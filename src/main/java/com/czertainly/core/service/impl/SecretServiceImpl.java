@@ -829,6 +829,12 @@ public class SecretServiceImpl implements SecretService, AttributeResourceServic
         getSecretEntity(uuid.getValue());
     }
 
+    @Override
+    @ExternalAuthorization(resource = Resource.SECRET, action = ResourceAction.DETAIL)
+    public void evaluatePermissionChainOnDetails(SecuredUUID securedUUID) throws NotFoundException {
+        getSecretEntity(securedUUID.getValue());
+    }
+
     private SecretResponseDto createSecretInVault(UUID connectorUuid, UUID vaultUuid, SecretType type, UUID vaultProfileUuid, SecretRequestDto secretRequest) throws ConnectorException, NotFoundException, AttributeException {
         CreateSecretRequestDto createSecretRequestDto = new CreateSecretRequestDto();
         createSecretRequestDto.setName(secretRequest.getName());

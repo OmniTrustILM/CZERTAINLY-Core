@@ -566,13 +566,23 @@ public class RaProfileServiceImpl implements RaProfileService {
     @Override
     @ExternalAuthorization(resource = Resource.RA_PROFILE, action = ResourceAction.UPDATE)
     public void evaluatePermissionChain(SecuredUUID uuid) throws NotFoundException {
+        evaluatePermissionInternal(uuid);
+
+    }
+
+    private void evaluatePermissionInternal(SecuredUUID uuid) throws NotFoundException {
         RaProfile profile = getRaProfileEntity(uuid);
         if (profile.getAuthorityInstanceReference() == null) {
             return;
         }
         // Parent Permission evaluation - Authority Instance
         permissionEvaluator.authorityInstance(profile.getAuthorityInstanceReference().getSecuredUuid());
+    }
 
+    @Override
+    @ExternalAuthorization(resource = Resource.RA_PROFILE, action = ResourceAction.DETAIL)
+    public void evaluatePermissionChainOnDetails(SecuredUUID securedUUID) throws NotFoundException {
+        evaluatePermissionInternal(securedUUID);
     }
 
     @Override

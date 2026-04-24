@@ -1545,6 +1545,12 @@ public class CertificateServiceImpl implements CertificateService, AttributeReso
     }
 
     @Override
+    @ExternalAuthorization(resource = Resource.CERTIFICATE, action = ResourceAction.DETAIL)
+    public void evaluatePermissionChainOnDetails(SecuredUUID securedUUID) throws NotFoundException {
+        getCertificateEntityWithAssociations(securedUUID);
+    }
+
+    @Override
     public void updateCertificateKeys(UUID keyUuid, String publicKeyFingerprint) {
         for (Certificate certificate : certificateRepository.findByPublicKeyFingerprint(publicKeyFingerprint)) {
             certificate.setKeyUuid(keyUuid);

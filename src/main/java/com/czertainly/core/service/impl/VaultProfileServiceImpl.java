@@ -245,8 +245,7 @@ public class VaultProfileServiceImpl implements VaultProfileService {
     @Override
     @ExternalAuthorization(resource = Resource.VAULT_PROFILE, action = ResourceAction.DETAIL)
     public NameAndUuidDto getResourceObjectExternal(SecuredUUID objectUuid) throws NotFoundException {
-        VaultProfile vaultProfile = vaultProfileRepository.findByUuid(objectUuid).orElseThrow(() -> new NotFoundException(VaultProfile.class, objectUuid));
-        permissionEvaluator.vaultInstance(vaultProfile.getVaultInstance().getSecuredUuid());
+        VaultProfile vaultProfile = evaluatePermissionsInternal(objectUuid);
         return new NameAndUuidDto(objectUuid.getValue(), vaultProfile.getName());
     }
 
@@ -261,8 +260,18 @@ public class VaultProfileServiceImpl implements VaultProfileService {
     @Override
     @ExternalAuthorization(resource = Resource.VAULT_PROFILE, action = ResourceAction.UPDATE)
     public void evaluatePermissionChain(SecuredUUID uuid) throws NotFoundException {
+        evaluatePermissionsInternal(uuid);
+    }
+
+    private void evaluatePermissionsInternal(SecuredUUID uuid) throws NotFoundException {
         VaultProfile vaultProfile = vaultProfileRepository.findByUuid(uuid).orElseThrow(() -> new NotFoundException(VaultProfile.class, uuid));
         permissionEvaluator.vaultInstance(vaultProfile.getVaultInstance().getSecuredUuid());
+    }
+
+    @Override
+    @ExternalAuthorization(resource = Resource.VAULT_PROFILE, action = ResourceAction.DETAIL)
+    public void evaluatePermissionChainOnDetails(SecuredUUID securedUUID) throws NotFoundException {
+        evaluatePermissionsInternal(securedUUID);
     }
 
     @Override

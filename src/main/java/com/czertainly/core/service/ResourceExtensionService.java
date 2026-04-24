@@ -36,4 +36,6 @@ public interface ResourceExtensionService {
      * @throws NotFoundException when the object with the given UUID is not found
      */
     void evaluatePermissionChain(SecuredUUID uuid) throws NotFoundException;
+
+    void evaluatePermissionChainOnDetails(SecuredUUID securedUUID) throws NotFoundException;
 }

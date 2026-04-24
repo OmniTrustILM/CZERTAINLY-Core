@@ -451,6 +451,12 @@ public class AcmeProfileServiceImpl implements AcmeProfileService {
         // Since there are is no parent to the ACME Profile, exclusive parent permission evaluation need not be done
     }
 
+    @Override
+    @ExternalAuthorization(resource = Resource.ACME_PROFILE, action = ResourceAction.DETAIL)
+    public void evaluatePermissionChainOnDetails(SecuredUUID securedUUID) throws NotFoundException {
+        getAcmeProfileEntity(securedUUID);
+    }
+
 
     private RaProfile getRaProfile(String uuid) throws NotFoundException {
         return raProfileService.getRaProfileEntity(SecuredUUID.fromString(uuid));

@@ -741,6 +741,17 @@ public class LocationServiceImpl implements LocationService {
     @Override
     @ExternalAuthorization(resource = Resource.LOCATION, action = ResourceAction.UPDATE)
     public void evaluatePermissionChain(SecuredUUID uuid) throws NotFoundException {
+        evaluatePermissionInternal(uuid);
+
+    }
+
+    @Override
+    @ExternalAuthorization(resource = Resource.LOCATION, action = ResourceAction.DETAIL)
+    public void evaluatePermissionChainOnDetails(SecuredUUID securedUUID) throws NotFoundException {
+        evaluatePermissionInternal(securedUUID);
+    }
+
+    private void evaluatePermissionInternal(SecuredUUID uuid) throws NotFoundException {
         Location location = locationRepository.findByUuid(uuid)
                 .orElseThrow(() -> new NotFoundException(Location.class, uuid));
         if (location.getEntityInstanceReference() == null) {
@@ -748,7 +759,6 @@ public class LocationServiceImpl implements LocationService {
         }
         // Parent Permission evaluation - Entity Instance
         permissionEvaluator.authorityInstance(location.getEntityInstanceReference().getSecuredUuid());
-
     }
 
     // PRIVATE METHODS

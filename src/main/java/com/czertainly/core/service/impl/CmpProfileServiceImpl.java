@@ -354,6 +354,13 @@ public class CmpProfileServiceImpl implements CmpProfileService {
         // Since there are is no parent to the CMP Profile, exclusive parent permission evaluation need not be done
     }
 
+    @Override
+    @ExternalAuthorization(resource = Resource.CMP_PROFILE, action = ResourceAction.DETAIL)
+    public void evaluatePermissionChainOnDetails(SecuredUUID securedUUID) throws NotFoundException {
+        getCmpProfileEntity(securedUUID);
+        // Since there are is no parent to the CMP Profile, exclusive parent permission evaluation need not be done
+    }
+
     // -----------------------------------------------------------------------------------------------------------------
     // -----------------------------------------------------------------------------------------------------------------
     // Helper private methods

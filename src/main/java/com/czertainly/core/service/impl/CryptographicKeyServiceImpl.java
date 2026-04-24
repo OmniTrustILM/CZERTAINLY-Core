@@ -956,6 +956,12 @@ public class CryptographicKeyServiceImpl implements CryptographicKeyService {
 
     @Override
     @ExternalAuthorization(resource = Resource.CRYPTOGRAPHIC_KEY, action = ResourceAction.DETAIL)
+    public void evaluatePermissionChainOnDetails(SecuredUUID securedUUID) throws NotFoundException {
+        getCryptographicKeyEntity(securedUUID.getValue());
+    }
+
+    @Override
+    @ExternalAuthorization(resource = Resource.CRYPTOGRAPHIC_KEY, action = ResourceAction.DETAIL)
     public KeyItemDetailDto editKeyItem(SecuredUUID keyUuid, UUID keyItemUuid, EditKeyItemDto editKeyItemDto) throws NotFoundException {
         CryptographicKey key = getCryptographicKeyEntityWithAssociations(keyUuid.getValue());
         if (key.getTokenInstanceReferenceUuid() != null)

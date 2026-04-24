@@ -407,6 +407,12 @@ public class ConnectorServiceImpl implements ConnectorService {
         getConnectorEntity(uuid);
     }
 
+    @Override
+    @ExternalAuthorization(resource = Resource.CONNECTOR, action = ResourceAction.DETAIL)
+    public void evaluatePermissionChainOnDetails(SecuredUUID securedUUID) throws NotFoundException {
+        getConnectorEntity(securedUUID);
+    }
+
     private Connector getConnectorEntity(SecuredUUID uuid) throws NotFoundException {
         return connectorRepository.findByUuid(uuid)
                 .orElseThrow(() -> new NotFoundException(Connector.class, uuid));

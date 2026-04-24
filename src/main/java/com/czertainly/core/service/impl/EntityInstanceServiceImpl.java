@@ -298,6 +298,12 @@ public class EntityInstanceServiceImpl implements EntityInstanceService {
         // Since there are is no parent to the Entity, exclusive parent permission evaluation need not be done
     }
 
+    @Override
+    @ExternalAuthorization(resource = Resource.ENTITY, action = ResourceAction.DETAIL)
+    public void evaluatePermissionChainOnDetails(SecuredUUID securedUUID) throws NotFoundException {
+        getEntityInstanceReferenceEntity(securedUUID);
+    }
+
     private EntityInstanceReference getEntityInstanceReferenceEntity(SecuredUUID uuid) throws NotFoundException {
         return entityInstanceReferenceRepository.findByUuid(uuid)
                 .orElseThrow(() -> new NotFoundException(EntityInstanceReference.class, uuid));

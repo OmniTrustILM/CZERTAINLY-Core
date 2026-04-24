@@ -352,4 +352,10 @@ public class AttributeServiceImpl implements AttributeService {
     public void evaluatePermissionChain(SecuredUUID uuid) throws NotFoundException {
         // not necessary to evaluate permissions to update
     }
+
+    @Override
+    @ExternalAuthorization(resource = Resource.ATTRIBUTE, action = ResourceAction.DETAIL)
+    public void evaluatePermissionChainOnDetails(SecuredUUID securedUUID) {
+        // not necessary to evaluate permissions to get a specific object
+    }
 }

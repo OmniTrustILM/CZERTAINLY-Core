@@ -326,6 +326,12 @@ public class CbomServiceImpl implements CbomService {
     }
 
     @Override
+    @ExternalAuthorization(resource = Resource.CBOM, action = ResourceAction.DETAIL)
+    public void evaluatePermissionChainOnDetails(SecuredUUID securedUUID) throws NotFoundException {
+        getEntity(securedUUID);
+    }
+
+    @Override
     public List<SearchFieldDataByGroupDto> getSearchableFieldInformationByGroup() {
         final List<SearchFieldDataByGroupDto> searchFieldDataByGroupDtos = attributeEngine.getResourceSearchableFields(Resource.CBOM, false);
 

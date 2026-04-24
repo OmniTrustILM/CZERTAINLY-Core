@@ -712,6 +712,12 @@ public class DiscoveryServiceImpl implements DiscoveryService {
     }
 
     @Override
+    @ExternalAuthorization(resource = Resource.DISCOVERY, action = ResourceAction.DELETE)
+    public void evaluatePermissionChainOnDetails(SecuredUUID securedUUID) throws NotFoundException {
+        getDiscoveryEntity(securedUUID);
+    }
+
+    @Override
     public List<SearchFieldDataByGroupDto> getSearchableFieldInformationByGroup() {
         final List<SearchFieldDataByGroupDto> searchFieldDataByGroupDtos = attributeEngine.getResourceSearchableFields(Resource.DISCOVERY, false);
 

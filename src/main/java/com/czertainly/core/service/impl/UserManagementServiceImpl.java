@@ -304,6 +304,12 @@ public class UserManagementServiceImpl implements UserManagementService {
         getUser(uuid.toString());
     }
 
+    @Override
+    @ExternalAuthorization(resource = Resource.USER, action = ResourceAction.DETAIL)
+    public void evaluatePermissionChainOnDetails(SecuredUUID securedUUID) throws NotFoundException {
+        getUser(securedUUID.toString());
+    }
+
     private Certificate addUserCertificate(String userUuid, String certificateUuid, String certificateData) throws CertificateException, NotFoundException {
         Certificate certificate = null;
         boolean uploadCertificate = false;

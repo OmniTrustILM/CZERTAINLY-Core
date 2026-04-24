@@ -302,6 +302,12 @@ public class CredentialServiceImpl implements CredentialService {
         // Since there are is no parent to the Connector, exclusive parent permission evaluation need not be done
     }
 
+    @Override
+    @ExternalAuthorization(resource = Resource.CREDENTIAL, action = ResourceAction.DETAIL)
+    public void evaluatePermissionChainOnDetails(SecuredUUID securedUUID) throws NotFoundException {
+        getCredentialEntity(securedUUID);
+    }
+
     private Credential getCredentialEntity(SecuredUUID uuid) throws NotFoundException {
         return credentialRepository.findByUuid(uuid)
                 .orElseThrow(() -> new NotFoundException(Credential.class, uuid));
