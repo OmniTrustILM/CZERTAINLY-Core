@@ -275,6 +275,11 @@ public class ConnectorServiceImpl implements ConnectorService {
         connectorServiceV2.evaluatePermissionChain(uuid);
     }
 
+    @Override
+    public void evaluatePermissionChainOnDetails(SecuredUUID securedUUID) throws NotFoundException {
+        connectorServiceV2.evaluatePermissionChainOnDetails(securedUUID);
+    }
+
     private void validateFunctionGroup(Connector connector, FunctionGroupCode functionGroup) {
         Connector2FunctionGroup connector2FunctionGroup = null;
         for (Connector2FunctionGroup c2fg : connector.getFunctionGroups()) {

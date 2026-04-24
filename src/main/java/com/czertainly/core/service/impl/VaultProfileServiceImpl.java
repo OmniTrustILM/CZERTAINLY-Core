@@ -263,9 +263,10 @@ public class VaultProfileServiceImpl implements VaultProfileService {
         evaluatePermissionsInternal(uuid);
     }
 
-    private void evaluatePermissionsInternal(SecuredUUID uuid) throws NotFoundException {
+    private VaultProfile evaluatePermissionsInternal(SecuredUUID uuid) throws NotFoundException {
         VaultProfile vaultProfile = vaultProfileRepository.findByUuid(uuid).orElseThrow(() -> new NotFoundException(VaultProfile.class, uuid));
         permissionEvaluator.vaultInstance(vaultProfile.getVaultInstance().getSecuredUuid());
+        return vaultProfile;
     }
 
     @Override
