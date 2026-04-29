@@ -1,14 +1,17 @@
 package com.czertainly.core.events;
 
 import com.czertainly.api.exception.EventException;
-import com.czertainly.api.exception.RuleException;
 import com.czertainly.api.exception.ValidationException;
 import com.czertainly.api.model.core.auth.Resource;
+import com.czertainly.api.model.core.other.ResourceEvent;
+import com.czertainly.api.model.core.workflows.EventStatus;
 import com.czertainly.core.dao.entity.UniquelyIdentifiedObject;
+import com.czertainly.core.dao.entity.workflows.EventHistory;
 import com.czertainly.core.dao.entity.workflows.Trigger;
 import com.czertainly.core.dao.entity.workflows.TriggerAssociation;
 import com.czertainly.core.dao.entity.workflows.TriggerHistory;
 import com.czertainly.core.dao.repository.SecurityFilterRepository;
+import com.czertainly.core.dao.repository.workflows.EventHistoryRepository;
 import com.czertainly.core.dao.repository.workflows.TriggerAssociationRepository;
 import com.czertainly.core.evaluator.TriggerEvaluator;
 import com.czertainly.core.messaging.model.EventMessage;
@@ -25,6 +28,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -40,6 +44,7 @@ public abstract class EventHandler<T extends UniquelyIdentifiedObject> implement
     protected EventProducer eventProducer;
     protected NotificationProducer notificationProducer;
     protected ApplicationEventPublisher applicationEventPublisher;
+    private EventHistoryRepository eventHistoryRepository;
 
     protected final TriggerEvaluator<T> triggerEvaluator;
     protected final SecurityFilterRepository<T, UUID> repository;
@@ -49,6 +54,11 @@ public abstract class EventHandler<T extends UniquelyIdentifiedObject> implement
     @Autowired
     public void setAuthHelper(AuthHelper authHelper) {
         this.authHelper = authHelper;
+    }
+
+    @Autowired
+    public void setEventHistoryRepository(EventHistoryRepository eventHistoryRepository) {
+        this.eventHistoryRepository = eventHistoryRepository;
     }
 
     @Autowired
@@ -98,12 +108,33 @@ public abstract class EventHandler<T extends UniquelyIdentifiedObject> implement
 
     public void handleEvent(EventMessage eventMessage) throws EventException {
         logger.debug("Going to handle event '{}'", eventMessage.getEvent().getLabel());
+        EventHistory eventHistory = createEventHistory(eventMessage.getEvent(), eventMessage.getOverrideResource(), eventMessage.getOverrideObjectUuid());
+        EventContext<T> eventContext;
+        try {
+            eventContext = prepareContext(eventMessage);
+            processAllTriggers(eventContext);
+            sendFollowUpEventsNotifications(eventContext);
+        } catch (Exception e) {
+            eventHistory.setStatus(EventStatus.FAILED);
+            eventHistoryRepository.save(eventHistory);
+            throw e;
+        }
 
-        EventContext<T> eventContext = prepareContext(eventMessage);
-        processAllTriggers(eventContext);
-        sendFollowUpEventsNotifications(eventContext);
+        eventHistory.setStatus(EventStatus.FINISHED);
+        eventHistory.setFinishedAt(OffsetDateTime.now());
+        eventHistoryRepository.save(eventHistory);
 
         logger.debug("Event '{}' successfully handled", eventMessage.getEvent().getLabel());
+    }
+
+    private EventHistory createEventHistory(ResourceEvent event, Resource overrideResource, UUID overrideObjectUuid) {
+        EventHistory eventHistory = new EventHistory();
+        eventHistory.setEvent(event);
+        eventHistory.setResource(overrideResource);
+        eventHistory.setResourceUuid(overrideObjectUuid);
+        eventHistory.setStatus(EventStatus.IN_PROGRESS);
+        eventHistory.setStartedAt(OffsetDateTime.now());
+        return eventHistoryRepository.save(eventHistory);
     }
 
     protected void sendFollowUpEventsNotifications(EventContext<T> eventContext) {

@@ -5,6 +5,8 @@ import com.czertainly.api.model.core.auth.Resource;
 import com.czertainly.core.dao.entity.workflows.TriggerHistory;
 import com.czertainly.core.dao.repository.SecurityFilterRepository;
 import org.springframework.data.jpa.repository.EntityGraph;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import org.springframework.data.domain.Page;
@@ -26,4 +28,16 @@ public interface TriggerHistoryRepository extends SecurityFilterRepository<Trigg
 
     @EntityGraph(attributePaths = {"records", "triggerAssociation", "records.execution", "records.execution.items", "records.execution.items.notificationProfile"})
     Page<TriggerHistory> findByObjectUuidAndTriggerResourceOrderByTriggeredAtDesc(UUID objectUuid, Resource resource, Pageable pageable);
+
+    @Query("SELECT DISTINCT t.objectUuid FROM TriggerHistory t WHERE t.eventHistoryUuid = :uuid")
+    Page<UUID> findDistinctObjectUuidsByEventHistoryUuid(@Param("uuid") UUID uuid, Pageable pageable);
+
+    List<TriggerHistory> findByEventHistoryUuidAndObjectUuidOrderByObjectUuidAscTriggeredAtDesc(UUID eventHistoryUuid, UUID objectUuid);
+
+    int countDistinctObjectUuidByEventHistoryUuid(UUID triggerHistoryUuid);
+
+    int countDistinctObjectUuidByEventHistoryUuidAndConditionsMatchedTrue(UUID triggerHistoryUuid);
+
+    int countDistinctObjectUuidByEventHistoryUuidAndConditionsMatchedTrueAndTriggerIgnoreTriggerTrue(UUID triggerHistoryUuid);
+
 }

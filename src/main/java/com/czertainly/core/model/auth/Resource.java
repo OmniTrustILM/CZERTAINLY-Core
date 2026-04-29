@@ -64,6 +64,7 @@ public enum Resource {
     RULE("rules"),
     ACTION("actions"),
     TRIGGER("triggers"),
+    EVENT("resourceEvents"),
 
     // SECRETS
     VAULT("vaults"),

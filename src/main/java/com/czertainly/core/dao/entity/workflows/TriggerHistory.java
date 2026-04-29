@@ -66,6 +66,14 @@ public class TriggerHistory extends UniquelyIdentified {
     @ToString.Exclude
     private List<TriggerHistoryRecord> records = new ArrayList<>();
 
+    @Column(name = "event_history_uuid")
+    private UUID eventHistoryUuid;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "event_history_uuid", insertable = false, updatable = false)
+    @ToString.Exclude
+    private EventHistory eventHistory;
+
     public TriggerHistoryDto mapToDto() {
         TriggerHistoryDto triggerHistoryDto = new TriggerHistoryDto();
         triggerHistoryDto.setUuid(String.valueOf(uuid));
