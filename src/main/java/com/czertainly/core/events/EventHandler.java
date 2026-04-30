@@ -197,7 +197,7 @@ public abstract class EventHandler<T extends UniquelyIdentifiedObject> implement
 
         // Evaluate rest of the triggers in given order
         for (TriggerAssociation triggerAssociation : eventTriggers.getTriggers()) {
-//            handleUser(context, triggerAssociation.getTriggeredBy());
+            handleUser(context, triggerAssociation.getTriggeredBy());
             Trigger trigger = triggerAssociation.getTrigger();
             try {
                 context.getTriggerEvaluator().evaluateTrigger(trigger, triggerAssociation, resourceObject, null, eventData);
