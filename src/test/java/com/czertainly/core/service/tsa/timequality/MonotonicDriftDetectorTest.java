@@ -4,13 +4,12 @@ import com.czertainly.core.service.tsa.serialnumber.TestClockSource;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
-import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 class MonotonicDriftDetectorTest {
     private static final Duration MAX_DRIFT_500MS = Duration.ofMillis(500);
-    private static final UUID PROFILE = UUID.fromString("12345678-1234-1234-1234-123456789012");
+    private static final String PROFILE = "test";
 
     @Test
     void returnsFalseWhenNoClockJump() {

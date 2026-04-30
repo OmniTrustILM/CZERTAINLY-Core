@@ -3,11 +3,9 @@ package com.czertainly.core.service.tsa.timequality;
 
 import java.time.Instant;
 import java.util.List;
-import java.util.UUID;
 
 public record TimeQualityResult(
-        UUID profileUuid,
-        String profileName,
+        String profile,
         Instant timestamp,
         TimeQualityStatus status,
         Double measuredDriftMs,

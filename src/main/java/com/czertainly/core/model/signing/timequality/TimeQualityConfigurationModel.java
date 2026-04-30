@@ -2,7 +2,6 @@ package com.czertainly.core.model.signing.timequality;
 
 import java.time.Duration;
 import java.util.Optional;
-import java.util.UUID;
 
 /**
  * Sealed interface for all time-quality configuration model objects.
@@ -19,8 +18,6 @@ public sealed interface TimeQualityConfigurationModel
         permits ExplicitTimeQualityConfiguration, LocalClockTimeQualityConfiguration {
 
     TimeQualitySource getSource();
-
-    UUID getUuid();
 
     String getName();
 

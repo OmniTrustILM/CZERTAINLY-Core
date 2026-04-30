@@ -5,19 +5,21 @@ import com.czertainly.core.model.signing.timequality.ExplicitTimeQualityConfigur
 import com.czertainly.core.model.signing.timequality.LocalClockTimeQualityConfiguration;
 import com.czertainly.core.model.signing.timequality.TimeQualityConfigurationModel;
 import com.czertainly.core.service.tsa.clocksource.ClockSource;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
-import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 
 @Component
-@Slf4j
 public class TimeQualityRegisterImpl implements TimeQualityRegister {
-    private final ConcurrentHashMap<UUID, AtomicReference<TimeQualityResult>> entries = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<UUID, TimeQualityStatus> lastLoggedStatus = new ConcurrentHashMap<>();
+
+    private static final Logger logger = LoggerFactory.getLogger(TimeQualityRegisterImpl.class);
+
+    private final ConcurrentHashMap<String, AtomicReference<TimeQualityResult>> entries = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, TimeQualityStatus> lastLoggedStatus = new ConcurrentHashMap<>();
     private final ClockSource clockSource;
     private final LeapSecondGuard leapSecondGuard;
     private final MonotonicDriftDetector driftDetector;
@@ -34,17 +36,16 @@ public class TimeQualityRegisterImpl implements TimeQualityRegister {
     }
 
     public void update(TimeQualityResult result) {
-        entryFor(result.profileUuid()).set(result);
+        entryFor(result.profile()).set(result);
 
         if (result.status() == TimeQualityStatus.OK) {
-            driftDetector.captureReference(result.profileUuid(), result.measuredDriftMs() != null ? result.measuredDriftMs() : 0.0);
+            driftDetector.captureReference(result.profile(), result.measuredDriftMs() != null ? result.measuredDriftMs() : 0.0);
         } else {
-            driftDetector.clearReference(result.profileUuid());
+            driftDetector.clearReference(result.profile());
         }
 
-        log.atTrace()
-                .addKeyValue("profile UUID", result.profileUuid())
-                .addKeyValue("profile name", result.profileName())
+        logger.atTrace()
+                .addKeyValue("profile", result.profile())
                 .addKeyValue("status", result.status())
                 .addKeyValue("reason", result.reason())
                 .addKeyValue("driftMs", result.measuredDriftMs())
@@ -59,42 +60,41 @@ public class TimeQualityRegisterImpl implements TimeQualityRegister {
     }
 
     private TimeQualityStatus getStatus(ExplicitTimeQualityConfiguration config) {
-        var result = entryFor(config.getUuid()).get();
+        var result = entryFor(config.getName()).get();
         if (result == null) {
-            return degraded(config.getUuid(), config.getName(), "no result received yet");
+            return degraded(config.getName(), "no result received yet");
         }
 
         var expiresAt = result.timestamp().plus(config.accuracy());
         if (clockSource.wallTimeInstant().isAfter(expiresAt)) {
-            return degraded(config.getUuid(), config.getName(), "result is stale (received at %s, max age %s)"
+            return degraded(config.getName(), "result is stale (received at %s, max age %s)"
                     .formatted(result.timestamp(), config.accuracy()));
         }
 
         if (result.status() == TimeQualityStatus.DEGRADED) {
-            return degraded(config.getUuid(), config.getName(), "TimeMonitor reported degraded status");
+            return degraded(config.getName(), "TimeMonitor reported degraded status");
         }
 
         if (Boolean.TRUE.equals(config.leapSecondGuard()) && leapSecondGuard.isLeapSecondRisk(result.leapSecondWarning())) {
-            return degraded(config.getUuid(), config.getName(), "leap second guard active");
+            return degraded(config.getName(), "leap second guard active");
         }
 
-        if (driftDetector.isDriftExceeded(config.getUuid(), config.maxClockDrift())) {
-            return degraded(config.getUuid(), config.getName(), "clock drift exceeded threshold");
+        if (driftDetector.isDriftExceeded(config.getName(), config.maxClockDrift())) {
+            return degraded(config.getName(), "clock drift exceeded threshold");
         }
 
-        return ok(config.getUuid(), config.getName());
+        return ok(config.getName());
     }
 
-    private AtomicReference<TimeQualityResult> entryFor(UUID profileUuid) {
-        return entries.computeIfAbsent(profileUuid, ignored -> new AtomicReference<>());
+    private AtomicReference<TimeQualityResult> entryFor(String profile) {
+        return entries.computeIfAbsent(profile, ignored -> new AtomicReference<>());
     }
 
-    private TimeQualityStatus degraded(UUID profileUuid, String profileName, String reason) {
-        var previousStatus = lastLoggedStatus.put(profileUuid, TimeQualityStatus.DEGRADED);
+    private TimeQualityStatus degraded(String profile, String reason) {
+        var previousStatus = lastLoggedStatus.put(profile, TimeQualityStatus.DEGRADED);
         if (previousStatus != TimeQualityStatus.DEGRADED) {
-            log.atWarn()
-                    .addKeyValue("profile UUID", profileUuid)
-                    .addKeyValue("profile name", profileName)
+            logger.atWarn()
+                    .addKeyValue("profile", profile)
                     .addKeyValue("status", "DEGRADED")
                     .addKeyValue("reason", reason)
                     .log("Time quality degraded");
@@ -102,12 +102,11 @@ public class TimeQualityRegisterImpl implements TimeQualityRegister {
         return TimeQualityStatus.DEGRADED;
     }
 
-    private TimeQualityStatus ok(UUID profileUuid, String profileName) {
-        var previousStatus = lastLoggedStatus.put(profileUuid, TimeQualityStatus.OK);
+    private TimeQualityStatus ok(String profile) {
+        var previousStatus = lastLoggedStatus.put(profile, TimeQualityStatus.OK);
         if (previousStatus != TimeQualityStatus.OK) {
-            log.atDebug()
-                    .addKeyValue("profile UUID", profileUuid)
-                    .addKeyValue("profile name", profileName)
+            logger.atDebug()
+                    .addKeyValue("profile", profile)
                     .addKeyValue("status", "OK")
                     .log("Time quality recovered");
         }

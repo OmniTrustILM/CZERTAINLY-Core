@@ -2,7 +2,6 @@ package com.czertainly.core.model.signing.timequality;
 
 import java.time.Duration;
 import java.util.Optional;
-import java.util.UUID;
 
 /**
  * Time-quality configuration variant representing the absence of any user-provided
@@ -13,16 +12,10 @@ public enum LocalClockTimeQualityConfiguration implements TimeQualityConfigurati
     INSTANCE;
 
     private static final String NAME = "LocalTime";
-    private static final UUID LOCAL_UUID = UUID.randomUUID();
 
     @Override
     public String getName() {
         return NAME;
-    }
-
-    @Override
-    public UUID getUuid() {
-        return LOCAL_UUID;
     }
 
     @Override

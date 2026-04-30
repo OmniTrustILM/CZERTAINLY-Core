@@ -38,11 +38,6 @@ public record ExplicitTimeQualityConfiguration(
     }
 
     @Override
-    public UUID getUuid() {
-        return uuid;
-    }
-
-    @Override
     public String getName() {
         return name;
     }

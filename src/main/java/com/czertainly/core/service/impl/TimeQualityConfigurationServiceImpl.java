@@ -36,7 +36,6 @@ import com.czertainly.core.security.authz.SecurityFilter;
 import com.czertainly.core.service.SigningProfileService;
 import com.czertainly.core.service.TimeQualityConfigurationService;
 import com.czertainly.core.service.model.SecuredList;
-import com.czertainly.core.messaging.model.TimeQualityConfigChangedEvent;
 import com.czertainly.core.util.FilterPredicatesBuilder;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
@@ -45,7 +44,6 @@ import jakarta.persistence.criteria.Root;
 import org.apache.commons.lang3.function.TriFunction;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -64,7 +62,6 @@ public class TimeQualityConfigurationServiceImpl implements TimeQualityConfigura
     private AttributeEngine attributeEngine;
     private SigningProfileService signingProfileService;
     private TimeQualityConfigurationRepository timeQualityConfigurationRepository;
-    private ApplicationEventPublisher eventPublisher;
 
     @Override
     @ExternalAuthorization(resource = Resource.TIME_QUALITY_CONFIGURATION, action = ResourceAction.LIST)
@@ -134,7 +131,6 @@ public class TimeQualityConfigurationServiceImpl implements TimeQualityConfigura
         TimeQualityConfiguration saved = timeQualityConfigurationRepository.save(configuration);
 
         List<ResponseAttribute> customAttributes = attributeEngine.updateObjectCustomAttributesContent(Resource.TIME_QUALITY_CONFIGURATION, saved.getUuid(), request.getCustomAttributes());
-        eventPublisher.publishEvent(new TimeQualityConfigChangedEvent(this));
         return TimeQualityConfigurationMapper.toDto(saved, customAttributes);
     }
 
@@ -163,7 +159,6 @@ public class TimeQualityConfigurationServiceImpl implements TimeQualityConfigura
         TimeQualityConfiguration saved = timeQualityConfigurationRepository.save(configuration);
 
         List<ResponseAttribute> customAttributes = attributeEngine.updateObjectCustomAttributesContent(Resource.TIME_QUALITY_CONFIGURATION, saved.getUuid(), request.getCustomAttributes());
-        eventPublisher.publishEvent(new TimeQualityConfigChangedEvent(this));
         return TimeQualityConfigurationMapper.toDto(saved, customAttributes);
     }
 
@@ -172,7 +167,6 @@ public class TimeQualityConfigurationServiceImpl implements TimeQualityConfigura
     @Transactional
     public void deleteTimeQualityConfiguration(SecuredUUID uuid) throws NotFoundException {
         deleteTimeQualityConfiguration(getTimeQualityConfigurationEntity(uuid));
-        eventPublisher.publishEvent(new TimeQualityConfigChangedEvent(this));
     }
 
     @Override
@@ -190,7 +184,6 @@ public class TimeQualityConfigurationServiceImpl implements TimeQualityConfigura
                 messages.add(new BulkActionMessageDto(uuid.toString(), configuration != null ? configuration.getName() : "", e.getMessage()));
             }
         }
-        eventPublisher.publishEvent(new TimeQualityConfigChangedEvent(this));
         return messages;
     }
 
@@ -265,10 +258,5 @@ public class TimeQualityConfigurationServiceImpl implements TimeQualityConfigura
     @Autowired
     public void setTimeQualityConfigurationRepository(TimeQualityConfigurationRepository timeQualityConfigurationRepository) {
         this.timeQualityConfigurationRepository = timeQualityConfigurationRepository;
-    }
-
-    @Autowired
-    public void setEventPublisher(ApplicationEventPublisher eventPublisher) {
-        this.eventPublisher = eventPublisher;
     }
 }

@@ -1,6 +1,5 @@
 package com.czertainly.core.service.tsa.timequality.builders;
 
-import com.czertainly.core.model.signing.timequality.ExplicitTimeQualityConfiguration;
 import com.czertainly.core.service.tsa.timequality.LeapSecondWarning;
 import com.czertainly.core.service.tsa.timequality.NtpServerResult;
 import com.czertainly.core.service.tsa.timequality.TimeQualityResult;
@@ -8,13 +7,11 @@ import com.czertainly.core.service.tsa.timequality.TimeQualityStatus;
 
 import java.time.Instant;
 import java.util.List;
-import java.util.UUID;
 
 
 public final class TimeQualityResultBuilder {
 
-    private UUID profileUuid;
-    private String profileName;
+    private String profile;
     private Instant timestamp;
     private TimeQualityStatus status;
     private Double measuredDriftMs;
@@ -28,8 +25,7 @@ public final class TimeQualityResultBuilder {
     }
 
     public TimeQualityResultBuilder withDefaults() {
-        profileUuid = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        profileName = "rfc3161";
+        profile = "rfc3161";
         timestamp = Instant.parse("2026-03-04T10:00:00Z");
         status = TimeQualityStatus.OK;
         measuredDriftMs = 0.;
@@ -39,19 +35,8 @@ public final class TimeQualityResultBuilder {
         return this;
     }
 
-    public TimeQualityResultBuilder profileUuid(UUID profileUuid) {
-        this.profileUuid = profileUuid;
-        return this;
-    }
-
-    public TimeQualityResultBuilder profile(ExplicitTimeQualityConfiguration config) {
-        this.profileUuid = config.getUuid();
-        this.profileName = config.getName();
-        return this;
-    }
-
-    public TimeQualityResultBuilder profileName(String profileName) {
-        this.profileName = profileName;
+    public TimeQualityResultBuilder profile(String profile) {
+        this.profile = profile;
         return this;
     }
 
@@ -91,7 +76,7 @@ public final class TimeQualityResultBuilder {
     }
 
     public TimeQualityResult build() {
-        return new TimeQualityResult(profileUuid, profileName, timestamp, status, measuredDriftMs,
+        return new TimeQualityResult(profile, timestamp, status, measuredDriftMs,
                 reachableServers, reason, leapSecondWarning, servers);
     }
 }
