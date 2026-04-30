@@ -13,7 +13,7 @@ public enum LocalClockTimeQualityConfiguration implements TimeQualityConfigurati
     INSTANCE;
 
     private static final String NAME = "LocalTime";
-    private static final UUID LOCAL_UUID = UUID.randomUUID();
+    private static final UUID LOCAL_UUID = UUID.fromString("00000000-0000-0000-0000-000000000000");
 
     @Override
     public String getName() {

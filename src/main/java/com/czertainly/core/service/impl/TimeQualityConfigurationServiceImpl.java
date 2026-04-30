@@ -97,7 +97,7 @@ public class TimeQualityConfigurationServiceImpl implements TimeQualityConfigura
     @Transactional(readOnly = true)
     public TimeQualityConfigurationDto getTimeQualityConfiguration(SecuredUUID uuid) throws NotFoundException {
         TimeQualityConfiguration configuration = timeQualityConfigurationRepository.findByUuid(uuid)
-                .orElseThrow(() -> new NotFoundException("Time Quality Configuration not found"));
+                .orElseThrow(() -> new NotFoundException("Time Quality Configuration not found: " + uuid));
         List<ResponseAttribute> customAttributes = attributeEngine.getObjectCustomAttributesContent(Resource.TIME_QUALITY_CONFIGURATION, configuration.getUuid());
         return TimeQualityConfigurationMapper.toDto(configuration, customAttributes);
     }
@@ -132,7 +132,7 @@ public class TimeQualityConfigurationServiceImpl implements TimeQualityConfigura
     @Transactional
     public TimeQualityConfigurationDto updateTimeQualityConfiguration(SecuredUUID uuid, TimeQualityConfigurationRequestDto request) throws AlreadyExistException, AttributeException, NotFoundException {
         TimeQualityConfiguration configuration = timeQualityConfigurationRepository.findByUuid(uuid)
-                .orElseThrow(() -> new NotFoundException("Time Quality Configuration not found"));
+                .orElseThrow(() -> new NotFoundException("Time Quality Configuration not found: " + uuid));
 
         Optional<TimeQualityConfiguration> existingWithSameName = timeQualityConfigurationRepository.findByName(request.getName());
         if (existingWithSameName.isPresent() && !existingWithSameName.get().getUuid().equals(configuration.getUuid())) {
@@ -209,7 +209,7 @@ public class TimeQualityConfigurationServiceImpl implements TimeQualityConfigura
     @Transactional(readOnly = true)
     public void evaluatePermissionChain(SecuredUUID uuid) throws NotFoundException {
         timeQualityConfigurationRepository.findByUuid(uuid)
-                .orElseThrow(() -> new NotFoundException("Time Quality Configuration not found"));
+                .orElseThrow(() -> new NotFoundException("Time Quality Configuration not found: " + uuid));
     }
 
     // ──────────────────────────────────────────────────────────────────────────
