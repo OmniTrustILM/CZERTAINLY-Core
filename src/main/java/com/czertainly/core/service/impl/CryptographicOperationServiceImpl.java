@@ -156,12 +156,12 @@ public class CryptographicOperationServiceImpl implements CryptographicOperation
         requestDto.setCipherAttributes(request.getCipherAttributes());
         logger.debug("Request to the connector: {}", requestDto);
         try {
-            var connectorDto = key.getKey().getTokenProfile().getTokenInstanceReference().getConnector().mapToApiClientDtoV1();
+            var connectorDto = key.connector();
             CryptographicOperationsSyncApiClient apiClient = connectorApiFactory.getCryptographicOperationsApiClient(connectorDto);
             com.czertainly.api.model.connector.cryptography.operations.EncryptDataResponseDto response = apiClient.encryptData(
                     connectorDto,
-                    key.getKey().getTokenProfile().getTokenInstanceReference().getTokenInstanceUuid(),
-                    key.getKeyReferenceUuid().toString(),
+                    key.tokenInstanceUuid(),
+                    key.keyReferenceUuid().toString(),
                     requestDto
             );
             eventHistoryService.addEventHistory(KeyEvent.ENCRYPT, KeyEventStatus.SUCCESS,
@@ -213,12 +213,12 @@ public class CryptographicOperationServiceImpl implements CryptographicOperation
         requestDto.setCipherAttributes(request.getCipherAttributes());
         logger.debug("Request to the connector: {}", requestDto);
         try {
-            var connectorDto = key.getKey().getTokenProfile().getTokenInstanceReference().getConnector().mapToApiClientDtoV1();
+            var connectorDto = key.connector();
             CryptographicOperationsSyncApiClient apiClient = connectorApiFactory.getCryptographicOperationsApiClient(connectorDto);
             com.czertainly.api.model.connector.cryptography.operations.DecryptDataResponseDto response = apiClient.decryptData(
                     connectorDto,
-                    key.getKey().getTokenProfile().getTokenInstanceReference().getTokenInstanceUuid(),
-                    key.getKeyReferenceUuid().toString(),
+                    key.tokenInstanceUuid(),
+                    key.keyReferenceUuid().toString(),
                     requestDto);
             eventHistoryService.addEventHistory(KeyEvent.DECRYPT, KeyEventStatus.SUCCESS,
                     "Decryption of data success ", null, key.keyItemUuid());
@@ -296,31 +296,23 @@ public class CryptographicOperationServiceImpl implements CryptographicOperation
                 }).toList()
         );
         logger.debug("Request to the connector: {}", requestDto);
-        try {
-            var connectorDto = key.getKey().getTokenProfile().getTokenInstanceReference().getConnector().mapToApiClientDtoV1();
-            CryptographicOperationsSyncApiClient apiClient = connectorApiFactory.getCryptographicOperationsApiClient(connectorDto);
-            com.czertainly.api.model.connector.cryptography.operations.SignDataResponseDto response = apiClient.signData(
-                    connectorDto,
-                    key.getKey().getTokenProfile().getTokenInstanceReference().getTokenInstanceUuid(),
-                    key.getKeyReferenceUuid().toString(),
-                    requestDto
-            );
-            eventHistoryService.addEventHistory(KeyEvent.SIGN, KeyEventStatus.SUCCESS,
-                    "Signing data success ", null, key);
-            SignDataResponseDto responseDto = new SignDataResponseDto();
-            if (response.getSignatures() != null) responseDto.setSignatures(response.getSignatures().stream().map(e -> {
-                SignatureResponseData signatureResponseData = new SignatureResponseData();
-                signatureResponseData.setData(byteArrayToBase64Encoded(e.getData()));
-                signatureResponseData.setIdentifier(e.getIdentifier());
-                signatureResponseData.setDetails(e.getDetails());
-                return signatureResponseData;
-            }).toList());
-            return responseDto;
-        } catch (Exception e) {
-            eventHistoryService.addEventHistory(KeyEvent.SIGN, KeyEventStatus.FAILED,
-                    "Signing of data failed ", Collections.singletonMap("exception", e.getLocalizedMessage()), key);
-            throw e;
-        }
+        var connectorDto = key.connector();
+        CryptographicOperationsSyncApiClient apiClient = connectorApiFactory.getCryptographicOperationsApiClient(connectorDto);
+        com.czertainly.api.model.connector.cryptography.operations.SignDataResponseDto response = apiClient.signData(
+                connectorDto,
+                key.tokenInstanceUuid(),
+                key.keyReferenceUuid().toString(),
+                requestDto
+        );
+        SignDataResponseDto responseDto = new SignDataResponseDto();
+        if (response.getSignatures() != null) responseDto.setSignatures(response.getSignatures().stream().map(e -> {
+            SignatureResponseData signatureResponseData = new SignatureResponseData();
+            signatureResponseData.setData(byteArrayToBase64Encoded(e.getData()));
+            signatureResponseData.setIdentifier(e.getIdentifier());
+            signatureResponseData.setDetails(e.getDetails());
+            return signatureResponseData;
+        }).toList());
+        return responseDto;
     }
 
     @Override
@@ -361,12 +353,12 @@ public class CryptographicOperationServiceImpl implements CryptographicOperation
         );
         logger.debug("Request to the connector: {}", requestDto);
         try {
-            var connectorDto = key.getKey().getTokenProfile().getTokenInstanceReference().getConnector().mapToApiClientDtoV1();
+            var connectorDto = key.connector();
             CryptographicOperationsSyncApiClient apiClient = connectorApiFactory.getCryptographicOperationsApiClient(connectorDto);
             com.czertainly.api.model.connector.cryptography.operations.VerifyDataResponseDto response = apiClient.verifyData(
                     connectorDto,
-                    key.getKey().getTokenProfile().getTokenInstanceReference().getTokenInstanceUuid(),
-                    key.getKeyReferenceUuid().toString(),
+                    key.tokenInstanceUuid(),
+                    key.keyReferenceUuid().toString(),
                     requestDto
             );
             eventHistoryService.addEventHistory(KeyEvent.VERIFY, KeyEventStatus.SUCCESS,

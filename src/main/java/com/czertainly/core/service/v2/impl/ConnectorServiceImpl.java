@@ -477,7 +477,7 @@ public class ConnectorServiceImpl implements ConnectorService {
             ConnectInfo connectInfo = connectorAdapter.validateConnection(connector.mapToApiClientDtoV2());
             connectorAdapter.updateConnectorFunctions(connector, connectInfo);
         } else {
-            ConnectorApiClientDto connectorApiDto = new ConnectorApiClientDto();
+            ConnectorApiClientDtoV1 connectorApiDto = new ConnectorApiClientDtoV1();
             connectorApiDto.setName(request.getName());
             connectorApiDto.setUrl(request.getUrl());
             connectorApiDto.setAuthType(request.getAuthType());
