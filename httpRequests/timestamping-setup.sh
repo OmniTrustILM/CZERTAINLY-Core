@@ -24,11 +24,11 @@
 set -euo pipefail
 
 # --- Defaults -----------------------------------------------------------------
-ILM_HOST="http://localhost:8200"
+ILM_HOST="http://localhost:8080"
 CLIENT_CERT_PEM=""
 
 CONNECTOR_HOST="localhost"
-PORT_CRED_PROVIDER="8201"
+PORT_CRED_PROVIDER="8200"
 PORT_EJBCA="8210"
 PORT_CRYPTO_PROVIDER="8230"
 PORT_FORMATTER="8270"
@@ -130,7 +130,7 @@ Credential/token options:
   --token-password PASS       Soft token PIN             (default: same as pkcs12-password)
 
 ILM API auth:
-  --ilm-host HOST             URL of ILM API                (default: http://localhost:8200)
+  --ilm-host HOST             URL of ILM API                (default: http://localhost:8080)
   --client-cert-pem FILE      Admin client certificate PEM  (required)
 
 EJBCA options:
