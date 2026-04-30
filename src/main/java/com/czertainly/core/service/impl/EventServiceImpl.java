@@ -96,7 +96,7 @@ public class EventServiceImpl implements EventService {
             resourceService.evaluateDetailsPermission(resource, uuid);
         }
 
-        Page<EventHistory> eventHistories = eventHistoryRepository.findByEventAndResourceAndResourceUuid(event, resource, uuid, Pageable.ofSize(pagination.getItemsPerPage()).withPage(pagination.getPageNumber() - 1));
+        Page<EventHistory> eventHistories = eventHistoryRepository.findByEventAndResourceAndResourceUuidOrderByStartedAtDesc(event, resource, uuid, Pageable.ofSize(pagination.getItemsPerPage()).withPage(pagination.getPageNumber() - 1));
         List<EventHistoryDto> eventHistoriesResponse = new ArrayList<>();
         for (EventHistory eventHistory : eventHistories) {
             EventHistoryDto dto = new EventHistoryDto();

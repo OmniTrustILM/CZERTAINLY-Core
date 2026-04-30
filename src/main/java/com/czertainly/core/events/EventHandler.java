@@ -108,22 +108,10 @@ public abstract class EventHandler<T extends UniquelyIdentifiedObject> implement
 
     public void handleEvent(EventMessage eventMessage) throws EventException {
         logger.debug("Going to handle event '{}'", eventMessage.getEvent().getLabel());
-        EventHistory eventHistory = createEventHistory(eventMessage.getEvent(), eventMessage.getOverrideResource(), eventMessage.getOverrideObjectUuid());
         EventContext<T> eventContext;
-        try {
-            eventContext = prepareContext(eventMessage);
-            processAllTriggers(eventContext);
-            sendFollowUpEventsNotifications(eventContext);
-        } catch (Exception e) {
-            eventHistory.setStatus(EventStatus.FAILED);
-            eventHistoryRepository.save(eventHistory);
-            throw e;
-        }
-
-        eventHistory.setStatus(EventStatus.FINISHED);
-        eventHistory.setFinishedAt(OffsetDateTime.now());
-        eventHistoryRepository.save(eventHistory);
-
+        eventContext = prepareContext(eventMessage);
+        processAllTriggers(eventContext);
+        sendFollowUpEventsNotifications(eventContext);
         logger.debug("Event '{}' successfully handled", eventMessage.getEvent().getLabel());
     }
 
@@ -185,7 +173,7 @@ public abstract class EventHandler<T extends UniquelyIdentifiedObject> implement
 
     protected void processTriggers(EventContext<T> context, EventContextTriggers eventTriggers, T resourceObject, Object eventData) {
         logger.debug("Going to process {} triggers from {} {} on {} object(s) registered for event '{}'", eventTriggers.getIgnoreTriggers().size() + eventTriggers.getTriggers().size(), eventTriggers.getResource() == null ? Resource.SETTINGS.getLabel() : eventTriggers.getResource().getLabel(), eventTriggers.getObjectUuid(), context.getResourceObjects().size(), context.getEvent().getLabel());
-
+        EventHistory eventHistory = createEventHistory(context.getEvent(), eventTriggers.getResource(), eventTriggers.getObjectUuid());
         // First, check the ignore triggers
         boolean isIgnored = false;
         for (TriggerAssociation triggerAssociation : eventTriggers.getIgnoreTriggers()) {
@@ -209,7 +197,7 @@ public abstract class EventHandler<T extends UniquelyIdentifiedObject> implement
 
         // Evaluate rest of the triggers in given order
         for (TriggerAssociation triggerAssociation : eventTriggers.getTriggers()) {
-            handleUser(context, triggerAssociation.getTriggeredBy());
+//            handleUser(context, triggerAssociation.getTriggeredBy());
             Trigger trigger = triggerAssociation.getTrigger();
             try {
                 context.getTriggerEvaluator().evaluateTrigger(trigger, triggerAssociation, resourceObject, null, eventData);
@@ -218,6 +206,10 @@ public abstract class EventHandler<T extends UniquelyIdentifiedObject> implement
                 logger.error("Unable to process trigger '{}' on {} object {}. Message: {}", trigger.getName(), context.getResource().getLabel(), resourceObject.getUuid(), e.getMessage());
             }
         }
+
+        eventHistory.setStatus(EventStatus.FINISHED);
+        eventHistory.setFinishedAt(OffsetDateTime.now());
+        eventHistoryRepository.save(eventHistory);
     }
 
     protected void handleUser(EventContext<T> context, UUID triggeredBy) {

@@ -11,5 +11,5 @@ import java.util.UUID;
 
 public interface EventHistoryRepository extends SecurityFilterRepository<EventHistory, UUID> {
 
-    Page<EventHistory> findByEventAndResourceAndResourceUuid(ResourceEvent event, Resource resource, UUID resourceUuid, Pageable pageable);
+    Page<EventHistory> findByEventAndResourceAndResourceUuidOrderByStartedAtDesc(ResourceEvent event, Resource resource, UUID resourceUuid, Pageable pageable);
 }
