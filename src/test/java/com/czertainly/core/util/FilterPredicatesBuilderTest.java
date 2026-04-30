@@ -1148,7 +1148,7 @@ class FilterPredicatesBuilderTest extends BaseSpringBootTest {
     }
 
     @Test
-    void testForbiddenRegexSequences_throwValidationException() {
+    void testForbiddenRegexSequences_throwsValidationException() {
         CertificateSearchRequestDto searchRequestDto = new CertificateSearchRequestDto();
         SecurityFilter securityFilter = new SecurityFilter();
         for (String forbidden : List.of("\\Rabc", "\\Gabc", "\\habc", "\\Habc", "\\zabc", "\\Xabc", "\\Vabc")) {
