@@ -61,6 +61,10 @@ public class Connector extends UniquelyIdentifiedAndAudited implements Serializa
     @Enumerated(EnumType.STRING)
     private ConnectorStatus status;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "proxy_uuid")
+    private Proxy proxy;
+
     @OneToMany(fetch = FetchType.LAZY, mappedBy = "connector")
     @ToString.Exclude
     @JsonManagedReference
@@ -122,6 +126,9 @@ public class Connector extends UniquelyIdentifiedAndAudited implements Serializa
             functionGroupDto.setKinds(MetaDefinitions.deserializeArrayString(f.getKinds()));
             return functionGroupDto;
         }).toList());
+        if (this.proxy != null) {
+            dto.setProxy(this.proxy.mapToDtoSimple());
+        }
     }
 
     public ConnectorApiClientDtoV2 mapToApiClientDtoV2() {
@@ -132,6 +139,9 @@ public class Connector extends UniquelyIdentifiedAndAudited implements Serializa
         dto.setStatus(this.status);
         dto.setAuthType(authType);
         dto.setAuthAttributes(AttributeEngine.getResponseAttributesFromBaseAttributes(AttributeDefinitionUtils.deserialize(this.authAttributes, BaseAttribute.class)));
+        if (this.proxy != null) {
+            dto.setProxy(this.proxy.mapToDtoSimple());
+        }
 
         return dto;
     }
@@ -151,6 +161,9 @@ public class Connector extends UniquelyIdentifiedAndAudited implements Serializa
             functionGroupDto.setKinds(MetaDefinitions.deserializeArrayString(f.getKinds()));
             return functionGroupDto;
         }).toList());
+        if (this.proxy != null) {
+            dto.setProxy(this.proxy.mapToDtoSimple());
+        }
         return dto;
     }
 
@@ -162,6 +175,9 @@ public class Connector extends UniquelyIdentifiedAndAudited implements Serializa
         dto.setAuthType(this.authType);
         dto.setAuthAttributes(AttributeEngine.getResponseAttributesFromBaseAttributes(
                 AttributeDefinitionUtils.deserialize(this.authAttributes, BaseAttribute.class)));
+        if (this.proxy != null) {
+            dto.setProxy(this.proxy.mapToDtoSimple());
+        }
     }
 
     @Override
