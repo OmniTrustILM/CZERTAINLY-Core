@@ -1076,8 +1076,53 @@ class FilterPredicatesBuilderTest extends BaseSpringBootTest {
                 FilterConditionOperator.EQUALS, "notanumber");
         CriteriaQuery<CryptographicKeyItem> ckiQuery = criteriaBuilder.createQuery(CryptographicKeyItem.class);
         Root<CryptographicKeyItem> ckiRoot = ckiQuery.from(CryptographicKeyItem.class);
+        List<SearchFilterRequestDto> filters = List.of(filterDto);
         Assertions.assertThrows(ValidationException.class,
-                () -> FilterPredicatesBuilder.getFiltersPredicate(criteriaBuilder, ckiQuery, ckiRoot, List.of(filterDto)));
+                () -> FilterPredicatesBuilder.getFiltersPredicate(criteriaBuilder, ckiQuery, ckiRoot, filters));
+    }
+
+    @Test
+    void testCountEqual_nullValue_throwsValidationException() {
+        CertificateSearchRequestDto searchRequestDto = new CertificateSearchRequestDto();
+        searchRequestDto.setFilters(List.of(new SearchFilterRequestDto(
+                FilterFieldSource.PROPERTY, FilterField.GROUP_NAME.name(),
+                FilterConditionOperator.COUNT_EQUAL, null)));
+        SecurityFilter securityFilter = new SecurityFilter();
+        Assertions.assertThrows(ValidationException.class,
+                () -> certificateService.listCertificates(securityFilter, searchRequestDto));
+    }
+
+    @Test
+    void testCountNotEqual_nullValue_throwsValidationException() {
+        CertificateSearchRequestDto searchRequestDto = new CertificateSearchRequestDto();
+        searchRequestDto.setFilters(List.of(new SearchFilterRequestDto(
+                FilterFieldSource.PROPERTY, FilterField.GROUP_NAME.name(),
+                FilterConditionOperator.COUNT_NOT_EQUAL, null)));
+        SecurityFilter securityFilter = new SecurityFilter();
+        Assertions.assertThrows(ValidationException.class,
+                () -> certificateService.listCertificates(securityFilter, searchRequestDto));
+    }
+
+    @Test
+    void testCountGreaterThan_nullValue_throwsValidationException() {
+        CertificateSearchRequestDto searchRequestDto = new CertificateSearchRequestDto();
+        searchRequestDto.setFilters(List.of(new SearchFilterRequestDto(
+                FilterFieldSource.PROPERTY, FilterField.GROUP_NAME.name(),
+                FilterConditionOperator.COUNT_GREATER_THAN, null)));
+        SecurityFilter securityFilter = new SecurityFilter();
+        Assertions.assertThrows(ValidationException.class,
+                () -> certificateService.listCertificates(securityFilter, searchRequestDto));
+    }
+
+    @Test
+    void testCountLessThan_nullValue_throwsValidationException() {
+        CertificateSearchRequestDto searchRequestDto = new CertificateSearchRequestDto();
+        searchRequestDto.setFilters(List.of(new SearchFilterRequestDto(
+                FilterFieldSource.PROPERTY, FilterField.GROUP_NAME.name(),
+                FilterConditionOperator.COUNT_LESS_THAN, null)));
+        SecurityFilter securityFilter = new SecurityFilter();
+        Assertions.assertThrows(ValidationException.class,
+                () -> certificateService.listCertificates(securityFilter, searchRequestDto));
     }
 
     @Test
