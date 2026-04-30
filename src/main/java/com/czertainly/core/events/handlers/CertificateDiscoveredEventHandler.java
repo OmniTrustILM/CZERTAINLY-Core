@@ -1,7 +1,6 @@
 package com.czertainly.core.events.handlers;
 
 import com.czertainly.api.exception.EventException;
-import com.czertainly.api.exception.RuleException;
 import com.czertainly.api.model.common.events.data.CertificateDiscoveredEventData;
 import com.czertainly.api.model.core.auth.Resource;
 import com.czertainly.api.model.core.discovery.DiscoveryStatus;
@@ -231,7 +230,7 @@ public class CertificateDiscoveredEventHandler extends EventHandler<Certificate>
             boolean isIgnored = false;
             for (TriggerAssociation triggerAssociation : mergedIgnoreTriggers) {
                 Trigger trigger = triggerAssociation.getTrigger();
-                TriggerHistory triggerHistory = eventContext.getTriggerEvaluator().evaluateTrigger(trigger, triggerAssociation, certificate, discoveryCertificate.getUuid(), null);
+                TriggerHistory triggerHistory = eventContext.getTriggerEvaluator().evaluateTrigger(trigger, triggerAssociation, certificate, discoveryCertificate.getUuid(), null, null);
                 triggerHistories.add(triggerHistory);
                 if (triggerHistory.isActionsPerformed()) {
                     isIgnored = true;
@@ -259,7 +258,7 @@ public class CertificateDiscoveredEventHandler extends EventHandler<Certificate>
                 for (TriggerAssociation triggerAssociation : mergedTriggers) {
                     // Create trigger history entry
                     Trigger trigger = triggerAssociation.getTrigger();
-                    eventContext.getTriggerEvaluator().evaluateTrigger(trigger, triggerAssociation, certificate, discoveryCertificate.getUuid(), eventData);
+                    eventContext.getTriggerEvaluator().evaluateTrigger(trigger, triggerAssociation, certificate, discoveryCertificate.getUuid(), eventData, null);
                 }
 
                 certificateHandler.updateDiscoveredCertificate(discovery, certificate, discoveryCertificate.getMeta());

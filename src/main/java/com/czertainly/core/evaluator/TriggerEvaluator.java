@@ -74,8 +74,8 @@ public class TriggerEvaluator<T extends UniquelyIdentifiedObject> implements ITr
     }
 
     @Override
-    public TriggerHistory evaluateTrigger(Trigger trigger, TriggerAssociation triggerAssociation, T object, UUID referenceObjectUuid, Object data) throws RuleException {
-        TriggerHistory triggerHistory = triggerService.createTriggerHistory(trigger.getUuid(), triggerAssociation, object.getUuid(), referenceObjectUuid);
+    public TriggerHistory evaluateTrigger(Trigger trigger, TriggerAssociation triggerAssociation, T object, UUID referenceObjectUuid, Object data, UUID eventHistoryUuid) throws RuleException {
+        TriggerHistory triggerHistory = triggerService.createTriggerHistory(trigger.getUuid(), triggerAssociation, object.getUuid(), referenceObjectUuid, eventHistoryUuid);
         if (evaluateRules(triggerHistory, trigger.getRules(), object)) {
             triggerHistory.setConditionsMatched(true);
             if (trigger.isIgnoreTrigger()) {
@@ -310,7 +310,7 @@ public class TriggerEvaluator<T extends UniquelyIdentifiedObject> implements ITr
                         if (execution.getType() == ExecutionType.SET_FIELD) {
                             performSetFieldExecution(trigger.getResource(), execution, object);
                         } else {
-                            performSendNotificationAction(trigger.getResource(), event, execution, object, data);
+                            performSendNotificationAction(trigger.getResource(), event, execution, object, data, triggerHistory);
                         }
                         logger.debug("Execution '{}' of action '{}' has been performed.", action.getName(), execution.getName());
                     } catch (Exception e) {
@@ -366,13 +366,13 @@ public class TriggerEvaluator<T extends UniquelyIdentifiedObject> implements ITr
         attributeEngine.updateObjectCustomAttributeContent(resource, objectUuid, null, fieldIdentifier.substring(0, fieldIdentifier.indexOf("|")), attributeContents);
     }
 
-    protected void performSendNotificationAction(Resource resource, ResourceEvent event, Execution execution, T object, Object data) {
+    protected void performSendNotificationAction(Resource resource, ResourceEvent event, Execution execution, T object, Object data, TriggerHistory triggerHistory) {
         List<UUID> notificationProfileUuids = new ArrayList<>();
         for (ExecutionItem executionItem : execution.getItems()) {
             notificationProfileUuids.add(executionItem.getNotificationProfileUuid());
         }
 
-        NotificationMessage message = new NotificationMessage(event, resource, object.getUuid(), notificationProfileUuids, null, data);
+        NotificationMessage message = new NotificationMessage(event, resource, object.getUuid(), notificationProfileUuids, null, data, triggerHistory, execution.getUuid());
         notificationProducer.produceMessage(message);
     }
 

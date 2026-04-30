@@ -2,6 +2,7 @@ package com.czertainly.core.messaging.model;
 
 import com.czertainly.api.model.core.auth.Resource;
 import com.czertainly.api.model.core.other.ResourceEvent;
+import com.czertainly.core.dao.entity.workflows.TriggerHistory;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -25,6 +26,10 @@ public class NotificationMessage {
 
     private List<NotificationRecipient> recipients;
 
+    private TriggerHistory triggerHistory;
+
+    private UUID executionUuid;
+
     private Object data;
 
     public NotificationMessage(ResourceEvent event, Resource resource, UUID objectUuid, List<UUID> notificationProfileUuids, List<NotificationRecipient> recipients, Object data) {
@@ -34,6 +39,12 @@ public class NotificationMessage {
         this.notificationProfileUuids = notificationProfileUuids;
         this.recipients = recipients;
         this.data = data;
+    }
+
+    public NotificationMessage(ResourceEvent event, Resource resource, UUID objectUuid, List<UUID> notificationProfileUuids, List<NotificationRecipient> recipients, Object data,  TriggerHistory triggerHistory, UUID executionUuid) {
+        this(event, resource, objectUuid, notificationProfileUuids, recipients, data);
+        this.triggerHistory = triggerHistory;
+        this.executionUuid = executionUuid;
     }
 
 }

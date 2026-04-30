@@ -18,11 +18,13 @@ import com.czertainly.core.attribute.engine.AttributeEngine;
 import com.czertainly.core.attribute.engine.AttributeVersionHelper;
 import com.czertainly.core.dao.entity.Group;
 import com.czertainly.core.dao.entity.notifications.*;
+import com.czertainly.core.dao.entity.workflows.TriggerHistoryRecord;
 import com.czertainly.core.dao.repository.GroupRepository;
 import com.czertainly.core.dao.repository.notifications.NotificationInstanceReferenceRepository;
 import com.czertainly.api.model.core.notification.RecipientType;
 import com.czertainly.core.dao.repository.notifications.NotificationProfileVersionRepository;
 import com.czertainly.core.dao.repository.notifications.PendingNotificationRepository;
+import com.czertainly.core.dao.repository.workflows.TriggerHistoryRecordRepository;
 import com.czertainly.core.messaging.configuration.RabbitMQConstants;
 import com.czertainly.core.messaging.model.NotificationMessage;
 import com.czertainly.core.messaging.model.NotificationRecipient;
@@ -30,6 +32,7 @@ import com.czertainly.core.security.authn.client.RoleManagementApiClient;
 import com.czertainly.core.security.authn.client.UserManagementApiClient;
 import com.czertainly.core.service.NotificationService;
 import com.czertainly.core.service.ResourceObjectAssociationService;
+import com.czertainly.core.service.TriggerService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -53,6 +56,7 @@ public class NotificationListener {
     private AttributeEngine attributeEngine;
 
     private NotificationService notificationService;
+    private TriggerService  triggerService;
     private NotificationInstanceApiClient notificationInstanceApiClient;
     private PendingNotificationRepository pendingNotificationRepository;
     private NotificationProfileVersionRepository notificationProfileVersionRepository;
@@ -91,6 +95,11 @@ public class NotificationListener {
     @Autowired
     public void setNotificationInstanceApiClient(NotificationInstanceApiClient notificationInstanceApiClient) {
         this.notificationInstanceApiClient = notificationInstanceApiClient;
+    }
+
+    @Autowired
+    public void setTriggerService(TriggerService triggerService) {
+        this.triggerService = triggerService;
     }
 
     @Autowired
@@ -143,7 +152,11 @@ public class NotificationListener {
                 try {
                     sendByNotificationProfile(notificationProfileUuid, message);
                 } catch (Exception e) {
-                    logger.error("Error in sending notifications based on notification profile {}: {}", notificationProfileUuid, e.getMessage());
+                    String errorMessage = "Error in sending notifications based on notification profile %s: %s".formatted(notificationProfileUuid, e.getMessage());
+                    logger.error(errorMessage);
+                    if (message.getTriggerHistory() != null) {
+                        triggerService.createTriggerHistoryRecord(message.getTriggerHistory(), null, message.getExecutionUuid(), errorMessage);
+                    }
                 }
             }
 
@@ -186,11 +199,23 @@ public class NotificationListener {
                 logger.debug("Sending notification message externally successful.");
                 notificationSent = true;
             } catch (ConnectorEntityNotFoundException e) {
-                logger.warn("Notification instance {} configured for notification profile {} in event {} was not found.", notificationInstanceUUID, notificationProfileVersion.getNotificationProfile().getName(), message.getEvent());
+                String errorMessage = "Notification instance %s configured for notification profile %s in event %s was not found.".formatted(notificationInstanceUUID, notificationProfileVersion.getNotificationProfile().getName(), message.getEvent());
+                logger.warn(errorMessage);
+                if (message.getTriggerHistory() != null) {
+                    triggerService.createTriggerHistoryRecord(message.getTriggerHistory(), null, message.getExecutionUuid(), errorMessage);
+                }
             } catch (ValidationException e) {
-                logger.warn("Validation error in sending notification to connector of notification instance {} configured for notification profile {} in event {}: {}", notificationInstanceUUID, notificationProfileVersion.getNotificationProfile().getName(), message.getEvent(), e.getMessage());
+                String errorMessage = "Validation error in sending notification to connector of notification instance %s configured for notification profile %s in event %s: %s".formatted(notificationInstanceUUID, notificationProfileVersion.getNotificationProfile().getName(), message.getEvent(), e.getMessage());
+                logger.warn(errorMessage);
+                if (message.getTriggerHistory() != null) {
+                    triggerService.createTriggerHistoryRecord(message.getTriggerHistory(), null, message.getExecutionUuid(), errorMessage);
+                }
             } catch (Exception e) {
-                logger.error("Error in external notification with notification instance {} configured for notification profile {} in event {}: {}", notificationInstanceUUID, notificationProfileVersion.getNotificationProfile().getName(), message.getEvent(), e.toString());
+                String errorMessage = "Error in external notification with notification instance %s configured for notification profile %s in event %s: %s".formatted(notificationInstanceUUID, notificationProfileVersion.getNotificationProfile().getName(), message.getEvent(), e.toString());
+                logger.error(errorMessage);
+                if (message.getTriggerHistory() != null) {
+                    triggerService.createTriggerHistoryRecord(message.getTriggerHistory(), null, message.getExecutionUuid(), errorMessage);
+                }
             }
         }
 
@@ -200,7 +225,11 @@ public class NotificationListener {
                 sendInternalNotifications(recipients, getInternalNotificationData(message), message.getResource(), message.getObjectUuid());
                 notificationSent = true;
             } catch (ValidationException e) {
-                logger.error("Error in internal notification: {}", e.toString());
+                String errorMessage = "Error in internal notification: %s".formatted(e.toString());
+                logger.error(errorMessage);
+                if (message.getTriggerHistory() != null) {
+                    triggerService.createTriggerHistoryRecord(message.getTriggerHistory(), null, message.getExecutionUuid(), errorMessage);
+                }
             }
         }
 
