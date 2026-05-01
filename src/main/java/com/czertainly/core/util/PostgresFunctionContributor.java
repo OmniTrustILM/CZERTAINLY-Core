@@ -17,7 +17,7 @@ public class PostgresFunctionContributor implements FunctionContributor {
         BasicType<Boolean> booleanType = functionContributions.getTypeConfiguration().getBasicTypeRegistry().resolve(StandardBasicTypes.BOOLEAN);
         functionContributions.getFunctionRegistry().registerPattern(BIT_AND_FUNCTION,
                 "?1 & ?2", resultType);
-        functionContributions.getFunctionRegistry().registerPattern(JSONB_CONTAINS, "?1 @> CAST(?2 AS jsonb)", booleanType);
+        functionContributions.getFunctionRegistry().registerPattern(JSONB_CONTAINS, "jsonb_contains(?1, ?2::jsonb)", booleanType);
         // CAST(?1 AS TEXT) = ANY(?2)  —  check scalar membership in a native text[] column
         functionContributions.getFunctionRegistry().registerPattern(ARRAY_CONTAINS, "CAST(?1 AS TEXT) = ANY(?2)", booleanType);
     }
