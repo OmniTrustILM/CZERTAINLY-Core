@@ -217,6 +217,12 @@ public class FilterPredicatesBuilder {
 
         // prepare filter values, expression and set filter characteristics
         List<Object> filterValues = preparePropertyFilterValues(filterDto, filterField);
+        if (filterValues.isEmpty()
+                && filterDto.getCondition() != FilterConditionOperator.EMPTY
+                && filterDto.getCondition() != FilterConditionOperator.NOT_EMPTY) {
+            throw new ValidationException("Filter for field " + filterField + " with operator " + filterDto.getCondition() + " requires at least one value.");
+        }
+
         Expression expression = null;
         if (filterField.getFieldAttribute() != null && !isCountOperator(filterDto.getCondition()))
             expression = from.get(filterField.getFieldAttribute().getName());
