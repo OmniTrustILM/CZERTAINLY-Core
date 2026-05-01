@@ -29,7 +29,12 @@ import com.czertainly.core.util.BaseSpringBootTest;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
+
+import static org.mockito.ArgumentMatchers.any;
 
 import java.time.Duration;
 import java.util.List;
@@ -44,7 +49,7 @@ class TimeQualityConfigurationServiceImplTest extends BaseSpringBootTest {
     @Autowired
     private TimeQualityConfigurationService timeQualityConfigurationService;
 
-    @Autowired
+    @MockitoSpyBean
     private TimeQualityConfigurationRepository timeQualityConfigurationRepository;
 
     @Autowired
@@ -321,6 +326,29 @@ class TimeQualityConfigurationServiceImplTest extends BaseSpringBootTest {
         timeQualityConfigurationService.createTimeQualityConfiguration(buildCreateRequest("duplicate-name"));
         Assertions.assertThrows(AlreadyExistException.class,
                 () -> timeQualityConfigurationService.createTimeQualityConfiguration(buildCreateRequest("duplicate-name")));
+    }
+
+    @Test
+    void create_translatesDbUniqueViolationToAlreadyExist() {
+        Mockito.doReturn(Optional.empty()).when(timeQualityConfigurationRepository).findByName("race-name");
+        Mockito.doThrow(new DataIntegrityViolationException("unique constraint violation"))
+               .when(timeQualityConfigurationRepository).saveAndFlush(any(TimeQualityConfiguration.class));
+
+        AlreadyExistException ex = Assertions.assertThrows(AlreadyExistException.class,
+                () -> timeQualityConfigurationService.createTimeQualityConfiguration(buildCreateRequest("race-name")));
+        Assertions.assertTrue(ex.getMessage().contains("race-name"));
+    }
+
+    @Test
+    void update_translatesDbUniqueViolationToAlreadyExist() {
+        Mockito.doReturn(Optional.empty()).when(timeQualityConfigurationRepository).findByName("race-name");
+        Mockito.doThrow(new DataIntegrityViolationException("unique constraint violation"))
+               .when(timeQualityConfigurationRepository).saveAndFlush(any(TimeQualityConfiguration.class));
+
+        AlreadyExistException ex = Assertions.assertThrows(AlreadyExistException.class,
+                () -> timeQualityConfigurationService.updateTimeQualityConfiguration(
+                        savedConfiguration.getSecuredUuid(), buildUpdateRequest("race-name")));
+        Assertions.assertTrue(ex.getMessage().contains("race-name"));
     }
 
     // ──────────────────────────────────────────────────────────────────────────

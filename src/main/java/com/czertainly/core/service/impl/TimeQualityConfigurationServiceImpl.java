@@ -38,7 +38,9 @@ import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.function.TriFunction;
+import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -112,19 +114,12 @@ public class TimeQualityConfigurationServiceImpl implements TimeQualityConfigura
         attributeEngine.validateCustomAttributesContent(Resource.TIME_QUALITY_CONFIGURATION, request.getCustomAttributes());
 
         TimeQualityConfiguration configuration = new TimeQualityConfiguration();
-        configuration.setName(request.getName());
-        configuration.setAccuracy(request.getAccuracy());
-        configuration.setNtpServers(request.getNtpServers());
-        configuration.setNtpCheckInterval(request.getNtpCheckInterval());
-        configuration.setNtpSamplesPerServer(request.getNtpSamplesPerServer());
-        configuration.setNtpCheckTimeout(request.getNtpCheckTimeout());
-        configuration.setNtpServersMinReachable(request.getNtpServersMinReachable());
-        configuration.setMaxClockDrift(request.getMaxClockDrift());
-        configuration.setLeapSecondGuard(request.isLeapSecondGuard());
-        TimeQualityConfiguration saved = timeQualityConfigurationRepository.save(configuration);
+        fillTimeQualityConfigurationEntity(configuration, request);
+        TimeQualityConfiguration saved = saveOrTranslateUniqueViolation(configuration, request.getName());
 
         List<ResponseAttribute> customAttributes = attributeEngine.updateObjectCustomAttributesContent(Resource.TIME_QUALITY_CONFIGURATION, saved.getUuid(), request.getCustomAttributes());
         return TimeQualityConfigurationMapper.toDto(saved, customAttributes);
+
     }
 
     @Override
@@ -140,16 +135,8 @@ public class TimeQualityConfigurationServiceImpl implements TimeQualityConfigura
         }
         attributeEngine.validateCustomAttributesContent(Resource.TIME_QUALITY_CONFIGURATION, request.getCustomAttributes());
 
-        configuration.setName(request.getName());
-        configuration.setAccuracy(request.getAccuracy());
-        configuration.setNtpServers(request.getNtpServers());
-        configuration.setNtpCheckInterval(request.getNtpCheckInterval());
-        configuration.setNtpSamplesPerServer(request.getNtpSamplesPerServer());
-        configuration.setNtpCheckTimeout(request.getNtpCheckTimeout());
-        configuration.setNtpServersMinReachable(request.getNtpServersMinReachable());
-        configuration.setMaxClockDrift(request.getMaxClockDrift());
-        configuration.setLeapSecondGuard(request.isLeapSecondGuard());
-        TimeQualityConfiguration saved = timeQualityConfigurationRepository.save(configuration);
+        fillTimeQualityConfigurationEntity(configuration, request);
+        TimeQualityConfiguration saved = saveOrTranslateUniqueViolation(configuration, request.getName());
 
         List<ResponseAttribute> customAttributes = attributeEngine.updateObjectCustomAttributesContent(Resource.TIME_QUALITY_CONFIGURATION, saved.getUuid(), request.getCustomAttributes());
         return TimeQualityConfigurationMapper.toDto(saved, customAttributes);
@@ -173,7 +160,7 @@ public class TimeQualityConfigurationServiceImpl implements TimeQualityConfigura
                 configuration = getTimeQualityConfigurationEntity(uuid);
                 deleteTimeQualityConfiguration(configuration);
             } catch (Exception e) {
-                log.error(e.getMessage());
+                log.error("Failed to delete Time Quality Configuration {}", uuid, e);
                 messages.add(new BulkActionMessageDto(uuid.toString(), configuration != null ? configuration.getName() : "", e.getMessage()));
             }
         }
@@ -221,9 +208,29 @@ public class TimeQualityConfigurationServiceImpl implements TimeQualityConfigura
                 .orElseThrow(() -> new NotFoundException("Time Quality Configuration not found: " + uuid));
     }
 
+    private void fillTimeQualityConfigurationEntity(TimeQualityConfiguration entity, TimeQualityConfigurationRequestDto request) {
+        entity.setName(request.getName());
+        entity.setAccuracy(request.getAccuracy());
+        entity.setNtpServers(request.getNtpServers());
+        entity.setNtpCheckInterval(request.getNtpCheckInterval());
+        entity.setNtpSamplesPerServer(request.getNtpSamplesPerServer());
+        entity.setNtpCheckTimeout(request.getNtpCheckTimeout());
+        entity.setNtpServersMinReachable(request.getNtpServersMinReachable());
+        entity.setMaxClockDrift(request.getMaxClockDrift());
+        entity.setLeapSecondGuard(request.isLeapSecondGuard());
+    }
+
     private void deleteTimeQualityConfiguration(TimeQualityConfiguration configuration) {
         attributeEngine.deleteObjectAttributeContent(Resource.TIME_QUALITY_CONFIGURATION, configuration.getUuid());
         timeQualityConfigurationRepository.delete(configuration);
+    }
+
+    private TimeQualityConfiguration saveOrTranslateUniqueViolation(TimeQualityConfiguration configuration, String name) throws AlreadyExistException {
+        try {
+            return timeQualityConfigurationRepository.saveAndFlush(configuration);
+        } catch (DataIntegrityViolationException e) {
+            throw new AlreadyExistException("Time Quality Configuration with name '" + name + "' already exists.");
+        }
     }
 
     @Autowired

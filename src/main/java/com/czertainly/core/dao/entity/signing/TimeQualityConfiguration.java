@@ -27,7 +27,7 @@ public class TimeQualityConfiguration extends UniquelyIdentifiedAndAudited {
     @Column(name = "accuracy", columnDefinition = "interval")
     private Duration accuracy;
 
-    @Column(name = "ntp_servers")
+    @Column(name = "ntp_servers", nullable = false)
     @JdbcTypeCode(SqlTypes.ARRAY)
     private List<String> ntpServers = new ArrayList<>();
 
