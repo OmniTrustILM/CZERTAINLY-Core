@@ -38,12 +38,13 @@ import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.function.TriFunction;
-import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
@@ -55,8 +56,11 @@ import java.util.UUID;
 @Service(Resource.Codes.TIME_QUALITY_CONFIGURATION)
 public class TimeQualityConfigurationServiceImpl implements TimeQualityConfigurationService {
 
+    private static final String NOT_FOUND_MSG = "Time Quality Configuration not found: ";
+
     private AttributeEngine attributeEngine;
     private TimeQualityConfigurationRepository timeQualityConfigurationRepository;
+    private TimeQualityConfigurationServiceImpl self;
 
     @Override
     @ExternalAuthorization(resource = Resource.TIME_QUALITY_CONFIGURATION, action = ResourceAction.LIST)
@@ -99,7 +103,7 @@ public class TimeQualityConfigurationServiceImpl implements TimeQualityConfigura
     @Transactional(readOnly = true)
     public TimeQualityConfigurationDto getTimeQualityConfiguration(SecuredUUID uuid) throws NotFoundException {
         TimeQualityConfiguration configuration = timeQualityConfigurationRepository.findByUuid(uuid)
-                .orElseThrow(() -> new NotFoundException("Time Quality Configuration not found: " + uuid));
+                .orElseThrow(() -> new NotFoundException(NOT_FOUND_MSG + uuid));
         List<ResponseAttribute> customAttributes = attributeEngine.getObjectCustomAttributesContent(Resource.TIME_QUALITY_CONFIGURATION, configuration.getUuid());
         return TimeQualityConfigurationMapper.toDto(configuration, customAttributes);
     }
@@ -127,7 +131,7 @@ public class TimeQualityConfigurationServiceImpl implements TimeQualityConfigura
     @Transactional
     public TimeQualityConfigurationDto updateTimeQualityConfiguration(SecuredUUID uuid, TimeQualityConfigurationRequestDto request) throws AlreadyExistException, AttributeException, NotFoundException {
         TimeQualityConfiguration configuration = timeQualityConfigurationRepository.findByUuid(uuid)
-                .orElseThrow(() -> new NotFoundException("Time Quality Configuration not found: " + uuid));
+                .orElseThrow(() -> new NotFoundException(NOT_FOUND_MSG + uuid));
 
         Optional<TimeQualityConfiguration> existingWithSameName = timeQualityConfigurationRepository.findByName(request.getName());
         if (existingWithSameName.isPresent() && !existingWithSameName.get().getUuid().equals(configuration.getUuid())) {
@@ -151,20 +155,24 @@ public class TimeQualityConfigurationServiceImpl implements TimeQualityConfigura
 
     @Override
     @ExternalAuthorization(resource = Resource.TIME_QUALITY_CONFIGURATION, action = ResourceAction.DELETE)
-    @Transactional
     public List<BulkActionMessageDto> bulkDeleteTimeQualityConfigurations(List<SecuredUUID> uuids) {
         List<BulkActionMessageDto> messages = new ArrayList<>();
         for (SecuredUUID uuid : uuids) {
             TimeQualityConfiguration configuration = null;
             try {
                 configuration = getTimeQualityConfigurationEntity(uuid);
-                deleteTimeQualityConfiguration(configuration);
+                self.deleteInOwnTransaction(configuration);
             } catch (Exception e) {
                 log.error("Failed to delete Time Quality Configuration {}", uuid, e);
                 messages.add(new BulkActionMessageDto(uuid.toString(), configuration != null ? configuration.getName() : "", e.getMessage()));
             }
         }
         return messages;
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    void deleteInOwnTransaction(TimeQualityConfiguration configuration) {
+        deleteTimeQualityConfiguration(configuration);
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -196,7 +204,7 @@ public class TimeQualityConfigurationServiceImpl implements TimeQualityConfigura
     @Transactional(readOnly = true)
     public void evaluatePermissionChain(SecuredUUID uuid) throws NotFoundException {
         timeQualityConfigurationRepository.findByUuid(uuid)
-                .orElseThrow(() -> new NotFoundException("Time Quality Configuration not found: " + uuid));
+                .orElseThrow(() -> new NotFoundException(NOT_FOUND_MSG + uuid));
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -205,7 +213,7 @@ public class TimeQualityConfigurationServiceImpl implements TimeQualityConfigura
 
     private TimeQualityConfiguration getTimeQualityConfigurationEntity(SecuredUUID uuid) throws NotFoundException {
         return timeQualityConfigurationRepository.findByUuid(uuid)
-                .orElseThrow(() -> new NotFoundException("Time Quality Configuration not found: " + uuid));
+                .orElseThrow(() -> new NotFoundException(NOT_FOUND_MSG + uuid));
     }
 
     private void fillTimeQualityConfigurationEntity(TimeQualityConfiguration entity, TimeQualityConfigurationRequestDto request) {
@@ -241,5 +249,11 @@ public class TimeQualityConfigurationServiceImpl implements TimeQualityConfigura
     @Autowired
     public void setTimeQualityConfigurationRepository(TimeQualityConfigurationRepository timeQualityConfigurationRepository) {
         this.timeQualityConfigurationRepository = timeQualityConfigurationRepository;
+    }
+
+    @Lazy
+    @Autowired
+    public void setSelf(TimeQualityConfigurationServiceImpl self) {
+        this.self = self;
     }
 }

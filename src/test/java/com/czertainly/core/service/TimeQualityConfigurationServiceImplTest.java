@@ -17,6 +17,7 @@ import com.czertainly.api.model.common.attribute.common.properties.CustomAttribu
 import com.czertainly.api.model.common.attribute.v3.CustomAttributeV3;
 import com.czertainly.api.model.common.attribute.v3.content.StringAttributeContentV3;
 import com.czertainly.api.model.core.auth.Resource;
+import com.czertainly.core.attribute.engine.AttributeEngine;
 import com.czertainly.core.dao.entity.AttributeDefinition;
 import com.czertainly.core.dao.entity.AttributeRelation;
 import com.czertainly.core.dao.entity.signing.TimeQualityConfiguration;
@@ -27,6 +28,7 @@ import com.czertainly.core.security.authz.SecuredUUID;
 import com.czertainly.core.security.authz.SecurityFilter;
 import com.czertainly.core.util.BaseSpringBootTest;
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -52,6 +54,9 @@ class TimeQualityConfigurationServiceImplTest extends BaseSpringBootTest {
     @MockitoSpyBean
     private TimeQualityConfigurationRepository timeQualityConfigurationRepository;
 
+    @MockitoSpyBean
+    private AttributeEngine attributeEngine;
+
     @Autowired
     private AttributeDefinitionRepository attributeDefinitionRepository;
 
@@ -62,6 +67,11 @@ class TimeQualityConfigurationServiceImplTest extends BaseSpringBootTest {
      * A pre-existing TimeQualityConfiguration saved directly via repository.
      */
     private TimeQualityConfiguration savedConfiguration;
+
+    @AfterEach
+    void resetSpies() {
+        Mockito.reset(timeQualityConfigurationRepository, attributeEngine);
+    }
 
     @BeforeEach
     void setUp() {
@@ -494,6 +504,28 @@ class TimeQualityConfigurationServiceImplTest extends BaseSpringBootTest {
         Assertions.assertEquals(1, messages.size());
         Assertions.assertEquals("00000000-0000-0000-0000-000000000099", messages.getFirst().getUuid());
         Assertions.assertNotNull(messages.getFirst().getMessage());
+    }
+
+    @Test
+    void testBulkDelete_partialFailure_survivingItemsAreCommitted() throws AlreadyExistException, AttributeException, NotFoundException {
+        TimeQualityConfigurationDto second = timeQualityConfigurationService.createTimeQualityConfiguration(buildCreateRequest("bulk-partial-second"));
+        UUID secondUuid = UUID.fromString(second.getUuid());
+
+        // Throw a RuntimeException for the first item only, keyed by its UUID.
+        // AttributeEngine is a concrete class so doCallRealMethod() works for the second item.
+        Mockito.doThrow(new DataIntegrityViolationException("simulated FK violation"))
+               .when(attributeEngine).deleteObjectAttributeContent(Resource.TIME_QUALITY_CONFIGURATION, savedConfiguration.getUuid());
+
+        List<BulkActionMessageDto> messages = timeQualityConfigurationService.bulkDeleteTimeQualityConfigurations(
+                List.of(savedConfiguration.getSecuredUuid(), SecuredUUID.fromString(second.getUuid())));
+
+        Assertions.assertEquals(1, messages.size(), "Only the failing item should produce an error message");
+        Assertions.assertEquals(savedConfiguration.getUuid().toString(), messages.getFirst().getUuid());
+
+        Assertions.assertTrue(timeQualityConfigurationRepository.findById(savedConfiguration.getUuid()).isPresent(),
+                "Failed item's REQUIRES_NEW transaction should have been rolled back, leaving the entity in the DB");
+        Assertions.assertTrue(timeQualityConfigurationRepository.findById(secondUuid).isEmpty(),
+                "Successful item's REQUIRES_NEW transaction should have committed independently");
     }
 
     // ──────────────────────────────────────────────────────────────────────────
