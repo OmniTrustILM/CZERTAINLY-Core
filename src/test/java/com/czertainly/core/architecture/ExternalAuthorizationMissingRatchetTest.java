@@ -21,7 +21,9 @@ class ExternalAuthorizationMissingRatchetTest {
                 .importPackages("com.czertainly.core.service");
 
         long actual = classes.stream()
-                .filter(c -> c.isInterface() && c.getSimpleName().endsWith("ExternalService"))
+                .filter(c -> !c.isInterface() &&
+                             c.getAllRawInterfaces().stream()
+                                     .anyMatch(ifc -> ifc.getSimpleName().endsWith("ExternalService")))
                 .flatMap(c -> c.getMethods().stream())
                 .filter(m -> m.isAnnotatedWith(ExternalAuthorizationMissing.class))
                 .count();
