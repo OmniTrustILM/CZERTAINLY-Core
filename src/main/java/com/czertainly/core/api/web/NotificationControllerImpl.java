@@ -18,7 +18,7 @@ import java.util.List;
 @RestController
 public class NotificationControllerImpl implements NotificationController {
 
-    NotificationExternalService notificationService;
+    private NotificationExternalService notificationService;
 
     @Autowired
     public void setNotificationService(NotificationExternalService notificationService) {

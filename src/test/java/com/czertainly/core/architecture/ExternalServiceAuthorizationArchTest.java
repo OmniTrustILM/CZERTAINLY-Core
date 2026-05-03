@@ -39,7 +39,7 @@ public class ExternalServiceAuthorizationArchTest {
                     .should(new ArchCondition<JavaClass>("not extend other interfaces") {
                         @Override
                         public void check(JavaClass javaClass, ConditionEvents events) {
-                            if (!javaClass.getDirectInterfaces().isEmpty()) {
+                            if (!javaClass.getRawInterfaces().isEmpty()) {
                                 events.add(SimpleConditionEvent.violated(javaClass,
                                         javaClass.getName() + " extends other interfaces; *ExternalService interfaces must be flat so the auth-annotation rule covers all callable methods"));
                             }
