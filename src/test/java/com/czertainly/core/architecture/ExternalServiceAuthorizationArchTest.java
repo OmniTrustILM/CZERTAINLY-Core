@@ -53,7 +53,8 @@ public class ExternalServiceAuthorizationArchTest {
             classes()
                     .that().haveSimpleNameEndingWith("ExternalService")
                     .and().areInterfaces()
-                    .should(new ArchCondition<JavaClass>("not extend other interfaces") {
+                    .should(new ArchCondition<>("not extend other interfaces") {
+                        @Override
                         public void check(JavaClass javaClass, ConditionEvents events) {
                             if (!javaClass.getRawInterfaces().isEmpty()) {
                                 events.add(SimpleConditionEvent.violated(javaClass,
@@ -66,7 +67,7 @@ public class ExternalServiceAuthorizationArchTest {
     static final ArchRule every_external_service_method_has_exactly_one_auth_annotation =
             classes()
                     .that(IMPLEMENTS_EXTERNAL_SERVICE)
-                    .should(new ArchCondition<JavaClass>("have exactly one authorization annotation on each method implementing an *ExternalService interface method") {
+                    .should(new ArchCondition<>("have exactly one authorization annotation on each method implementing an *ExternalService interface method") {
                         @Override
                         public void check(JavaClass implClass, ConditionEvents events) {
                             implClass.getAllRawInterfaces().stream()
