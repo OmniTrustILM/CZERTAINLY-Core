@@ -954,4 +954,387 @@ class ClientOperationServiceV2Test extends BaseSpringBootTest {
 
 
     }
+
+    /**
+     * Sets the certificate to REQUESTED with a CSR ready for issuance, then returns its UUID.
+     */
+    private UUID prepareCertificateForIssuance() throws java.security.NoSuchAlgorithmException {
+        CertificateRequestEntity csr = new CertificateRequestEntity();
+        csr.setContent("content");
+        certificateRequestRepository.save(csr);
+        certificate.setState(CertificateState.REQUESTED);
+        certificate.setCertificateRequest(csr);
+        certificate.setCertificateRequestUuid(csr.getUuid());
+        certificateRepository.save(certificate);
+        return certificate.getUuid();
+    }
+
+    @Test
+    void issueCertificateAction_transitionsToPendingIssue_when202FromConnector() throws Exception {
+        UUID certUuid = prepareCertificateForIssuance();
+        mockServer.stubFor(WireMock
+                .post(WireMock.urlPathMatching("/v2/authorityProvider/authorities/[^/]+/certificates/issue"))
+                .willReturn(WireMock.aResponse().withStatus(202)));
+
+        Assertions.assertDoesNotThrow(() -> clientOperationService.issueCertificateAction(certUuid, true));
+
+        Certificate fetched = certificateRepository.findByUuid(certUuid).orElseThrow();
+        Assertions.assertEquals(CertificateState.PENDING_ISSUE, fetched.getState());
+    }
+
+    @Test
+    void issueCertificateAction_persistsMeta_when202CarriesMetadata() throws Exception {
+        UUID certUuid = prepareCertificateForIssuance();
+        // 202 with a meta entry the connector wants to track against the certificate
+        mockServer.stubFor(WireMock
+                .post(WireMock.urlPathMatching("/v2/authorityProvider/authorities/[^/]+/certificates/issue"))
+                .willReturn(WireMock.aResponse().withStatus(202)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("""
+                                {
+                                  "meta": [
+                                    {
+                                      "uuid": "00000000-0000-0000-0000-000000000001",
+                                      "name": "orderId",
+                                      "type": "meta",
+                                      "label": "Order ID",
+                                      "contentType": "string",
+                                      "content": [{"data": "ORD-123"}],
+                                      "properties": {"label": "Order ID", "global": false, "overwrite": false},
+                                      "version": 2
+                                    }
+                                  ]
+                                }
+                                """)));
+
+        clientOperationService.issueCertificateAction(certUuid, true);
+
+        Certificate fetched = certificateRepository.findByUuid(certUuid).orElseThrow();
+        Assertions.assertEquals(CertificateState.PENDING_ISSUE, fetched.getState());
+        // Meta should be persisted against the certificate via the standard attribute pipeline
+        var storedMeta = attributeEngine.getMetadataAttributesDefinitionContent(
+                ObjectAttributeContentInfo.builder(Resource.CERTIFICATE, fetched.getUuid())
+                        .connector(connector.getUuid()).build());
+        Assertions.assertNotNull(storedMeta);
+        Assertions.assertFalse(storedMeta.isEmpty(),
+                "expected the connector's meta to be persisted against the certificate");
+        Assertions.assertEquals("orderId", storedMeta.getFirst().getName());
+    }
+
+    @Test
+    void issueCertificateAction_recordsEventHistoryEntry_on202() throws Exception {
+        UUID certUuid = prepareCertificateForIssuance();
+        mockServer.stubFor(WireMock
+                .post(WireMock.urlPathMatching("/v2/authorityProvider/authorities/[^/]+/certificates/issue"))
+                .willReturn(WireMock.aResponse().withStatus(202)));
+
+        clientOperationService.issueCertificateAction(certUuid, true);
+
+        // The state transition to PENDING_ISSUE should produce an ISSUE event in the cert history.
+        Certificate fetched = certificateRepository.findByUuid(certUuid).orElseThrow();
+        var history = certificateEventHistoryRepository.findByCertificateOrderByCreatedDesc(fetched);
+        Assertions.assertTrue(
+                history.stream().anyMatch(h ->
+                        h.getEvent() == com.czertainly.api.model.core.certificate.CertificateEvent.ISSUE
+                                && h.getStatus() == com.czertainly.api.model.core.certificate.CertificateEventStatus.SUCCESS),
+                "expected an ISSUE/SUCCESS event in cert history after 202 from connector");
+    }
+
+    @Test
+    void revokeCertificateAction_transitionsToPendingRevoke_when202FromConnector() throws Exception {
+        mockServer.stubFor(WireMock
+                .post(WireMock.urlPathMatching("/v2/authorityProvider/authorities/[^/]+/certificates/revoke"))
+                .willReturn(WireMock.aResponse().withStatus(202)));
+
+        ClientCertificateRevocationDto request = new ClientCertificateRevocationDto();
+        request.setAttributes(List.of());
+        request.setDestroyKey(true);
+
+        clientOperationService.revokeCertificateAction(certificate.getUuid(), request, true);
+
+        Certificate fetched = certificateRepository.findByUuid(certificate.getUuid()).orElseThrow();
+        Assertions.assertEquals(CertificateState.PENDING_REVOKE, fetched.getState());
+        Assertions.assertEquals(Boolean.TRUE, fetched.getPendingRevokeDestroyKey(),
+                "destroyKey flag should be persisted for later finalization");
+        Assertions.assertNotNull(fetched.getPendingRevokeAttributes(),
+                "revoke attributes should be persisted for later finalization");
+    }
+
+    @Test
+    void revokeCertificateAction_persistsMeta_when202CarriesMetadata() throws Exception {
+        mockServer.stubFor(WireMock
+                .post(WireMock.urlPathMatching("/v2/authorityProvider/authorities/[^/]+/certificates/revoke"))
+                .willReturn(WireMock.aResponse().withStatus(202)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("""
+                                {
+                                  "meta": [
+                                    {
+                                      "uuid": "00000000-0000-0000-0000-000000000002",
+                                      "name": "revokeOrderId",
+                                      "type": "meta",
+                                      "label": "Revoke Order ID",
+                                      "contentType": "string",
+                                      "content": [{"data": "REV-456"}],
+                                      "properties": {"label": "Revoke Order ID", "global": false, "overwrite": false},
+                                      "version": 2
+                                    }
+                                  ]
+                                }
+                                """)));
+
+        ClientCertificateRevocationDto request = new ClientCertificateRevocationDto();
+        request.setAttributes(List.of());
+        request.setDestroyKey(false);
+
+        clientOperationService.revokeCertificateAction(certificate.getUuid(), request, true);
+
+        Certificate fetched = certificateRepository.findByUuid(certificate.getUuid()).orElseThrow();
+        Assertions.assertEquals(CertificateState.PENDING_REVOKE, fetched.getState());
+
+        var storedMeta = attributeEngine.getMetadataAttributesDefinitionContent(
+                ObjectAttributeContentInfo.builder(Resource.CERTIFICATE, fetched.getUuid())
+                        .connector(connector.getUuid()).build());
+        Assertions.assertNotNull(storedMeta);
+        Assertions.assertFalse(storedMeta.isEmpty(),
+                "expected the connector's revoke meta to be persisted against the certificate");
+        Assertions.assertEquals("revokeOrderId", storedMeta.getFirst().getName());
+    }
+
+    @Test
+    void revokeCertificateAction_completesSynchronously_on200WithEmptyBodyAndNoContentType() {
+        // Default WireMock 200 response: no Content-Length, no Content-Type, no body.
+        // This is the typical synchronous-success response from a v2 connector
+        // (Spring `void` controller → 200 OK + empty body).
+        mockServer.stubFor(WireMock
+                .post(WireMock.urlPathMatching("/v2/authorityProvider/authorities/[^/]+/certificates/revoke"))
+                .willReturn(WireMock.ok()));
+
+        ClientCertificateRevocationDto request = new ClientCertificateRevocationDto();
+        request.setAttributes(List.of());
+
+        Assertions.assertDoesNotThrow(() ->
+                clientOperationService.revokeCertificateAction(certificate.getUuid(), request, true));
+
+        Certificate fetched = certificateRepository.findByUuid(certificate.getUuid()).orElseThrow();
+        Assertions.assertEquals(CertificateState.REVOKED, fetched.getState());
+        Assertions.assertNull(fetched.getPendingRevokeDestroyKey());
+        Assertions.assertNull(fetched.getPendingRevokeAttributes());
+    }
+
+    @Test
+    void revokeCertificateAction_completesSynchronously_on200WithEmptyJsonBody() {
+        // 200 + Content-Type: application/json + empty body. Some HTTP frameworks emit this even
+        // when the controller returns void. Body should deserialize to null without throwing.
+        mockServer.stubFor(WireMock
+                .post(WireMock.urlPathMatching("/v2/authorityProvider/authorities/[^/]+/certificates/revoke"))
+                .willReturn(WireMock.aResponse().withStatus(200)
+                        .withHeader("Content-Type", "application/json")));
+
+        ClientCertificateRevocationDto request = new ClientCertificateRevocationDto();
+        request.setAttributes(List.of());
+
+        Assertions.assertDoesNotThrow(() ->
+                clientOperationService.revokeCertificateAction(certificate.getUuid(), request, true));
+
+        Certificate fetched = certificateRepository.findByUuid(certificate.getUuid()).orElseThrow();
+        Assertions.assertEquals(CertificateState.REVOKED, fetched.getState());
+    }
+
+    @Test
+    void revokeCertificateAction_completesSynchronously_on200WithEmptyJsonObjectBody() {
+        // 200 + Content-Type: application/json + body "{}". Jackson must deserialize to a
+        // CertificateDataResponseDto with all null fields without throwing.
+        mockServer.stubFor(WireMock
+                .post(WireMock.urlPathMatching("/v2/authorityProvider/authorities/[^/]+/certificates/revoke"))
+                .willReturn(WireMock.aResponse().withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{}")));
+
+        ClientCertificateRevocationDto request = new ClientCertificateRevocationDto();
+        request.setAttributes(List.of());
+
+        Assertions.assertDoesNotThrow(() ->
+                clientOperationService.revokeCertificateAction(certificate.getUuid(), request, true));
+
+        Certificate fetched = certificateRepository.findByUuid(certificate.getUuid()).orElseThrow();
+        Assertions.assertEquals(CertificateState.REVOKED, fetched.getState());
+    }
+
+    @Test
+    void revokeCertificateAction_completesSynchronously_on204NoContent() {
+        // 204 No Content — RFC-correct alternative for synchronous void operations. WebClient
+        // must not attempt to deserialize a body that isn't there.
+        mockServer.stubFor(WireMock
+                .post(WireMock.urlPathMatching("/v2/authorityProvider/authorities/[^/]+/certificates/revoke"))
+                .willReturn(WireMock.aResponse().withStatus(204)));
+
+        ClientCertificateRevocationDto request = new ClientCertificateRevocationDto();
+        request.setAttributes(List.of());
+
+        Assertions.assertDoesNotThrow(() ->
+                clientOperationService.revokeCertificateAction(certificate.getUuid(), request, true));
+
+        Certificate fetched = certificateRepository.findByUuid(certificate.getUuid()).orElseThrow();
+        Assertions.assertEquals(CertificateState.REVOKED, fetched.getState());
+    }
+
+    @Test
+    void revokeCertificateAction_recordsEventHistoryEntry_on202() throws Exception {
+        mockServer.stubFor(WireMock
+                .post(WireMock.urlPathMatching("/v2/authorityProvider/authorities/[^/]+/certificates/revoke"))
+                .willReturn(WireMock.aResponse().withStatus(202)));
+
+        ClientCertificateRevocationDto request = new ClientCertificateRevocationDto();
+        request.setAttributes(List.of());
+        request.setDestroyKey(false);
+
+        clientOperationService.revokeCertificateAction(certificate.getUuid(), request, true);
+
+        Certificate fetched = certificateRepository.findByUuid(certificate.getUuid()).orElseThrow();
+        var history = certificateEventHistoryRepository.findByCertificateOrderByCreatedDesc(fetched);
+        Assertions.assertTrue(
+                history.stream().anyMatch(h ->
+                        h.getEvent() == com.czertainly.api.model.core.certificate.CertificateEvent.REVOKE
+                                && h.getStatus() == com.czertainly.api.model.core.certificate.CertificateEventStatus.SUCCESS),
+                "expected a REVOKE/SUCCESS event in cert history after 202 from connector");
+    }
+
+    /**
+     * Creates a renewal/rekey setup: an ISSUED predecessor certificate plus the existing
+     * {@code certificate} field re-purposed as the REQUESTED successor with a CSR. Returns
+     * the predecessor UUID; the successor UUID is {@code certificate.getUuid()}.
+     */
+    private UUID prepareCertificateForRenewal() throws java.security.NoSuchAlgorithmException {
+        CertificateContent predContent = new CertificateContent();
+        predContent.setContent("predContent");
+        predContent = certificateContentRepository.save(predContent);
+
+        Certificate predCert = new Certificate();
+        predCert.setSubjectDn("predecessor");
+        predCert.setIssuerDn("predecessor");
+        predCert.setSerialNumber("987654321");
+        predCert.setCertificateContent(predContent);
+        predCert.setCertificateContentId(predContent.getId());
+        predCert.setState(CertificateState.ISSUED);
+        predCert.setRaProfile(certificate.getRaProfile());
+        predCert = certificateRepository.save(predCert);
+
+        CertificateRequestEntity csr = new CertificateRequestEntity();
+        csr.setContent("content");
+        certificateRequestRepository.save(csr);
+        certificate.setState(CertificateState.REQUESTED);
+        certificate.setCertificateRequest(csr);
+        certificate.setCertificateRequestUuid(csr.getUuid());
+        certificateRepository.save(certificate);
+
+        CertificateRelation relation = new CertificateRelation();
+        relation.setSuccessorCertificate(certificate);
+        relation.setPredecessorCertificate(predCert);
+        relation.setRelationType(CertificateRelationType.PENDING);
+        certificateRelationRepository.save(relation);
+
+        return predCert.getUuid();
+    }
+
+    @Test
+    void renewCertificateAction_transitionsNewCertToPendingIssue_when202FromConnector() throws Exception {
+        UUID predUuid = prepareCertificateForRenewal();
+        mockServer.stubFor(WireMock
+                .post(WireMock.urlPathMatching("/v2/authorityProvider/authorities/[^/]+/certificates/renew"))
+                .willReturn(WireMock.aResponse().withStatus(202)));
+
+        ClientCertificateRenewRequestDto request = ClientCertificateRenewRequestDto.builder().build();
+        clientOperationService.renewCertificateAction(certificate.getUuid(), request, true);
+
+        Certificate newCert = certificateRepository.findByUuid(certificate.getUuid()).orElseThrow();
+        Assertions.assertEquals(CertificateState.PENDING_ISSUE, newCert.getState());
+
+        Certificate predCert = certificateRepository.findByUuid(predUuid).orElseThrow();
+        Assertions.assertEquals(CertificateState.ISSUED, predCert.getState(),
+                "predecessor must remain ISSUED while the new cert awaits external completion");
+    }
+
+    @Test
+    void renewCertificateAction_persistsMeta_when202CarriesMetadata() throws Exception {
+        prepareCertificateForRenewal();
+        mockServer.stubFor(WireMock
+                .post(WireMock.urlPathMatching("/v2/authorityProvider/authorities/[^/]+/certificates/renew"))
+                .willReturn(WireMock.aResponse().withStatus(202)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("""
+                                {
+                                  "meta": [
+                                    {
+                                      "uuid": "00000000-0000-0000-0000-000000000003",
+                                      "name": "renewOrderId",
+                                      "type": "meta",
+                                      "label": "Renew Order ID",
+                                      "contentType": "string",
+                                      "content": [{"data": "REN-789"}],
+                                      "properties": {"label": "Renew Order ID", "global": false, "overwrite": false},
+                                      "version": 2
+                                    }
+                                  ]
+                                }
+                                """)));
+
+        ClientCertificateRenewRequestDto request = ClientCertificateRenewRequestDto.builder().build();
+        clientOperationService.renewCertificateAction(certificate.getUuid(), request, true);
+
+        Certificate newCert = certificateRepository.findByUuid(certificate.getUuid()).orElseThrow();
+        Assertions.assertEquals(CertificateState.PENDING_ISSUE, newCert.getState());
+
+        var storedMeta = attributeEngine.getMetadataAttributesDefinitionContent(
+                ObjectAttributeContentInfo.builder(Resource.CERTIFICATE, newCert.getUuid())
+                        .connector(connector.getUuid()).build());
+        Assertions.assertNotNull(storedMeta);
+        Assertions.assertFalse(storedMeta.isEmpty(),
+                "expected the connector's renew meta to be persisted against the new certificate");
+        Assertions.assertEquals("renewOrderId", storedMeta.getFirst().getName());
+    }
+
+    @Test
+    void renewCertificateAction_recordsRenewEventOnPredecessor_on202() throws Exception {
+        UUID predUuid = prepareCertificateForRenewal();
+        mockServer.stubFor(WireMock
+                .post(WireMock.urlPathMatching("/v2/authorityProvider/authorities/[^/]+/certificates/renew"))
+                .willReturn(WireMock.aResponse().withStatus(202)));
+
+        ClientCertificateRenewRequestDto request = ClientCertificateRenewRequestDto.builder().build();
+        clientOperationService.renewCertificateAction(certificate.getUuid(), request, true);
+
+        Certificate predCert = certificateRepository.findByUuid(predUuid).orElseThrow();
+        var history = certificateEventHistoryRepository.findByCertificateOrderByCreatedDesc(predCert);
+        Assertions.assertTrue(
+                history.stream().anyMatch(h ->
+                        h.getEvent() == com.czertainly.api.model.core.certificate.CertificateEvent.RENEW
+                                && h.getStatus() == com.czertainly.api.model.core.certificate.CertificateEventStatus.SUCCESS),
+                "expected a RENEW/SUCCESS event on the predecessor after 202 from connector");
+    }
+
+    @Test
+    void rekeyCertificateAction_transitionsNewCertToPendingIssue_when202FromConnector() throws Exception {
+        UUID predUuid = prepareCertificateForRenewal();
+        mockServer.stubFor(WireMock
+                .post(WireMock.urlPathMatching("/v2/authorityProvider/authorities/[^/]+/certificates/renew"))
+                .willReturn(WireMock.aResponse().withStatus(202)));
+
+        ClientCertificateRekeyRequestDto request = new ClientCertificateRekeyRequestDto();
+        clientOperationService.rekeyCertificateAction(certificate.getUuid(), request, true);
+
+        Certificate newCert = certificateRepository.findByUuid(certificate.getUuid()).orElseThrow();
+        Assertions.assertEquals(CertificateState.PENDING_ISSUE, newCert.getState());
+
+        Certificate predCert = certificateRepository.findByUuid(predUuid).orElseThrow();
+        Assertions.assertEquals(CertificateState.ISSUED, predCert.getState());
+
+        var history = certificateEventHistoryRepository.findByCertificateOrderByCreatedDesc(predCert);
+        Assertions.assertTrue(
+                history.stream().anyMatch(h ->
+                        h.getEvent() == com.czertainly.api.model.core.certificate.CertificateEvent.REKEY
+                                && h.getStatus() == com.czertainly.api.model.core.certificate.CertificateEventStatus.SUCCESS),
+                "expected a REKEY/SUCCESS event on the predecessor after 202 from connector");
+    }
+
 }

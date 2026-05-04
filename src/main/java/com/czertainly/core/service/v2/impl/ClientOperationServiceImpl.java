@@ -47,6 +47,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionStatus;
@@ -294,12 +295,20 @@ public class ClientOperationServiceImpl implements ClientOperationService {
 
         try {
             var connectorDto = certificate.getRaProfile().getAuthorityInstanceReference().getConnector().mapToApiClientDtoV1();
-            CertificateDataResponseDto issueCaResponse = connectorApiFactory.getCertificateApiClientV2(connectorDto).issueCertificate(
+            ResponseEntity<CertificateDataResponseDto> issueResponse = connectorApiFactory.getCertificateApiClientV2(connectorDto).issueCertificate(
                     connectorDto,
                     certificate.getRaProfile().getAuthorityInstanceReference().getAuthorityInstanceUuid(),
                     caRequest);
 
-            if (issueCaResponse.getCertificateData() == null || issueCaResponse.getCertificateData().isEmpty()) {
+            if (issueResponse.getStatusCode().value() == 202) {
+                // The connector accepted the request but completion is non-synchronous; the
+                // certificate moves to PENDING_ISSUE rather than FAILED.
+                transitionToPendingIssue(certificate, issueResponse.getBody(), ResourceAction.ISSUE);
+                return;
+            }
+
+            CertificateDataResponseDto issueCaResponse = issueResponse.getBody();
+            if (issueCaResponse == null || issueCaResponse.getCertificateData() == null || issueCaResponse.getCertificateData().isEmpty()) {
                 throw new CertificateOperationException("Response from authority did not contain certificate data");
             }
 
@@ -324,6 +333,43 @@ public class ClientOperationServiceImpl implements ClientOperationService {
         eventProducer.produceMessage(CertificateActionPerformedEventHandler.constructEventMessage(certificate.getUuid(), ResourceAction.ISSUE));
 
         logger.debug("Certificate issued: {}", certificate);
+    }
+
+    /**
+     * Transitions the certificate to {@code PENDING_ISSUE}, persists any metadata the connector
+     * returned in its {@code 202 Accepted} response body, and records an event-history entry.
+     * The {@code originatingAction} (ISSUE / RENEW / REKEY) drives the event-log
+     * {@code CERTIFICATE_ACTION_PERFORMED} message so subscribers see the operation that produced
+     * this state — not always {@code ISSUE}.
+     */
+    private void transitionToPendingIssue(Certificate certificate, CertificateDataResponseDto acceptedBody, ResourceAction originatingAction) {
+        if (acceptedBody != null && acceptedBody.getMeta() != null && !acceptedBody.getMeta().isEmpty()) {
+            try {
+                attributeEngine.updateMetadataAttributes(acceptedBody.getMeta(),
+                        ObjectAttributeContentInfo.builder(Resource.CERTIFICATE, certificate.getUuid())
+                                .connector(certificate.getRaProfile().getAuthorityInstanceReference().getConnectorUuid())
+                                .build());
+            } catch (Exception metaEx) {
+                logger.warn("Failed to persist metadata from 202 response for cert {}: {}",
+                        certificate.getUuid(), metaEx.getMessage());
+            }
+        }
+
+        certificate.setState(CertificateState.PENDING_ISSUE);
+        certificateRepository.save(certificate);
+
+        certificateEventHistoryService.addEventHistory(
+                certificate.getUuid(),
+                CertificateEvent.ISSUE,
+                CertificateEventStatus.SUCCESS,
+                "Issuance accepted; awaiting external completion.",
+                "");
+
+        eventProducer.produceMessage(
+                CertificateActionPerformedEventHandler.constructEventMessage(
+                        certificate.getUuid(), originatingAction));
+
+        logger.info("Certificate {} transitioned to PENDING_ISSUE", certificate.getUuid());
     }
 
     private boolean isRequestNotCompliant(UUID certificateUuid, UUID certificateRequestUuid, CertificateEvent certificateEvent) throws NotFoundException {
@@ -485,12 +531,23 @@ public class ClientOperationServiceImpl implements ClientOperationService {
         additionalInformation.put("New Certificate UUID", certificate.getUuid());
         try {
             var connectorDto = raProfile.getAuthorityInstanceReference().getConnector().mapToApiClientDtoV1();
-            renewCaResponse = connectorApiFactory.getCertificateApiClientV2(connectorDto).renewCertificate(
+            ResponseEntity<CertificateDataResponseDto> renewResponse = connectorApiFactory.getCertificateApiClientV2(connectorDto).renewCertificate(
                     connectorDto,
                     raProfile.getAuthorityInstanceReference().getAuthorityInstanceUuid(),
                     caRequest);
 
-            if (renewCaResponse.getCertificateData() == null || renewCaResponse.getCertificateData().isEmpty()) {
+            if (renewResponse.getStatusCode().value() == 202) {
+                // The connector accepted the renewal but completion is non-synchronous; the new
+                // certificate moves to PENDING_ISSUE while the predecessor remains ISSUED.
+                transitionToPendingIssue(certificate, renewResponse.getBody(), ResourceAction.RENEW);
+                certificateEventHistoryService.addEventHistory(oldCertificate.getUuid(), CertificateEvent.RENEW,
+                        CertificateEventStatus.SUCCESS, "Renewal accepted; awaiting external completion.",
+                        MetaDefinitions.serialize(additionalInformation));
+                return;
+            }
+
+            renewCaResponse = renewResponse.getBody();
+            if (renewCaResponse == null || renewCaResponse.getCertificateData() == null || renewCaResponse.getCertificateData().isEmpty()) {
                 throw new CertificateOperationException("Response from authority did not contain certificate data");
             }
 
@@ -682,12 +739,23 @@ public class ClientOperationServiceImpl implements ClientOperationService {
         additionalInformation.put("New Certificate UUID", certificate.getUuid());
         try {
             var connectorDto = raProfile.getAuthorityInstanceReference().getConnector().mapToApiClientDtoV1();
-            renewCaResponse = connectorApiFactory.getCertificateApiClientV2(connectorDto).renewCertificate(
+            ResponseEntity<CertificateDataResponseDto> rekeyResponse = connectorApiFactory.getCertificateApiClientV2(connectorDto).renewCertificate(
                     connectorDto,
                     raProfile.getAuthorityInstanceReference().getAuthorityInstanceUuid(),
                     caRequest);
 
-            if (renewCaResponse.getCertificateData() == null || renewCaResponse.getCertificateData().isEmpty()) {
+            if (rekeyResponse.getStatusCode().value() == 202) {
+                // The connector accepted the rekey but completion is non-synchronous; the new
+                // certificate moves to PENDING_ISSUE while the predecessor remains ISSUED.
+                transitionToPendingIssue(certificate, rekeyResponse.getBody(), ResourceAction.REKEY);
+                certificateEventHistoryService.addEventHistory(oldCertificate.getUuid(), CertificateEvent.REKEY,
+                        CertificateEventStatus.SUCCESS, "Rekey accepted; awaiting external completion.",
+                        MetaDefinitions.serialize(additionalInformation));
+                return;
+            }
+
+            renewCaResponse = rekeyResponse.getBody();
+            if (renewCaResponse == null || renewCaResponse.getCertificateData() == null || renewCaResponse.getCertificateData().isEmpty()) {
                 throw new CertificateOperationException("Response from authority did not contain certificate data");
             }
 
@@ -777,10 +845,18 @@ public class ClientOperationServiceImpl implements ClientOperationService {
             caRequest.setCertificate(certificate.getCertificateContent().getContent());
 
             var connectorDto = raProfile.getAuthorityInstanceReference().getConnector().mapToApiClientDtoV1();
-            connectorApiFactory.getCertificateApiClientV2(connectorDto).revokeCertificate(
+            ResponseEntity<CertificateDataResponseDto> revokeResponse = connectorApiFactory.getCertificateApiClientV2(connectorDto).revokeCertificate(
                     connectorDto,
                     raProfile.getAuthorityInstanceReference().getAuthorityInstanceUuid(),
                     caRequest);
+
+            if (revokeResponse.getStatusCode().value() == 202) {
+                // The connector accepted the revocation but completion is non-synchronous; the
+                // certificate moves to PENDING_REVOKE. Preserve revoke parameters so the operation
+                // can be finalized later (key destruction happens at finalization, not here).
+                transitionToPendingRevoke(certificate, request, revokeResponse.getBody());
+                return;
+            }
 
             certificate.setState(CertificateState.REVOKED);
             certificateRepository.save(certificate);
@@ -809,6 +885,44 @@ public class ClientOperationServiceImpl implements ClientOperationService {
         eventProducer.produceMessage(CertificateActionPerformedEventHandler.constructEventMessage(certificate.getUuid(), ResourceAction.REVOKE));
 
         logger.debug("Certificate revoked: {}", certificate);
+    }
+
+    /**
+     * Transitions the certificate to {@code PENDING_REVOKE} and preserves the parameters needed to
+     * finalize the revocation later (destroy-key flag, revoke attributes). Key destruction is
+     * deliberately deferred until the revocation is confirmed externally. Optional metadata from
+     * the connector's {@code 202 Accepted} body is persisted via the standard attribute pipeline.
+     */
+    private void transitionToPendingRevoke(Certificate certificate, ClientCertificateRevocationDto request, CertificateDataResponseDto acceptedBody) {
+        if (acceptedBody != null && acceptedBody.getMeta() != null && !acceptedBody.getMeta().isEmpty()) {
+            try {
+                attributeEngine.updateMetadataAttributes(acceptedBody.getMeta(),
+                        ObjectAttributeContentInfo.builder(Resource.CERTIFICATE, certificate.getUuid())
+                                .connector(certificate.getRaProfile().getAuthorityInstanceReference().getConnectorUuid())
+                                .build());
+            } catch (Exception metaEx) {
+                logger.warn("Failed to persist metadata from 202 revoke response for cert {}: {}",
+                        certificate.getUuid(), metaEx.getMessage());
+            }
+        }
+
+        certificate.setPendingRevokeDestroyKey(request.isDestroyKey());
+        certificate.setPendingRevokeAttributes(request.getAttributes());
+        certificate.setState(CertificateState.PENDING_REVOKE);
+        certificateRepository.save(certificate);
+
+        certificateEventHistoryService.addEventHistory(
+                certificate.getUuid(),
+                CertificateEvent.REVOKE,
+                CertificateEventStatus.SUCCESS,
+                "Revocation accepted; awaiting external completion.",
+                "");
+
+        eventProducer.produceMessage(
+                CertificateActionPerformedEventHandler.constructEventMessage(
+                        certificate.getUuid(), ResourceAction.REVOKE));
+
+        logger.info("Certificate {} transitioned to PENDING_REVOKE", certificate.getUuid());
     }
 
     private Certificate validateOldCertificateForOperation(String certificateUuid, String raProfileUuid, ResourceAction action) throws NotFoundException {
