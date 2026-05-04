@@ -903,6 +903,30 @@ poll_certificate() {
 }
 
 
+# --- Trust the certificate chain ----------------------------------------------
+# Usage: trust_certificate_chain <cert_uuid>
+#
+# Walks issuerCertificateUuid upward from <cert_uuid> and marks every CA
+# certificate in the chain as trustedCa=true.  Required before creating a
+# signing profile: CZERTAINLY rejects a certificate whose issuer chain is not
+# fully trusted.
+trust_certificate_chain() {
+  local cert_uuid="$1"
+  local current_uuid cert_details
+
+  current_uuid=$(ilm_curl GET "/v1/certificates/${cert_uuid}" \
+    | jq -r '.issuerCertificateUuid // empty')
+
+  while [[ -n "$current_uuid" ]]; do
+    log "Marking issuer certificate ${current_uuid} as trusted CA..."
+    ilm_curl PATCH "/v1/certificates/${current_uuid}" -d '{"trustedCa": true}' >/dev/null
+    ok "Issuer certificate ${current_uuid} marked trusted"
+
+    current_uuid=$(ilm_curl GET "/v1/certificates/${current_uuid}" \
+      | jq -r '.issuerCertificateUuid // empty')
+  done
+}
+
 # --- Step 12: TSP profile -----------------------------------------------------
 # Usage: setup_tsp_profile <name> <out_tsp_uuid_var>
 setup_tsp_profile() {
@@ -1103,6 +1127,7 @@ main() {
     "$KEY_UUID_NQ" "$PRIVATE_KEY_ITEM_UUID_NQ" "$RA_PROFILE_UUID_NQ" \
     ISSUED_CERT_UUID_NQ
   poll_certificate "$ISSUED_CERT_UUID_NQ" "${CERTIFICATE_DN}-non-qualified"
+  trust_certificate_chain "$ISSUED_CERT_UUID_NQ"
   setup_tsp_profile \
     "${TSP_PROFILE_NAME_BASE}-non-qualified" \
     TSP_PROFILE_UUID_NQ
@@ -1130,6 +1155,7 @@ main() {
     "$KEY_UUID_Q" "$PRIVATE_KEY_ITEM_UUID_Q" "$RA_PROFILE_UUID_Q" \
     ISSUED_CERT_UUID_Q
   poll_certificate "$ISSUED_CERT_UUID_Q" "${CERTIFICATE_DN}-qualified"
+  trust_certificate_chain "$ISSUED_CERT_UUID_Q"
   setup_tsp_profile \
     "${TSP_PROFILE_NAME_BASE}-qualified" \
     TSP_PROFILE_UUID_Q
