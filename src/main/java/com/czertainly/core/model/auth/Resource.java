@@ -20,6 +20,7 @@ public enum Resource {
     ATTRIBUTE("attributes"),
     SCHEDULED_JOB("jobs"),
     OID("oids"),
+    PROXY("proxies"),
 
     // AUTH
     USER("users"),
@@ -65,6 +66,9 @@ public enum Resource {
     ACTION("actions"),
     TRIGGER("triggers"),
     EVENT("resourceEvents"),
+
+    // SAAS
+    TRUSTED_CERTIFICATE("trustedCertificates"),
 
     // SECRETS
     VAULT("vaults"),
