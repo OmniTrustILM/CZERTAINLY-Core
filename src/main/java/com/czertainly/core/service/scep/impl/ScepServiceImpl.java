@@ -601,6 +601,11 @@ public class ScepServiceImpl implements ScepService {
                             scepRequest,
                             x509Certificate
                     );
+                } else {
+                    // Non-terminal states (REQUESTED, PENDING_APPROVAL, PENDING_ISSUE,
+                    // PENDING_REVOKE) — return pkiPending per RFC 8894. Without this branch the
+                    // response would ship without a pkiStatus and trip an NPE downstream.
+                    scepResponse.setPkiStatus(PkiStatus.PENDING);
                 }
             } else {
                 scepResponse.setPkiStatus(PkiStatus.PENDING);
