@@ -89,6 +89,9 @@ class ClientOperationServiceV2Test extends BaseSpringBootTest {
     @Autowired
     private ClientOperationService clientOperationService;
 
+    @Autowired
+    private CertificateService certificateService;
+
     @MockitoBean
     private CryptographicOperationService cryptographicOperationService;
 
@@ -1335,6 +1338,96 @@ class ClientOperationServiceV2Test extends BaseSpringBootTest {
                         h.getEvent() == com.czertainly.api.model.core.certificate.CertificateEvent.REKEY
                                 && h.getStatus() == com.czertainly.api.model.core.certificate.CertificateEventStatus.SUCCESS),
                 "expected a REKEY/SUCCESS event on the predecessor after 202 from connector");
+    }
+
+    @Test
+    void renewCertificate_blocked_when_certInPendingIssue() {
+        certificate.setState(CertificateState.PENDING_ISSUE);
+        certificateRepository.save(certificate);
+
+        ClientCertificateRenewRequestDto request = ClientCertificateRenewRequestDto.builder().build();
+        ValidationException ex = Assertions.assertThrows(ValidationException.class, () ->
+                clientOperationService.renewCertificate(
+                        SecuredParentUUID.fromUUID(raProfile.getAuthorityInstanceReferenceUuid()),
+                        raProfile.getSecuredUuid(),
+                        certificate.getUuid().toString(),
+                        request));
+        Assertions.assertTrue(ex.getMessage().toLowerCase().contains("pending"),
+                "expected error message to mention pending state, got: " + ex.getMessage());
+    }
+
+    @Test
+    void rekeyCertificate_blocked_when_certInPendingRevoke() {
+        certificate.setState(CertificateState.PENDING_REVOKE);
+        certificateRepository.save(certificate);
+
+        ClientCertificateRekeyRequestDto request = new ClientCertificateRekeyRequestDto();
+        ValidationException ex = Assertions.assertThrows(ValidationException.class, () ->
+                clientOperationService.rekeyCertificate(
+                        SecuredParentUUID.fromUUID(raProfile.getAuthorityInstanceReferenceUuid()),
+                        raProfile.getSecuredUuid(),
+                        certificate.getUuid().toString(),
+                        request));
+        Assertions.assertTrue(ex.getMessage().toLowerCase().contains("pending"),
+                "expected error message to mention pending state, got: " + ex.getMessage());
+    }
+
+    @Test
+    void revokeCertificate_blocked_when_certInPendingRevoke() {
+        certificate.setState(CertificateState.PENDING_REVOKE);
+        certificateRepository.save(certificate);
+
+        ClientCertificateRevocationDto request = new ClientCertificateRevocationDto();
+        request.setAttributes(List.of());
+        ValidationException ex = Assertions.assertThrows(ValidationException.class, () ->
+                clientOperationService.revokeCertificate(
+                        SecuredParentUUID.fromUUID(raProfile.getAuthorityInstanceReferenceUuid()),
+                        raProfile.getSecuredUuid(),
+                        certificate.getUuid().toString(),
+                        request));
+        Assertions.assertTrue(ex.getMessage().toLowerCase().contains("pending"),
+                "expected error message to mention pending state, got: " + ex.getMessage());
+    }
+
+    @Test
+    void revokeCertificate_blocked_when_certInPendingIssue() {
+        certificate.setState(CertificateState.PENDING_ISSUE);
+        certificateRepository.save(certificate);
+
+        ClientCertificateRevocationDto request = new ClientCertificateRevocationDto();
+        request.setAttributes(List.of());
+        ValidationException ex = Assertions.assertThrows(ValidationException.class, () ->
+                clientOperationService.revokeCertificate(
+                        SecuredParentUUID.fromUUID(raProfile.getAuthorityInstanceReferenceUuid()),
+                        raProfile.getSecuredUuid(),
+                        certificate.getUuid().toString(),
+                        request));
+        Assertions.assertTrue(ex.getMessage().toLowerCase().contains("pending"),
+                "expected error message to mention pending state, got: " + ex.getMessage());
+    }
+
+    @Test
+    void switchRaProfile_blocked_when_certInPendingIssue() {
+        certificate.setState(CertificateState.PENDING_ISSUE);
+        certificateRepository.save(certificate);
+
+        ValidationException ex = Assertions.assertThrows(ValidationException.class, () ->
+                certificateService.switchRaProfile(certificate.getSecuredUuid(),
+                        raProfile.getSecuredUuid()));
+        Assertions.assertTrue(ex.getMessage().toLowerCase().contains("pending"),
+                "expected error message to mention pending state, got: " + ex.getMessage());
+    }
+
+    @Test
+    void switchRaProfile_blocked_when_certInPendingRevoke() {
+        certificate.setState(CertificateState.PENDING_REVOKE);
+        certificateRepository.save(certificate);
+
+        ValidationException ex = Assertions.assertThrows(ValidationException.class, () ->
+                certificateService.switchRaProfile(certificate.getSecuredUuid(),
+                        raProfile.getSecuredUuid()));
+        Assertions.assertTrue(ex.getMessage().toLowerCase().contains("pending"),
+                "expected error message to mention pending state, got: " + ex.getMessage());
     }
 
 }

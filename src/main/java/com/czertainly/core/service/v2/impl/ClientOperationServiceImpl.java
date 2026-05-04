@@ -929,6 +929,9 @@ public class ClientOperationServiceImpl implements ClientOperationService {
         Certificate oldCertificate = certificateRepository.findByUuid(UUID.fromString(certificateUuid)).orElseThrow(() -> new NotFoundException(Certificate.class, certificateUuid));
         if (oldCertificate.isArchived())
             throw new ValidationException("Cannot perform operation %s on archived certificate. Certificate: %s".formatted(action.getCode(), oldCertificate.toStringShort()));
+        if (oldCertificate.getState() == CertificateState.PENDING_ISSUE || oldCertificate.getState() == CertificateState.PENDING_REVOKE) {
+            throw new ValidationException("Cannot perform operation %s on certificate with a pending operation. Finalize or cancel the pending operation first. Certificate: %s".formatted(action.getCode(), oldCertificate.toStringShort()));
+        }
         if (!oldCertificate.getState().equals(CertificateState.ISSUED)) {
             throw new ValidationException(String.format("Cannot perform operation %s on certificate in state %s. Certificate: %s", action.getCode(), oldCertificate.getState().getLabel(), oldCertificate));
         }
