@@ -78,33 +78,70 @@ echo ""
 echo "=== SonarQube Results ==="
 echo "Dashboard: ${SONAR_URL}/dashboard?id=${PROJECT_KEY}"
 
-sleep 10
+# Sonar processes the analysis report asynchronously after upload. Poll until
+# the projectStatus payload is available, then report.
+echo ""
+echo "Waiting for Sonar to process the analysis..."
+for i in $(seq 1 60); do
+    PROBE=$(curl -s -u "${SONAR_CREDS}" \
+        "${SONAR_URL}/api/qualitygates/project_status?projectKey=${PROJECT_KEY}" 2>/dev/null || true)
+    if echo "${PROBE}" | python3 -c "import sys,json; d=json.load(sys.stdin); sys.exit(0 if 'projectStatus' in d else 1)" 2>/dev/null; then
+        break
+    fi
+    sleep 2
+done
+
+# Determine the set of files changed against the upstream base branch (main).
+# We filter the issues report to those files only — ephemeral SonarQube has no
+# previous analysis to use as a "new code" baseline, so we approximate
+# PR-style focus by intersecting with the git diff.
+BASE_BRANCH="${BASE_BRANCH:-main}"
+CHANGED=$(git diff --name-only "${BASE_BRANCH}...HEAD" 2>/dev/null || true)
+if [ -z "${CHANGED}" ]; then
+    echo ""
+    echo "(No changes vs ${BASE_BRANCH}; reporting full project for first-run baseline.)"
+    SCOPE_DESC="all project files"
+else
+    echo ""
+    echo "Files changed vs ${BASE_BRANCH}:"
+    echo "${CHANGED}" | sed 's/^/  /'
+    SCOPE_DESC="changed files only"
+fi
 
 echo ""
-echo "Quality Gate:"
-curl -sf -u "${SONAR_CREDS}" \
-    "${SONAR_URL}/api/qualitygates/project_status?projectKey=${PROJECT_KEY}" \
-    | python3 -c "
+echo "Quality Gate (whole project; new-code conditions trivially OK without baseline):"
+echo "${PROBE}" | python3 -c "
 import sys, json
-d = json.load(sys.stdin)['projectStatus']
-print(f'  Status: {d[\"status\"]}')
-for c in d.get('conditions', []):
-    print(f'  {c[\"metricKey\"]}: {c[\"actualValue\"]} (threshold: {c[\"errorThreshold\"]}) - {c[\"status\"]}')
+try:
+    d = json.load(sys.stdin)['projectStatus']
+    print(f'  Status: {d[\"status\"]}')
+    for c in d.get('conditions', []):
+        print(f'  {c[\"metricKey\"]}: {c[\"actualValue\"]} (threshold: {c[\"errorThreshold\"]}) - {c[\"status\"]}')
+except Exception as e:
+    print(f'  WARN: Quality gate not yet available ({e}). See dashboard.')
 "
 
 echo ""
-echo "Issues:"
-curl -sf -u "${SONAR_CREDS}" \
-    "${SONAR_URL}/api/issues/search?projectKeys=${PROJECT_KEY}&statuses=OPEN&ps=100" \
-    | python3 -c "
-import sys, json
-d = json.load(sys.stdin)
-print(f'  Total: {d[\"total\"]}')
-for i in d['issues'][:30]:
-    comp = i['component'].split(':')[-1]
-    line = i.get('line', '?')
-    print(f'  [{i[\"severity\"]}] {comp}:{line} - {i[\"message\"]}')
+echo "Issues — ${SCOPE_DESC}:"
+curl -s -u "${SONAR_CREDS}" \
+    "${SONAR_URL}/api/issues/search?projectKeys=${PROJECT_KEY}&statuses=OPEN&ps=500" \
+    | CHANGED_LIST="${CHANGED}" python3 -c "
+import sys, json, os
+changed = [f.strip() for f in os.environ.get('CHANGED_LIST', '').splitlines() if f.strip()]
+try:
+    d = json.load(sys.stdin)
+    issues = d.get('issues', [])
+    if changed:
+        # Keep only issues whose component path ends with one of the changed files
+        issues = [i for i in issues if any(i.get('component', '').endswith(f) for f in changed)]
+    print(f'  Total in scope: {len(issues)}')
+    for i in issues[:50]:
+        comp = i['component'].split(':')[-1]
+        line = i.get('line', '?')
+        print(f'  [{i[\"severity\"]}] {comp}:{line} - {i[\"message\"]}')
+except Exception as e:
+    print(f'  WARN: Issues list not available ({e}).')
 "
 
 echo ""
-echo "Done."
+echo "Done. (Set BASE_BRANCH=<other> to compare against a different base; default: main.)"
