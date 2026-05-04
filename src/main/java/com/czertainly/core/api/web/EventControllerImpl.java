@@ -6,10 +6,10 @@ import com.czertainly.api.model.common.PaginationResponseDto;
 import com.czertainly.api.model.core.auth.Resource;
 import com.czertainly.api.model.core.logging.enums.Module;
 import com.czertainly.api.model.core.logging.enums.Operation;
-import com.czertainly.api.model.core.other.NestedPaginationRequestDto;
 import com.czertainly.api.model.core.other.ResourceEvent;
 import com.czertainly.api.model.core.scheduler.PaginationRequestDto;
 import com.czertainly.api.model.core.workflows.EventHistoryDto;
+import com.czertainly.api.model.core.workflows.EventHistoryRequestDto;
 import com.czertainly.api.model.core.workflows.ObjectEventHistoryDto;
 import com.czertainly.core.aop.AuditLogged;
 import com.czertainly.core.logging.LogResource;
@@ -41,19 +41,19 @@ public class EventControllerImpl implements EventController {
 
     @Override
     @AuditLogged(module = Module.WORKFLOWS, resource = Resource.RESOURCE_EVENT, operation = Operation.HISTORY)
-    public PaginationResponseDto<ObjectEventHistoryDto> getEventHistory(@LogResource(affiliated = true) Resource resource, @LogResource(uuid = true, affiliated = true) UUID uuid, PaginationRequestDto pagination) throws NotFoundException {
+    public PaginationResponseDto<ObjectEventHistoryDto> getObjectEventHistory(@LogResource(affiliated = true) Resource resource, @LogResource(uuid = true, affiliated = true) UUID uuid, PaginationRequestDto pagination) throws NotFoundException {
         return eventService.getEventHistory(resource, uuid, pagination);
     }
 
     @Override
     @AuditLogged(module = Module.WORKFLOWS, resource = Resource.RESOURCE_EVENT, operation = Operation.HISTORY)
-    public PaginationResponseDto<EventHistoryDto> getEventHistory(ResourceEvent event, NestedPaginationRequestDto pagination) throws NotFoundException {
-        return eventService.getEventHistory(event, null, null, pagination);
+    public PaginationResponseDto<EventHistoryDto> getPlatformSettingsEventHistory(ResourceEvent event, EventHistoryRequestDto request) throws NotFoundException {
+        return eventService.getEventHistory(event, null, null, , request);
     }
 
     @Override
     @AuditLogged(module = Module.WORKFLOWS, resource = Resource.RESOURCE_EVENT, operation = Operation.HISTORY)
-    public PaginationResponseDto<EventHistoryDto> getEventHistory(ResourceEvent event, @LogResource(affiliated = true) Resource resource, @LogResource(affiliated = true, uuid = true) UUID uuid, NestedPaginationRequestDto pagination) throws NotFoundException {
-        return eventService.getEventHistory(event, resource, uuid, pagination);
+    public PaginationResponseDto<EventHistoryDto> getObjectDefinedEventHistory(ResourceEvent event, @LogResource(affiliated = true) Resource resource, @LogResource(affiliated = true, uuid = true) UUID uuid, EventHistoryRequestDto request) throws NotFoundException {
+        return eventService.getEventHistory(event, resource, uuid, , request);
     }
 }

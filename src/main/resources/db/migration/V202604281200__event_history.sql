@@ -4,8 +4,8 @@ CREATE TABLE event_history (
     event        TEXT         NOT NULL,
     resource     TEXT,
     resource_uuid UUID,
-    started_at   TIMESTAMPTZ  NOT NULL,
-    finished_at  TIMESTAMPTZ,
+    started_at   TIMESTAMP  NOT NULL,
+    finished_at  TIMESTAMP,
     status       TEXT,
     PRIMARY KEY (uuid)
 );

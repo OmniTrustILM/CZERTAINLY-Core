@@ -5,8 +5,8 @@ import com.czertainly.api.exception.ValidationException;
 import com.czertainly.api.model.common.NameAndUuidDto;
 import com.czertainly.api.model.common.PaginationResponseDto;
 import com.czertainly.api.model.core.auth.Resource;
-import com.czertainly.api.model.core.other.NestedPaginationRequestDto;
 import com.czertainly.api.model.core.other.ResourceEvent;
+import com.czertainly.api.model.core.other.ResourceObjectDto;
 import com.czertainly.api.model.core.scheduler.PaginationRequestDto;
 import com.czertainly.api.model.core.workflows.*;
 import com.czertainly.core.dao.entity.workflows.EventHistory;
@@ -19,6 +19,7 @@ import com.czertainly.core.security.authz.ExternalAuthorization;
 import com.czertainly.core.service.EventService;
 import com.czertainly.core.service.ResourceService;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -67,8 +68,11 @@ public class EventServiceImpl implements EventService {
                             ObjectEventHistoryDto dto = new ObjectEventHistoryDto();
                             dto.setEvent(triggerHistory.getEvent());
                             if (triggerHistory.getTriggerAssociation() != null) {
-                                TriggeredEventOriginDto triggeredEventOriginDto = getTriggeredEventOriginDto(triggerHistory);
-                                dto.setTriggeredEventOrigin(triggeredEventOriginDto);
+                                try {
+                                    dto.setOrigin(resourceService.getResourceObject(triggerHistory.getTriggerAssociation().getResource(), triggerHistory.getTriggerAssociation().getUuid()));
+                                } catch (NotFoundException e) {
+                                    dto.setOrigin(new ResourceObjectDto(triggerHistory.getTriggerAssociation().getResource(), null, null));
+                                }
                             }
                             if (triggerHistory.getTrigger() != null) {
                                 dto.setTrigger(new NameAndUuidDto(triggerHistory.getTriggerUuid(), triggerHistory.getTrigger().getName()));
@@ -78,6 +82,7 @@ public class EventServiceImpl implements EventService {
                             dto.setTriggeredAt(triggerHistory.getTriggeredAt());
                             dto.setMessage(triggerHistory.getMessage());
                             dto.setRecords(triggerHistory.getRecords().stream().map(TriggerHistoryRecord::mapToDto).toList());
+                            dto.setNotificationsSent(notificationsSent(triggerHistory));
                             return dto;
                         }
                 ).toList()
@@ -86,9 +91,22 @@ public class EventServiceImpl implements EventService {
         return response;
     }
 
+    @Nullable
+    private static Boolean notificationsSent(TriggerHistory triggerHistory) {
+        // If there was any action sending notifications and conditions were met and there is no trigger history record for failed execution with send notification type
+        boolean notificationsInTrigger = triggerHistory.getTrigger().getActions().stream()
+                .anyMatch(action -> action.getExecutions().stream().anyMatch(e -> e.getType() == ExecutionType.SEND_NOTIFICATION));
+        if (notificationsInTrigger) {
+            return
+                    triggerHistory.isConditionsMatched() &&
+                            triggerHistory.getRecords().stream().noneMatch(r -> r.getExecution() != null && r.getExecution().getType() == ExecutionType.SEND_NOTIFICATION);
+        }
+        return null;
+    }
+
     @Override
     @ExternalAuthorization(resource = Resource.RESOURCE_EVENT, action = ResourceAction.DETAIL)
-    public PaginationResponseDto<EventHistoryDto> getEventHistory(ResourceEvent event, Resource resource, UUID uuid, NestedPaginationRequestDto pagination) throws NotFoundException {
+    public PaginationResponseDto<EventHistoryDto> getEventHistory(ResourceEvent event, Resource resource, UUID uuid, EventHistoryRequestDto request) throws NotFoundException {
         if (uuid == null && resource != null || uuid != null && resource == null) {
             throw new ValidationException("Missing UUID or Resource");
         }
@@ -96,7 +114,7 @@ public class EventServiceImpl implements EventService {
             resourceService.evaluateDetailsPermission(resource, uuid);
         }
 
-        Page<EventHistory> eventHistories = eventHistoryRepository.findByEventAndResourceAndResourceUuidOrderByStartedAtDesc(event, resource, uuid, Pageable.ofSize(pagination.getItemsPerPage()).withPage(pagination.getPageNumber() - 1));
+        Page<EventHistory> eventHistories = eventHistoryRepository.findByEventAndResourceAndResourceUuidOrderByStartedAtDesc(event, resource, uuid, Pageable.ofSize(request.getPagination().getItemsPerPage()).withPage(request.getPagination().getPageNumber() - 1));
         List<EventHistoryDto> eventHistoriesResponse = new ArrayList<>();
         for (EventHistory eventHistory : eventHistories) {
             EventHistoryDto dto = new EventHistoryDto();
@@ -106,7 +124,7 @@ public class EventServiceImpl implements EventService {
             dto.setObjectsEvaluated(triggerHistoryRepository.countDistinctObjectUuidByEventHistoryUuid(eventHistory.getUuid()));
             dto.setObjectsMatched(triggerHistoryRepository.countDistinctObjectUuidByEventHistoryUuidAndConditionsMatchedTrue(eventHistory.getUuid()));
             dto.setObjectsIgnored(triggerHistoryRepository.countDistinctObjectUuidByEventHistoryUuidAndConditionsMatchedTrueAndTriggerIgnoreTriggerTrue(eventHistory.getUuid()));
-            Page<UUID> objectUuids = triggerHistoryRepository.findDistinctObjectUuidsByEventHistoryUuid(eventHistory.getUuid(), Pageable.ofSize(pagination.getInnerItemsPerPage()).withPage(pagination.getInnerPageNumber() - 1));
+            Page<UUID> objectUuids = triggerHistoryRepository.findDistinctObjectUuidsByEventHistoryUuid(eventHistory.getUuid(), Pageable.ofSize(request.getObjectsPagination().getItemsPerPage()).withPage(request.getObjectsPagination().getPageNumber() - 1));
             List<TriggerHistoryObjectSummaryDto> triggerHistoriesInEvent = new ArrayList<>();
             for (UUID objectUuid : objectUuids) {
                 List<TriggerHistory> triggerHistories = triggerHistoryRepository.findByEventHistoryUuidAndObjectUuidOrderByObjectUuidAscTriggeredAtDesc(eventHistory.getUuid(), objectUuid);
@@ -119,24 +137,25 @@ public class EventServiceImpl implements EventService {
                     triggerHistoryDto.setTriggerUuid(triggerHistory.getTriggerUuid());
                     triggerHistoryDto.setTriggeredAt(triggerHistory.getTriggeredAt());
                     triggerHistoryDto.setRecords(triggerHistory.getRecords().stream().map(TriggerHistoryRecord::mapToDto).toList());
+                    triggerHistoryDto.setNotificationsSent(notificationsSent(triggerHistory));
                     return triggerHistoryDto;
                 }).toList());
                 triggerHistoriesInEvent.add(triggerHistoryObjectSummaryDto);
             }
 
             PaginationResponseDto<TriggerHistoryObjectSummaryDto> triggerHistoriesPaginated = new PaginationResponseDto<>();
-            triggerHistoriesPaginated.setItemsPerPage(pagination.getInnerItemsPerPage());
-            triggerHistoriesPaginated.setPageNumber(pagination.getInnerPageNumber());
+            triggerHistoriesPaginated.setItemsPerPage(request.getObjectsPagination().getItemsPerPage());
+            triggerHistoriesPaginated.setPageNumber(request.getObjectsPagination().getPageNumber());
             triggerHistoriesPaginated.setItems(triggerHistoriesInEvent);
             triggerHistoriesPaginated.setTotalItems(dto.getObjectsEvaluated());
             dto.setObjectHistories(triggerHistoriesPaginated);
             eventHistoriesResponse.add(dto);
         }
 
-        return getEventHistoryDtoPaginationResponseDto(pagination, eventHistoriesResponse, eventHistories);
+        return getEventHistoryDtoPaginationResponseDto(request.getPagination(), eventHistoriesResponse, eventHistories);
     }
 
-    private static @NonNull PaginationResponseDto<EventHistoryDto> getEventHistoryDtoPaginationResponseDto(NestedPaginationRequestDto pagination, List<EventHistoryDto> eventHistoriesResponse, Page<EventHistory> eventHistories) {
+    private static @NonNull PaginationResponseDto<EventHistoryDto> getEventHistoryDtoPaginationResponseDto(PaginationRequestDto pagination, List<EventHistoryDto> eventHistoriesResponse, Page<EventHistory> eventHistories) {
         PaginationResponseDto<EventHistoryDto> eventHistoriesPaginatedResponse = new PaginationResponseDto<>();
         eventHistoriesPaginatedResponse.setItems(eventHistoriesResponse);
         eventHistoriesPaginatedResponse.setTotalItems(eventHistories.getTotalElements());
@@ -144,13 +163,5 @@ public class EventServiceImpl implements EventService {
         eventHistoriesPaginatedResponse.setPageNumber(pagination.getPageNumber());
         eventHistoriesPaginatedResponse.setItemsPerPage(pagination.getItemsPerPage());
         return eventHistoriesPaginatedResponse;
-    }
-
-    private static @NonNull TriggeredEventOriginDto getTriggeredEventOriginDto(TriggerHistory triggerHistory) {
-        TriggeredEventOriginDto triggeredEventOriginDto = new TriggeredEventOriginDto();
-        triggeredEventOriginDto.setType(triggerHistory.getTriggerAssociation().getResource() == null ? Resource.SETTINGS : triggerHistory.getTriggerAssociation().getResource());
-        if (triggerHistory.getTriggerAssociation().getObjectUuid() != null)
-            triggeredEventOriginDto.setResource(new NameAndUuidDto(triggerHistory.getTriggerAssociation().getObjectUuid(), null));
-        return triggeredEventOriginDto;
     }
 }
