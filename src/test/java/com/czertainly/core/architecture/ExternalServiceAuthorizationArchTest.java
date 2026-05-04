@@ -49,6 +49,20 @@ public class ExternalServiceAuthorizationArchTest {
             };
 
     @ArchTest
+    static final ArchRule external_service_interfaces_must_not_extend_other_interfaces =
+            classes()
+                    .that().haveSimpleNameEndingWith("ExternalService")
+                    .and().areInterfaces()
+                    .should(new ArchCondition<JavaClass>("not extend other interfaces") {
+                        public void check(JavaClass javaClass, ConditionEvents events) {
+                            if (!javaClass.getRawInterfaces().isEmpty()) {
+                                events.add(SimpleConditionEvent.violated(javaClass,
+                                        javaClass.getName() + " extends other interfaces; *ExternalService interfaces must be flat so the auth-annotation rule covers all callable methods"));
+                            }
+                        }
+                    });
+
+    @ArchTest
     static final ArchRule every_external_service_method_has_exactly_one_auth_annotation =
             classes()
                     .that(IMPLEMENTS_EXTERNAL_SERVICE)
