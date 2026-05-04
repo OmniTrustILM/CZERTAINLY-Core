@@ -171,8 +171,9 @@ public class CertConfirmMessageHandler implements MessageHandler<PKIMessage> {
             digester.getOutputStream().write(x509Cert.getEncoded());
             return new DEROctetString(digester.getDigest());
         } catch (Exception e) {
+            LOG.error("TID={} | failed to compute certificate fingerprint", tid, e);
             throw new CmpProcessingException(tid, PKIFailureInfo.badMessageCheck,
-                    "problem to compute certificate fingerprint (cert hash)");
+                    "problem to compute certificate fingerprint (cert hash): " + e.getMessage(), e);
         }
     }
 }

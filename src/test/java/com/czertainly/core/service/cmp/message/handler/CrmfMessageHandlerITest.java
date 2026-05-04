@@ -27,11 +27,11 @@ import org.bouncycastle.asn1.DEROctetString;
 import org.bouncycastle.asn1.cmp.*;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.transaction.TestTransaction;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigInteger;
 import java.security.*;
@@ -42,7 +42,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 
-@Disabled
+@Transactional
 public class CrmfMessageHandlerITest extends BaseSpringBootTest {
 
     @Autowired private CertificateContentRepository certificateContentRepository;
@@ -62,7 +62,7 @@ public class CrmfMessageHandlerITest extends BaseSpringBootTest {
     @Autowired private FunctionGroupRepository functionGroupRepository;
     @Autowired private Connector2FunctionGroupRepository connector2FunctionGroupRepository;
 
-    @MockBean
+    @MockitoBean
     private PollFeature pollFeature;
 
     private CrmfMessageHandler testedHandler;
@@ -112,6 +112,7 @@ public class CrmfMessageHandlerITest extends BaseSpringBootTest {
         connector2FunctionGroupRepository.save(c2fg);
 
         connector.getFunctionGroups().add(c2fg);
+        connector.setVersion(ConnectorVersion.V2);
         connectorRepository.save(connector);
 
         AuthorityInstanceReference authorityInstance = new AuthorityInstanceReference();
@@ -125,9 +126,11 @@ public class CrmfMessageHandlerITest extends BaseSpringBootTest {
 
         raProfile = raProfileRepository.saveAndFlush(CmpEntityUtil.createRaProfile(authorityInstance));
 
+        // Commit the connector + RA profile so subsequent v2 ClientOperationService calls
+        // (which run with Propagation.NOT_SUPPORTED) can see them. Subsequent entities go
+        // into a fresh transaction that rolls back at test end.
         TestTransaction.flagForCommit();
         TestTransaction.end();
-        // -------------------------- vv|vv NEW JTA vv|vv --------------------------------
         TestTransaction.start();
 
         // create chain of cert(s)
@@ -299,7 +302,9 @@ public class CrmfMessageHandlerITest extends BaseSpringBootTest {
     // --  entities
     private Certificate createSigningCertificateEntity(WireMockServer mockServer) {
         Connector connector = new Connector();
+        connector.setName("signingCertConnector");
         connector.setUrl("http://localhost:"+mockServer.port());
+        connector.setVersion(ConnectorVersion.V1);
         connector.setStatus(ConnectorStatus.CONNECTED);
         connector = connectorRepository.save(connector);
 
