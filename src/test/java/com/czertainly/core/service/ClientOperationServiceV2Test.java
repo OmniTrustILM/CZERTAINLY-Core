@@ -50,14 +50,27 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.math.BigInteger;
 import java.security.*;
 import java.security.cert.CertificateException;
+import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.security.spec.InvalidKeySpecException;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.Date;
 import java.util.List;
 import java.util.UUID;
+import com.czertainly.api.model.client.certificate.UploadCertificateRequestDto;
+import com.czertainly.api.model.core.enums.CertificateRequestFormat;
+import org.bouncycastle.asn1.x500.X500Name;
+import org.bouncycastle.cert.X509v3CertificateBuilder;
+import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
+import org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder;
+import org.bouncycastle.operator.ContentSigner;
+import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
+import org.bouncycastle.pkcs.PKCS10CertificationRequest;
+import org.bouncycastle.pkcs.jcajce.JcaPKCS10CertificationRequestBuilder;
 
 import static org.mockito.ArgumentMatchers.*;
 
@@ -1430,4 +1443,138 @@ class ClientOperationServiceV2Test extends BaseSpringBootTest {
                 "expected error message to mention pending state, got: " + ex.getMessage());
     }
 
+    /**
+     * Sets {@code certificate} to PENDING_ISSUE with a real PKCS10 CSR backed by the returned
+     * KeyPair. Tests can use the same KeyPair to build a matching uploaded cert (happy path) or
+     * a different one to exercise the public-key mismatch branch.
+     */
+    private KeyPair setupPendingIssueCertWithRealCsr() throws Exception {
+        KeyPairGenerator kpg = KeyPairGenerator.getInstance("RSA");
+        kpg.initialize(2048);
+        KeyPair kp = kpg.generateKeyPair();
+
+        X500Name subject = new X500Name("CN=test-pending-issue");
+        JcaPKCS10CertificationRequestBuilder csrBuilder = new JcaPKCS10CertificationRequestBuilder(subject, kp.getPublic());
+        ContentSigner signer = new JcaContentSignerBuilder("SHA256WithRSA").build(kp.getPrivate());
+        PKCS10CertificationRequest csr = csrBuilder.build(signer);
+        String csrBase64 = Base64.getEncoder().encodeToString(csr.getEncoded());
+
+        CertificateRequestEntity csrEntity = new CertificateRequestEntity();
+        csrEntity.setContent(csrBase64);
+        csrEntity.setCertificateRequestFormat(CertificateRequestFormat.PKCS10);
+        csrEntity.setSubjectDn("CN=test-pending-issue");
+        csrEntity.setPublicKeyAlgorithm("RSA");
+        csrEntity.setSignatureAlgorithm("SHA256WithRSA");
+        certificateRequestRepository.save(csrEntity);
+
+        certificate.setState(CertificateState.PENDING_ISSUE);
+        certificate.setCertificateRequest(csrEntity);
+        certificate.setCertificateRequestUuid(csrEntity.getUuid());
+        certificateRepository.save(certificate);
+        return kp;
+    }
+
+    /** Build a self-signed X.509 cert with the given KeyPair, returns base64-DER. */
+    private String buildSelfSignedCertBase64(KeyPair kp, String cn) throws Exception {
+        X500Name name = new X500Name("CN=" + cn);
+        Date notBefore = new Date();
+        Date notAfter = new Date(notBefore.getTime() + 365L * 24 * 60 * 60 * 1000);
+        X509v3CertificateBuilder builder = new JcaX509v3CertificateBuilder(name, BigInteger.ONE, notBefore, notAfter, name, kp.getPublic());
+        ContentSigner signer = new JcaContentSignerBuilder("SHA256WithRSA").build(kp.getPrivate());
+        X509Certificate x509 = new JcaX509CertificateConverter().getCertificate(builder.build(signer));
+        return Base64.getEncoder().encodeToString(x509.getEncoded());
+    }
+
+    @Test
+    void manuallyIssueCertificate_happyPath_transitionsToIssued() throws Exception {
+        KeyPair kp = setupPendingIssueCertWithRealCsr();
+        String certBase64 = buildSelfSignedCertBase64(kp, "test-pending-issue");
+
+        mockServer.stubFor(WireMock
+                .post(WireMock.urlPathMatching("/v2/authorityProvider/authorities/[^/]+/certificates/identify"))
+                .willReturn(WireMock.okJson("{\"meta\":[]}")));
+
+        UploadCertificateRequestDto req = new UploadCertificateRequestDto();
+        req.setCertificate(certBase64);
+        req.setCustomAttributes(List.of());
+
+        clientOperationService.manuallyIssueCertificate(
+                SecuredParentUUID.fromUUID(raProfile.getAuthorityInstanceReferenceUuid()),
+                raProfile.getSecuredUuid(),
+                certificate.getUuid().toString(),
+                req);
+
+        Certificate fetched = certificateRepository.findByUuid(certificate.getUuid()).orElseThrow();
+        Assertions.assertEquals(CertificateState.ISSUED, fetched.getState());
+    }
+
+    @Test
+    void manuallyIssueCertificate_blocksWhenCertNotInPendingIssue() {
+        // certificate is in ISSUED state from setUp()
+        UploadCertificateRequestDto req = new UploadCertificateRequestDto();
+        req.setCertificate("dGVzdA==");
+        req.setCustomAttributes(List.of());
+
+        ValidationException ex = Assertions.assertThrows(ValidationException.class, () ->
+                clientOperationService.manuallyIssueCertificate(
+                        SecuredParentUUID.fromUUID(raProfile.getAuthorityInstanceReferenceUuid()),
+                        raProfile.getSecuredUuid(),
+                        certificate.getUuid().toString(),
+                        req));
+        Assertions.assertTrue(ex.getMessage().toLowerCase().contains("pending_issue"),
+                "expected error mentioning PENDING_ISSUE state, got: " + ex.getMessage());
+    }
+
+    @Test
+    void manuallyIssueCertificate_blocksOnPublicKeyMismatch() throws Exception {
+        setupPendingIssueCertWithRealCsr();
+        // Build a cert with a DIFFERENT keypair than the CSR's
+        KeyPairGenerator kpg = KeyPairGenerator.getInstance("RSA");
+        kpg.initialize(2048);
+        KeyPair otherKp = kpg.generateKeyPair();
+        String mismatchedCertBase64 = buildSelfSignedCertBase64(otherKp, "test-pending-issue");
+
+        mockServer.stubFor(WireMock
+                .post(WireMock.urlPathMatching("/v2/authorityProvider/authorities/[^/]+/certificates/identify"))
+                .willReturn(WireMock.okJson("{\"meta\":[]}")));
+
+        UploadCertificateRequestDto req = new UploadCertificateRequestDto();
+        req.setCertificate(mismatchedCertBase64);
+        req.setCustomAttributes(List.of());
+
+        ValidationException ex = Assertions.assertThrows(ValidationException.class, () ->
+                clientOperationService.manuallyIssueCertificate(
+                        SecuredParentUUID.fromUUID(raProfile.getAuthorityInstanceReferenceUuid()),
+                        raProfile.getSecuredUuid(),
+                        certificate.getUuid().toString(),
+                        req));
+        Assertions.assertTrue(ex.getMessage().toLowerCase().contains("public key"),
+                "expected error mentioning public key mismatch, got: " + ex.getMessage());
+    }
+
+    @Test
+    void manuallyIssueCertificate_blocksOnConnectorIdentifyFailure() throws Exception {
+        KeyPair kp = setupPendingIssueCertWithRealCsr();
+        String certBase64 = buildSelfSignedCertBase64(kp, "test-pending-issue");
+
+        // Connector rejects the cert via identify (e.g., not issued by the configured CA)
+        mockServer.stubFor(WireMock
+                .post(WireMock.urlPathMatching("/v2/authorityProvider/authorities/[^/]+/certificates/identify"))
+                .willReturn(WireMock.aResponse().withStatus(422)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("[\"Certificate not issued by the configured CA\"]")));
+
+        UploadCertificateRequestDto req = new UploadCertificateRequestDto();
+        req.setCertificate(certBase64);
+        req.setCustomAttributes(List.of());
+
+        ValidationException ex = Assertions.assertThrows(ValidationException.class, () ->
+                clientOperationService.manuallyIssueCertificate(
+                        SecuredParentUUID.fromUUID(raProfile.getAuthorityInstanceReferenceUuid()),
+                        raProfile.getSecuredUuid(),
+                        certificate.getUuid().toString(),
+                        req));
+        Assertions.assertTrue(ex.getMessage().toLowerCase().contains("identify"),
+                "expected error mentioning connector identify, got: " + ex.getMessage());
+    }
 }

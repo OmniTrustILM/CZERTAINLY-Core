@@ -7,6 +7,7 @@ import com.czertainly.api.model.client.location.PushToLocationRequestDto;
 import com.czertainly.api.model.common.attribute.common.BaseAttribute;
 import com.czertainly.api.model.connector.v2.CertRevocationDto;
 import com.czertainly.api.model.connector.v2.CertificateDataResponseDto;
+import com.czertainly.api.model.connector.v2.CertificateIdentificationRequestDto;
 import com.czertainly.api.model.connector.v2.CertificateRenewRequestDto;
 import com.czertainly.api.model.connector.v2.CertificateSignRequestDto;
 import com.czertainly.api.model.core.auth.Resource;
@@ -1285,10 +1286,86 @@ public class ClientOperationServiceImpl implements ClientOperationService {
     }
 
     @Override
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    @ExternalAuthorization(resource = Resource.RA_PROFILE, action = ResourceAction.DETAIL, parentResource = Resource.AUTHORITY, parentAction = ResourceAction.DETAIL)
     public CertificateDetailDto manuallyIssueCertificate(
             SecuredParentUUID authorityUuid, SecuredUUID raProfileUuid, String certificateUuid,
-            com.czertainly.api.model.client.certificate.UploadCertificateRequestDto request) {
-        throw new UnsupportedOperationException("manuallyIssueCertificate not yet implemented");
+            com.czertainly.api.model.client.certificate.UploadCertificateRequestDto request) throws NotFoundException, java.security.cert.CertificateException, AlreadyExistException, ConnectorException, AttributeException {
+        // Two-layer authz: RA_PROFILE/DETAIL gates use of the RA profile (above);
+        // CERTIFICATE/ISSUE gates the actual issuance authority. Mirrors the synchronous
+        // issueCertificateAction flow which calls checkIssuePermissions() before persisting.
+        certificateService.checkIssuePermissions();
+
+        Certificate certificate = certificateRepository.findWithAssociationsByUuid(UUID.fromString(certificateUuid))
+                .orElseThrow(() -> new NotFoundException(Certificate.class, certificateUuid));
+
+        if (certificate.getState() != CertificateState.PENDING_ISSUE) {
+            throw new ValidationException("Cannot finalize issuance: certificate is not in PENDING_ISSUE. Current state: %s. Certificate: %s"
+                    .formatted(certificate.getState().getLabel(), certificate.toStringShort()));
+        }
+        if (certificate.getCertificateRequest() == null) {
+            throw new ValidationException("Cannot finalize issuance: certificate has no associated certificate request. Certificate: %s"
+                    .formatted(certificate.toStringShort()));
+        }
+
+        CertificateRequest certificateRequest;
+        try {
+            certificateRequest = CertificateRequestUtils.createCertificateRequest(
+                    certificate.getCertificateRequest().getContent(),
+                    certificate.getCertificateRequest().getCertificateRequestFormat());
+        } catch (CertificateRequestException e) {
+            throw new ValidationException("Cannot parse stored certificate request: " + e.getMessage());
+        }
+
+        // Hard validation: uploaded cert's public key must match the CSR's public key.
+        validatePublicKeyForCsrAndCertificate(request.getCertificate(), certificateRequest, true);
+
+        // Mandatory: connector must accept the cert via identify (it owns the decision whether
+        // this cert was actually issued by the configured authority).
+        RaProfile raProfile = certificate.getRaProfile();
+        var connectorDto = raProfile.getAuthorityInstanceReference().getConnector().mapToApiClientDtoV1();
+        CertificateIdentificationRequestDto idReq = new CertificateIdentificationRequestDto();
+        idReq.setCertificate(request.getCertificate());
+        idReq.setRaProfileAttributes(attributeEngine.getRequestObjectDataAttributesContent(
+                ObjectAttributeContentInfo.builder(Resource.RA_PROFILE, raProfile.getUuid())
+                        .connector(raProfile.getAuthorityInstanceReference().getConnectorUuid()).build()));
+        try {
+            connectorApiFactory.getCertificateApiClientV2(connectorDto)
+                    .identifyCertificate(connectorDto,
+                            raProfile.getAuthorityInstanceReference().getAuthorityInstanceUuid(), idReq);
+        } catch (ConnectorException | ValidationException e) {
+            certificateEventHistoryService.addEventHistory(certificate.getUuid(), CertificateEvent.ISSUE,
+                    CertificateEventStatus.FAILED,
+                    "Manual upload rejected by connector identify: " + e.getMessage(), "");
+            throw new ValidationException("Manual upload rejected by connector identify: " + e.getMessage());
+        }
+
+        // Persist cert content + transition to ISSUED via the standard issuance pipeline.
+        try {
+            certificateService.issueRequestedCertificate(certificate.getUuid(), request.getCertificate(), List.of());
+        } catch (NoSuchAlgorithmException e) {
+            throw new java.security.cert.CertificateException(e);
+        }
+
+        if (request.getCustomAttributes() != null && !request.getCustomAttributes().isEmpty()) {
+            attributeEngine.updateObjectCustomAttributesContent(Resource.CERTIFICATE,
+                    certificate.getUuid(), request.getCustomAttributes());
+        }
+
+        for (CertificateLocation cl : certificate.getLocations()) {
+            try {
+                locationService.pushRequestedCertificateToLocationAction(cl.getId(), false);
+            } catch (Exception e) {
+                logger.error("Failed to push manually-finalized certificate to location: {}", e.getMessage());
+            }
+        }
+
+        eventProducer.produceMessage(
+                CertificateActionPerformedEventHandler.constructEventMessage(certificate.getUuid(), ResourceAction.ISSUE));
+
+        Certificate refreshed = certificateRepository.findByUuid(certificate.getUuid())
+                .orElseThrow(() -> new NotFoundException(Certificate.class, certificate.getUuid()));
+        return refreshed.mapToDto();
     }
 
     @Override
