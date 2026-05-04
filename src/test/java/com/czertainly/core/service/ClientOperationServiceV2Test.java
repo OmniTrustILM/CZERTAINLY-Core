@@ -14,6 +14,8 @@ import com.czertainly.api.model.common.attribute.common.properties.DataAttribute
 import com.czertainly.api.model.common.enums.cryptography.KeyAlgorithm;
 import com.czertainly.api.model.common.enums.cryptography.KeyType;
 import com.czertainly.api.model.core.auth.Resource;
+import com.czertainly.api.model.core.certificate.CertificateEvent;
+import com.czertainly.api.model.core.certificate.CertificateEventStatus;
 import com.czertainly.api.model.core.certificate.CertificateRelationType;
 import com.czertainly.api.model.core.certificate.CertificateState;
 import com.czertainly.api.model.core.certificate.CertificateValidationStatus;
@@ -61,6 +63,7 @@ import java.util.Base64;
 import java.util.Date;
 import java.util.List;
 import java.util.UUID;
+import com.czertainly.api.model.client.certificate.CancelPendingCertificateRequestDto;
 import com.czertainly.api.model.client.certificate.UploadCertificateRequestDto;
 import com.czertainly.api.model.core.enums.CertificateRequestFormat;
 import org.bouncycastle.asn1.x500.X500Name;
@@ -1051,8 +1054,8 @@ class ClientOperationServiceV2Test extends BaseSpringBootTest {
         var history = certificateEventHistoryRepository.findByCertificateOrderByCreatedDesc(fetched);
         Assertions.assertTrue(
                 history.stream().anyMatch(h ->
-                        h.getEvent() == com.czertainly.api.model.core.certificate.CertificateEvent.ISSUE
-                                && h.getStatus() == com.czertainly.api.model.core.certificate.CertificateEventStatus.SUCCESS),
+                        h.getEvent() == CertificateEvent.ISSUE
+                                && h.getStatus() == CertificateEventStatus.SUCCESS),
                 "expected an ISSUE/SUCCESS event in cert history after 202 from connector");
     }
 
@@ -1211,8 +1214,8 @@ class ClientOperationServiceV2Test extends BaseSpringBootTest {
         var history = certificateEventHistoryRepository.findByCertificateOrderByCreatedDesc(fetched);
         Assertions.assertTrue(
                 history.stream().anyMatch(h ->
-                        h.getEvent() == com.czertainly.api.model.core.certificate.CertificateEvent.REVOKE
-                                && h.getStatus() == com.czertainly.api.model.core.certificate.CertificateEventStatus.SUCCESS),
+                        h.getEvent() == CertificateEvent.REVOKE
+                                && h.getStatus() == CertificateEventStatus.SUCCESS),
                 "expected a REVOKE/SUCCESS event in cert history after 202 from connector");
     }
 
@@ -1324,8 +1327,8 @@ class ClientOperationServiceV2Test extends BaseSpringBootTest {
         var history = certificateEventHistoryRepository.findByCertificateOrderByCreatedDesc(predCert);
         Assertions.assertTrue(
                 history.stream().anyMatch(h ->
-                        h.getEvent() == com.czertainly.api.model.core.certificate.CertificateEvent.RENEW
-                                && h.getStatus() == com.czertainly.api.model.core.certificate.CertificateEventStatus.SUCCESS),
+                        h.getEvent() == CertificateEvent.RENEW
+                                && h.getStatus() == CertificateEventStatus.SUCCESS),
                 "expected a RENEW/SUCCESS event on the predecessor after 202 from connector");
     }
 
@@ -1348,8 +1351,8 @@ class ClientOperationServiceV2Test extends BaseSpringBootTest {
         var history = certificateEventHistoryRepository.findByCertificateOrderByCreatedDesc(predCert);
         Assertions.assertTrue(
                 history.stream().anyMatch(h ->
-                        h.getEvent() == com.czertainly.api.model.core.certificate.CertificateEvent.REKEY
-                                && h.getStatus() == com.czertainly.api.model.core.certificate.CertificateEventStatus.SUCCESS),
+                        h.getEvent() == CertificateEvent.REKEY
+                                && h.getStatus() == CertificateEventStatus.SUCCESS),
                 "expected a REKEY/SUCCESS event on the predecessor after 202 from connector");
     }
 
@@ -1590,9 +1593,142 @@ class ClientOperationServiceV2Test extends BaseSpringBootTest {
         var history = certificateEventHistoryRepository.findByCertificateOrderByCreatedDesc(after);
         Assertions.assertTrue(
                 history.stream().anyMatch(h ->
-                        h.getEvent() == com.czertainly.api.model.core.certificate.CertificateEvent.REVOKE
-                                && h.getStatus() == com.czertainly.api.model.core.certificate.CertificateEventStatus.SUCCESS),
+                        h.getEvent() == CertificateEvent.REVOKE
+                                && h.getStatus() == CertificateEventStatus.SUCCESS),
                 "expected REVOKE/SUCCESS event after manual revoke confirm");
+    }
+
+    @Test
+    void cancelPendingCertificateOperation_pendingIssue_transitionsToFailed_on204() {
+        certificate.setState(CertificateState.PENDING_ISSUE);
+        certificateRepository.save(certificate);
+
+        mockServer.stubFor(WireMock
+                .post(WireMock.urlPathMatching("/v2/authorityProvider/authorities/[^/]+/certificates/issue/cancel"))
+                .willReturn(WireMock.aResponse().withStatus(204)));
+
+        CancelPendingCertificateRequestDto req = new CancelPendingCertificateRequestDto();
+        req.setReason("requirement changed");
+
+        Assertions.assertDoesNotThrow(() ->
+                clientOperationService.cancelPendingCertificateOperation(
+                        SecuredParentUUID.fromUUID(raProfile.getAuthorityInstanceReferenceUuid()),
+                        raProfile.getSecuredUuid(),
+                        certificate.getUuid().toString(), req));
+
+        Certificate after = certificateRepository.findByUuid(certificate.getUuid()).orElseThrow();
+        Assertions.assertEquals(CertificateState.FAILED, after.getState());
+    }
+
+    @Test
+    void cancelPendingCertificateOperation_pendingRevoke_revertsToIssuedAndClearsPreservedFields_on204() {
+        certificate.setState(CertificateState.PENDING_REVOKE);
+        certificate.setPendingRevokeDestroyKey(true);
+        certificate.setPendingRevokeAttributes(List.of());
+        certificateRepository.save(certificate);
+
+        mockServer.stubFor(WireMock
+                .post(WireMock.urlPathMatching("/v2/authorityProvider/authorities/[^/]+/certificates/revoke/cancel"))
+                .willReturn(WireMock.aResponse().withStatus(204)));
+
+        CancelPendingCertificateRequestDto req = new CancelPendingCertificateRequestDto();
+
+        Assertions.assertDoesNotThrow(() ->
+                clientOperationService.cancelPendingCertificateOperation(
+                        SecuredParentUUID.fromUUID(raProfile.getAuthorityInstanceReferenceUuid()),
+                        raProfile.getSecuredUuid(),
+                        certificate.getUuid().toString(), req));
+
+        Certificate after = certificateRepository.findByUuid(certificate.getUuid()).orElseThrow();
+        Assertions.assertEquals(CertificateState.ISSUED, after.getState());
+        Assertions.assertNull(after.getPendingRevokeDestroyKey());
+        Assertions.assertNull(after.getPendingRevokeAttributes());
+    }
+
+    @Test
+    void cancelPendingCertificateOperation_blocksOnNonPendingState() {
+        // certificate is ISSUED from setUp()
+        CancelPendingCertificateRequestDto req = new CancelPendingCertificateRequestDto();
+
+        ValidationException ex = Assertions.assertThrows(ValidationException.class, () ->
+                clientOperationService.cancelPendingCertificateOperation(
+                        SecuredParentUUID.fromUUID(raProfile.getAuthorityInstanceReferenceUuid()),
+                        raProfile.getSecuredUuid(),
+                        certificate.getUuid().toString(), req));
+        Assertions.assertTrue(ex.getMessage().toLowerCase().contains("pending"),
+                "expected error mentioning pending state, got: " + ex.getMessage());
+    }
+
+    @Test
+    void cancelPendingCertificateOperation_proceedsLocally_when404FromConnector() {
+        certificate.setState(CertificateState.PENDING_ISSUE);
+        certificateRepository.save(certificate);
+
+        // 404: connector does not track this operation — soft failure, local cancel proceeds.
+        mockServer.stubFor(WireMock
+                .post(WireMock.urlPathMatching("/v2/authorityProvider/authorities/[^/]+/certificates/issue/cancel"))
+                .willReturn(WireMock.aResponse().withStatus(404).withBody("not tracked")));
+
+        CancelPendingCertificateRequestDto req = new CancelPendingCertificateRequestDto();
+
+        Assertions.assertDoesNotThrow(() ->
+                clientOperationService.cancelPendingCertificateOperation(
+                        SecuredParentUUID.fromUUID(raProfile.getAuthorityInstanceReferenceUuid()),
+                        raProfile.getSecuredUuid(),
+                        certificate.getUuid().toString(), req));
+
+        Certificate after = certificateRepository.findByUuid(certificate.getUuid()).orElseThrow();
+        Assertions.assertEquals(CertificateState.FAILED, after.getState());
+    }
+
+    @Test
+    void cancelPendingCertificateOperation_proceedsLocally_when5xxFromConnector() {
+        certificate.setState(CertificateState.PENDING_ISSUE);
+        certificateRepository.save(certificate);
+
+        // 500 server error from connector — soft failure, local cancel proceeds.
+        mockServer.stubFor(WireMock
+                .post(WireMock.urlPathMatching("/v2/authorityProvider/authorities/[^/]+/certificates/issue/cancel"))
+                .willReturn(WireMock.aResponse().withStatus(500).withBody("server fault")));
+
+        CancelPendingCertificateRequestDto req = new CancelPendingCertificateRequestDto();
+
+        Assertions.assertDoesNotThrow(() ->
+                clientOperationService.cancelPendingCertificateOperation(
+                        SecuredParentUUID.fromUUID(raProfile.getAuthorityInstanceReferenceUuid()),
+                        raProfile.getSecuredUuid(),
+                        certificate.getUuid().toString(), req));
+
+        Certificate after = certificateRepository.findByUuid(certificate.getUuid()).orElseThrow();
+        Assertions.assertEquals(CertificateState.FAILED, after.getState());
+    }
+
+    @Test
+    void cancelPendingCertificateOperation_isRejectedAndStateUnchanged_when422FromConnector() {
+        certificate.setState(CertificateState.PENDING_ISSUE);
+        certificateRepository.save(certificate);
+
+        // 422: HARD refusal — connector tracks the op but cannot abort it.
+        // Local cancel must NOT proceed; cert stays PENDING_ISSUE; user sees upstream reason.
+        mockServer.stubFor(WireMock
+                .post(WireMock.urlPathMatching("/v2/authorityProvider/authorities/[^/]+/certificates/issue/cancel"))
+                .willReturn(WireMock.aResponse().withStatus(422)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("[\"Issuance is past the point of no return\"]")));
+
+        CancelPendingCertificateRequestDto req = new CancelPendingCertificateRequestDto();
+
+        ValidationException ex = Assertions.assertThrows(ValidationException.class, () ->
+                clientOperationService.cancelPendingCertificateOperation(
+                        SecuredParentUUID.fromUUID(raProfile.getAuthorityInstanceReferenceUuid()),
+                        raProfile.getSecuredUuid(),
+                        certificate.getUuid().toString(), req));
+        Assertions.assertTrue(ex.getMessage().contains("past the point of no return"),
+                "expected upstream reason in error message, got: " + ex.getMessage());
+
+        Certificate after = certificateRepository.findByUuid(certificate.getUuid()).orElseThrow();
+        Assertions.assertEquals(CertificateState.PENDING_ISSUE, after.getState(),
+                "state must NOT change on hard 422 refusal");
     }
 
     @Test
