@@ -48,12 +48,12 @@ public class EventControllerImpl implements EventController {
     @Override
     @AuditLogged(module = Module.WORKFLOWS, resource = Resource.RESOURCE_EVENT, operation = Operation.HISTORY)
     public PaginationResponseDto<EventHistoryDto> getPlatformSettingsEventHistory(ResourceEvent event, EventHistoryRequestDto request) throws NotFoundException {
-        return eventService.getEventHistory(event, null, null, , request);
+        return eventService.getEventHistory(event, null, null, request);
     }
 
     @Override
     @AuditLogged(module = Module.WORKFLOWS, resource = Resource.RESOURCE_EVENT, operation = Operation.HISTORY)
     public PaginationResponseDto<EventHistoryDto> getObjectDefinedEventHistory(ResourceEvent event, @LogResource(affiliated = true) Resource resource, @LogResource(affiliated = true, uuid = true) UUID uuid, EventHistoryRequestDto request) throws NotFoundException {
-        return eventService.getEventHistory(event, resource, uuid, , request);
+        return eventService.getEventHistory(event, resource, uuid, request);
     }
 }
