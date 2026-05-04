@@ -69,7 +69,7 @@ public class EventServiceImpl implements EventService {
                         triggerHistory -> {
                             ObjectEventHistoryDto dto = new ObjectEventHistoryDto();
                             dto.setEvent(triggerHistory.getEvent());
-                            if (triggerHistory.getTriggerAssociation() != null) {
+                            if (triggerHistory.getTriggerAssociation().getResource() != null) {
                                 try {
                                     dto.setOrigin(resourceService.getResourceObject(triggerHistory.getTriggerAssociation().getResource(), triggerHistory.getTriggerAssociation().getUuid()));
                                 } catch (NotFoundException e) {

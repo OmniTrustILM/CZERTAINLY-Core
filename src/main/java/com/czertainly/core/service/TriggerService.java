@@ -31,5 +31,5 @@ public interface TriggerService {
     TriggerHistorySummaryDto getTriggerHistorySummary(String associationObjectUuid) throws NotFoundException;
 
     TriggerHistory createTriggerHistory(UUID triggerUuid, TriggerAssociation triggerAssociation, UUID objectUuid, UUID referenceObjectUuid, UUID eventHistoryUuid);
-    TriggerHistoryRecord createTriggerHistoryRecord(TriggerHistory triggerHistory, UUID conditionUuid, UUID executionUuid, String message);
+    TriggerHistoryRecord createTriggerHistoryRecord(UUID triggerHistoryUuid, UUID conditionUuid, UUID executionUuid, String message);
 }

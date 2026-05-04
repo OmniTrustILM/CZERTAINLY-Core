@@ -315,7 +315,7 @@ public class TriggerEvaluator<T extends UniquelyIdentifiedObject> implements ITr
                         logger.debug("Execution '{}' of action '{}' has been performed.", action.getName(), execution.getName());
                     } catch (Exception e) {
                         logger.debug("Execution '{}' of action '{}' has not been performed. Reason: {}", action.getName(), execution.getName(), e.getMessage());
-                        TriggerHistoryRecord triggerHistoryRecord = triggerService.createTriggerHistoryRecord(triggerHistory, null, execution.getUuid(), e.getMessage());
+                        TriggerHistoryRecord triggerHistoryRecord = triggerService.createTriggerHistoryRecord(triggerHistory.getUuid(), null, execution.getUuid(), e.getMessage());
                         triggerHistory.getRecords().add(triggerHistoryRecord);
                     }
                 }
@@ -372,7 +372,7 @@ public class TriggerEvaluator<T extends UniquelyIdentifiedObject> implements ITr
             notificationProfileUuids.add(executionItem.getNotificationProfileUuid());
         }
 
-        NotificationMessage message = new NotificationMessage(event, resource, object.getUuid(), notificationProfileUuids, null, data, triggerHistory, execution.getUuid());
+        NotificationMessage message = new NotificationMessage(event, resource, object.getUuid(), notificationProfileUuids, null, data, triggerHistory.getUuid(), execution.getUuid());
         notificationProducer.produceMessage(message);
     }
 
@@ -386,12 +386,12 @@ public class TriggerEvaluator<T extends UniquelyIdentifiedObject> implements ITr
             if (!evaluateConditionItem(conditionItem, object, rule.getResource())) {
                 String message = String.format("Condition item '%s %s %s %s' is false.", conditionItem.getFieldSource().getLabel(), conditionItem.getFieldIdentifier(), conditionItem.getOperator().getLabel(), conditionItem.getValue() != null ? conditionItem.getValue().toString() : "");
                 logger.debug("Rule {} is not satisfied. Reason: {}", rule.getName(), message);
-                TriggerHistoryRecord triggerHistoryRecord = triggerService.createTriggerHistoryRecord(triggerHistory, conditionItem.getCondition().getUuid(), null, message);
+                TriggerHistoryRecord triggerHistoryRecord = triggerService.createTriggerHistoryRecord(triggerHistory.getUuid(), conditionItem.getCondition().getUuid(), null, message);
                 triggerHistory.getRecords().add(triggerHistoryRecord);
                 return false;
             }
         } catch (RuleException e) {
-            TriggerHistoryRecord triggerHistoryRecord = triggerService.createTriggerHistoryRecord(triggerHistory, conditionItem.getCondition().getUuid(), null, e.getMessage());
+            TriggerHistoryRecord triggerHistoryRecord = triggerService.createTriggerHistoryRecord(triggerHistory.getUuid(), conditionItem.getCondition().getUuid(), null, e.getMessage());
             triggerHistory.getRecords().add(triggerHistoryRecord);
             return false;
         }

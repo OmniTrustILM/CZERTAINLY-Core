@@ -373,10 +373,10 @@ public class TriggerServiceImpl implements TriggerService {
     }
 
     @Override
-    public TriggerHistoryRecord createTriggerHistoryRecord(TriggerHistory triggerHistory, UUID conditionUuid, UUID executionUuid, String message) {
+    public TriggerHistoryRecord createTriggerHistoryRecord(UUID triggerHistoryUuid, UUID conditionUuid, UUID executionUuid, String message) {
         TriggerHistoryRecord triggerHistoryRecord = new TriggerHistoryRecord();
 
-        triggerHistoryRecord.setTriggerHistory(triggerHistory);
+        triggerHistoryRecord.setTriggerHistoryUuid(triggerHistoryUuid);
         triggerHistoryRecord.setConditionUuid(conditionUuid);
         triggerHistoryRecord.setExecutionUuid(executionUuid);
         triggerHistoryRecord.setMessage(message);

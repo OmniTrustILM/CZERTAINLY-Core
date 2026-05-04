@@ -154,8 +154,8 @@ public class NotificationListener {
                 } catch (Exception e) {
                     String errorMessage = "Error in sending notifications based on notification profile %s: %s".formatted(notificationProfileUuid, e.getMessage());
                     logger.error(errorMessage);
-                    if (message.getTriggerHistory() != null) {
-                        triggerService.createTriggerHistoryRecord(message.getTriggerHistory(), null, message.getExecutionUuid(), errorMessage);
+                    if (message.getTriggerHistoryUuid() != null) {
+                        triggerService.createTriggerHistoryRecord(message.getTriggerHistoryUuid(), null, message.getExecutionUuid(), errorMessage);
                     }
                 }
             }
@@ -201,20 +201,20 @@ public class NotificationListener {
             } catch (ConnectorEntityNotFoundException e) {
                 String errorMessage = "Notification instance %s configured for notification profile %s in event %s was not found.".formatted(notificationInstanceUUID, notificationProfileVersion.getNotificationProfile().getName(), message.getEvent());
                 logger.warn(errorMessage);
-                if (message.getTriggerHistory() != null) {
-                    triggerService.createTriggerHistoryRecord(message.getTriggerHistory(), null, message.getExecutionUuid(), errorMessage);
+                if (message.getTriggerHistoryUuid() != null) {
+                    triggerService.createTriggerHistoryRecord(message.getTriggerHistoryUuid(), null, message.getExecutionUuid(), errorMessage);
                 }
             } catch (ValidationException e) {
                 String errorMessage = "Validation error in sending notification to connector of notification instance %s configured for notification profile %s in event %s: %s".formatted(notificationInstanceUUID, notificationProfileVersion.getNotificationProfile().getName(), message.getEvent(), e.getMessage());
                 logger.warn(errorMessage);
-                if (message.getTriggerHistory() != null) {
-                    triggerService.createTriggerHistoryRecord(message.getTriggerHistory(), null, message.getExecutionUuid(), errorMessage);
+                if (message.getTriggerHistoryUuid() != null) {
+                    triggerService.createTriggerHistoryRecord(message.getTriggerHistoryUuid(), null, message.getExecutionUuid(), errorMessage);
                 }
             } catch (Exception e) {
                 String errorMessage = "Error in external notification with notification instance %s configured for notification profile %s in event %s: %s".formatted(notificationInstanceUUID, notificationProfileVersion.getNotificationProfile().getName(), message.getEvent(), e.toString());
                 logger.error(errorMessage);
-                if (message.getTriggerHistory() != null) {
-                    triggerService.createTriggerHistoryRecord(message.getTriggerHistory(), null, message.getExecutionUuid(), errorMessage);
+                if (message.getTriggerHistoryUuid() != null) {
+                    triggerService.createTriggerHistoryRecord(message.getTriggerHistoryUuid(), null, message.getExecutionUuid(), errorMessage);
                 }
             }
         }
@@ -227,8 +227,8 @@ public class NotificationListener {
             } catch (ValidationException e) {
                 String errorMessage = "Error in internal notification: %s".formatted(e.toString());
                 logger.error(errorMessage);
-                if (message.getTriggerHistory() != null) {
-                    triggerService.createTriggerHistoryRecord(message.getTriggerHistory(), null, message.getExecutionUuid(), errorMessage);
+                if (message.getTriggerHistoryUuid() != null) {
+                    triggerService.createTriggerHistoryRecord(message.getTriggerHistoryUuid(), null, message.getExecutionUuid(), errorMessage);
                 }
             }
         }
