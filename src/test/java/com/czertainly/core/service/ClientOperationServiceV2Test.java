@@ -1553,6 +1553,61 @@ class ClientOperationServiceV2Test extends BaseSpringBootTest {
     }
 
     @Test
+    void manuallyConfirmRevoke_happyPath_transitionsToRevoked() {
+        certificate.setState(CertificateState.PENDING_REVOKE);
+        certificate.setPendingRevokeDestroyKey(false);
+        certificate.setPendingRevokeAttributes(List.of());
+        certificateRepository.save(certificate);
+
+        Assertions.assertDoesNotThrow(() ->
+                clientOperationService.manuallyConfirmRevoke(
+                        SecuredParentUUID.fromUUID(raProfile.getAuthorityInstanceReferenceUuid()),
+                        raProfile.getSecuredUuid(),
+                        certificate.getUuid().toString()));
+
+        Certificate after = certificateRepository.findByUuid(certificate.getUuid()).orElseThrow();
+        Assertions.assertEquals(CertificateState.REVOKED, after.getState());
+        Assertions.assertNull(after.getPendingRevokeDestroyKey(),
+                "destroyKey flag should be cleared after manual revoke confirm");
+        Assertions.assertNull(after.getPendingRevokeAttributes(),
+                "preserved revoke attributes should be cleared after manual revoke confirm");
+    }
+
+    @Test
+    void manuallyConfirmRevoke_recordsRevokeSuccessEvent() {
+        certificate.setState(CertificateState.PENDING_REVOKE);
+        certificate.setPendingRevokeDestroyKey(false);
+        certificate.setPendingRevokeAttributes(List.of());
+        certificateRepository.save(certificate);
+
+        Assertions.assertDoesNotThrow(() ->
+                clientOperationService.manuallyConfirmRevoke(
+                        SecuredParentUUID.fromUUID(raProfile.getAuthorityInstanceReferenceUuid()),
+                        raProfile.getSecuredUuid(),
+                        certificate.getUuid().toString()));
+
+        Certificate after = certificateRepository.findByUuid(certificate.getUuid()).orElseThrow();
+        var history = certificateEventHistoryRepository.findByCertificateOrderByCreatedDesc(after);
+        Assertions.assertTrue(
+                history.stream().anyMatch(h ->
+                        h.getEvent() == com.czertainly.api.model.core.certificate.CertificateEvent.REVOKE
+                                && h.getStatus() == com.czertainly.api.model.core.certificate.CertificateEventStatus.SUCCESS),
+                "expected REVOKE/SUCCESS event after manual revoke confirm");
+    }
+
+    @Test
+    void manuallyConfirmRevoke_blocksWhenCertNotInPendingRevoke() {
+        // certificate is in ISSUED state from setUp()
+        ValidationException ex = Assertions.assertThrows(ValidationException.class, () ->
+                clientOperationService.manuallyConfirmRevoke(
+                        SecuredParentUUID.fromUUID(raProfile.getAuthorityInstanceReferenceUuid()),
+                        raProfile.getSecuredUuid(),
+                        certificate.getUuid().toString()));
+        Assertions.assertTrue(ex.getMessage().toLowerCase().contains("pending_revoke"),
+                "expected error mentioning PENDING_REVOKE state, got: " + ex.getMessage());
+    }
+
+    @Test
     void manuallyIssueCertificate_blocksOnConnectorIdentifyFailure() throws Exception {
         KeyPair kp = setupPendingIssueCertWithRealCsr();
         String certBase64 = buildSelfSignedCertBase64(kp, "test-pending-issue");

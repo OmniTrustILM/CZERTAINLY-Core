@@ -1369,9 +1369,63 @@ public class ClientOperationServiceImpl implements ClientOperationService {
     }
 
     @Override
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    @ExternalAuthorization(resource = Resource.RA_PROFILE, action = ResourceAction.DETAIL, parentResource = Resource.AUTHORITY, parentAction = ResourceAction.DETAIL)
     public void manuallyConfirmRevoke(
-            SecuredParentUUID authorityUuid, SecuredUUID raProfileUuid, String certificateUuid) {
-        throw new UnsupportedOperationException("manuallyConfirmRevoke not yet implemented");
+            SecuredParentUUID authorityUuid, SecuredUUID raProfileUuid, String certificateUuid) throws NotFoundException {
+        // Two-layer authz: RA_PROFILE/DETAIL gates use of the RA profile (above);
+        // CERTIFICATE/REVOKE gates the actual revocation authority.
+        certificateService.checkRevokePermissions();
+
+        Certificate cert = certificateRepository.findWithAssociationsByUuid(UUID.fromString(certificateUuid))
+                .orElseThrow(() -> new NotFoundException(Certificate.class, certificateUuid));
+
+        if (cert.getState() != CertificateState.PENDING_REVOKE) {
+            throw new ValidationException("Cannot confirm revocation: certificate is not in PENDING_REVOKE. Current state: %s. Certificate: %s"
+                    .formatted(cert.getState().getLabel(), cert.toStringShort()));
+        }
+
+        RaProfile raProfile = cert.getRaProfile();
+
+        // Apply the preserved revoke attributes that were captured when the cert entered
+        // PENDING_REVOKE so the cert detail accurately reflects revocation parameters.
+        if (cert.getPendingRevokeAttributes() != null && !cert.getPendingRevokeAttributes().isEmpty()) {
+            try {
+                attributeEngine.updateObjectDataAttributesContent(
+                        ObjectAttributeContentInfo.builder(Resource.CERTIFICATE, cert.getUuid())
+                                .connector(raProfile.getAuthorityInstanceReference().getConnectorUuid())
+                                .operation(AttributeOperation.CERTIFICATE_REVOKE).build(),
+                        cert.getPendingRevokeAttributes());
+            } catch (AttributeException e) {
+                logger.warn("Failed to apply preserved revoke attributes on manual revoke confirm for cert {}: {}",
+                        cert.getUuid(), e.getMessage());
+            }
+        }
+
+        boolean destroyKey = Boolean.TRUE.equals(cert.getPendingRevokeDestroyKey());
+
+        // Clear preserved data and transition state.
+        cert.setPendingRevokeDestroyKey(null);
+        cert.setPendingRevokeAttributes(null);
+        cert.setState(CertificateState.REVOKED);
+        certificateRepository.save(cert);
+
+        if (destroyKey && cert.getKey() != null) {
+            try {
+                logger.debug("Manual revoke confirm: destroying key for cert {}", cert.getUuid());
+                keyService.destroyKey(List.of(cert.getKeyUuid().toString()));
+            } catch (Exception e) {
+                logger.warn("Failed to destroy certificate key on manual revoke confirm: {}", e.getMessage());
+            }
+        }
+
+        certificateEventHistoryService.addEventHistory(cert.getUuid(), CertificateEvent.REVOKE,
+                CertificateEventStatus.SUCCESS, "Revocation confirmed manually", "");
+
+        eventProducer.produceMessage(
+                CertificateActionPerformedEventHandler.constructEventMessage(cert.getUuid(), ResourceAction.REVOKE));
+
+        logger.info("Certificate {} revocation confirmed manually", cert.getUuid());
     }
 
     @Override
