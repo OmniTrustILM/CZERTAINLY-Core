@@ -1166,4 +1166,24 @@ public class ClientOperationServiceImpl implements ClientOperationService {
         }
         return requestB64;
     }
+
+    @Override
+    public CertificateDetailDto manuallyIssueCertificate(
+            SecuredParentUUID authorityUuid, SecuredUUID raProfileUuid, String certificateUuid,
+            com.czertainly.api.model.client.certificate.UploadCertificateRequestDto request) {
+        throw new UnsupportedOperationException("manuallyIssueCertificate not yet implemented");
+    }
+
+    @Override
+    public void manuallyConfirmRevoke(
+            SecuredParentUUID authorityUuid, SecuredUUID raProfileUuid, String certificateUuid) {
+        throw new UnsupportedOperationException("manuallyConfirmRevoke not yet implemented");
+    }
+
+    @Override
+    public CertificateDetailDto cancelPendingCertificateOperation(
+            SecuredParentUUID authorityUuid, SecuredUUID raProfileUuid, String certificateUuid,
+            com.czertainly.api.model.client.certificate.CancelPendingCertificateRequestDto request) {
+        throw new UnsupportedOperationException("cancelPendingCertificateOperation not yet implemented");
+    }
 }
