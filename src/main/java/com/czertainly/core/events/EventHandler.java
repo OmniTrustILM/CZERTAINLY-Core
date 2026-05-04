@@ -44,7 +44,7 @@ public abstract class EventHandler<T extends UniquelyIdentifiedObject> implement
     protected EventProducer eventProducer;
     protected NotificationProducer notificationProducer;
     protected ApplicationEventPublisher applicationEventPublisher;
-    private EventHistoryRepository eventHistoryRepository;
+    protected EventHistoryRepository eventHistoryRepository;
 
     protected final TriggerEvaluator<T> triggerEvaluator;
     protected final SecurityFilterRepository<T, UUID> repository;
@@ -115,7 +115,7 @@ public abstract class EventHandler<T extends UniquelyIdentifiedObject> implement
         logger.debug("Event '{}' successfully handled", eventMessage.getEvent().getLabel());
     }
 
-    private EventHistory createEventHistory(ResourceEvent event, Resource overrideResource, UUID overrideObjectUuid) {
+    protected EventHistory createEventHistory(ResourceEvent event, Resource overrideResource, UUID overrideObjectUuid) {
         EventHistory eventHistory = new EventHistory();
         eventHistory.setEvent(event);
         eventHistory.setResource(overrideResource);
