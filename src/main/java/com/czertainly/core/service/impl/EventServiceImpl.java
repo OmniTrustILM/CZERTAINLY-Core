@@ -18,6 +18,7 @@ import com.czertainly.core.model.auth.ResourceAction;
 import com.czertainly.core.security.authz.ExternalAuthorization;
 import com.czertainly.core.service.EventService;
 import com.czertainly.core.service.ResourceService;
+import jakarta.transaction.Transactional;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -30,6 +31,7 @@ import java.util.List;
 import java.util.UUID;
 
 @Service
+@Transactional
 public class EventServiceImpl implements EventService {
 
     private ResourceService resourceService;
