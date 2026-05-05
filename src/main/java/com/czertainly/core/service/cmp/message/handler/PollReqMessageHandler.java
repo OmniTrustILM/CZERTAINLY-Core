@@ -39,8 +39,8 @@ import java.util.List;
  * associated certificate's state, and responds with one of:
  * <ul>
  *   <li><b>another {@code pollRep}</b> — when the certificate is still in
- *       {@code PENDING_ISSUE} or {@code PENDING_REVOKE} (offline RA: connector accepted with
- *       202 but the external CA hasn't completed yet);</li>
+ *       {@code PENDING_ISSUE} or {@code PENDING_REVOKE} (the authority provider connector
+ *       accepted the operation with HTTP 202 but completion is asynchronous);</li>
  *   <li><b>{@code ip}/{@code cp}/{@code kup}</b> with the issued certificate — when the
  *       certificate is now {@code ISSUED}. The response body type is reconstructed from the
  *       {@code originalRequestBodyType} stored on the transaction (so a client that sent ir
@@ -100,7 +100,7 @@ public class PollReqMessageHandler implements MessageHandler<PKIMessage> {
         return switch (state) {
             case PENDING_ISSUE, PENDING_REVOKE ->
                     buildPollRep(request, configuration, certReqId,
-                            "Awaiting external completion (state=" + state.getCode() + ")");
+                            "Awaiting asynchronous completion (state=" + state.getCode() + ")");
             case ISSUED ->
                     buildCertReadyResponse(request, configuration, tid, certReqId, transaction, certificate);
             case REVOKED, REJECTED, FAILED ->

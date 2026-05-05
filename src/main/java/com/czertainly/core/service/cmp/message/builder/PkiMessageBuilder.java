@@ -319,7 +319,7 @@ public class PkiMessageBuilder {
 
     /**
      * Builds a {@code pollRep} body (RFC 4210 §5.2.6) signalling that the requested operation
-     * is pending external completion. The CMP client should retry the poll request after
+     * is pending asynchronous completion. The CMP client should retry the poll request after
      * {@code checkAfterSeconds}.
      *
      * @param certReqId        the certificate-request ID echoed back to the client

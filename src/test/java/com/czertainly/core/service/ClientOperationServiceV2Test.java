@@ -1269,7 +1269,7 @@ class ClientOperationServiceV2Test extends BaseSpringBootTest {
 
         Certificate predCert = certificateRepository.findByUuid(predUuid).orElseThrow();
         Assertions.assertEquals(CertificateState.ISSUED, predCert.getState(),
-                "predecessor must remain ISSUED while the new cert awaits external completion");
+                "predecessor must remain ISSUED while the new cert awaits asynchronous completion");
     }
 
     @Test

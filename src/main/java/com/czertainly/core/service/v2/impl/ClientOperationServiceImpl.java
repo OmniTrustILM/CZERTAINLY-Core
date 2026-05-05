@@ -305,7 +305,7 @@ public class ClientOperationServiceImpl implements ClientOperationService {
                     caRequest);
 
             if (issueResponse.getStatusCode().value() == 202) {
-                // The connector accepted the request but completion is non-synchronous; the
+                // The connector accepted the request but completion is asynchronous; the
                 // certificate moves to PENDING_ISSUE rather than FAILED.
                 transitionToPendingIssue(certificate, issueResponse.getBody(), ResourceAction.ISSUE);
                 return;
@@ -366,7 +366,7 @@ public class ClientOperationServiceImpl implements ClientOperationService {
                 certificate.getUuid(),
                 CertificateEvent.ISSUE,
                 CertificateEventStatus.SUCCESS,
-                "Issuance accepted; awaiting external completion.",
+                "Issuance accepted; awaiting asynchronous completion.",
                 "");
 
         eventProducer.produceMessage(
@@ -541,11 +541,11 @@ public class ClientOperationServiceImpl implements ClientOperationService {
                     caRequest);
 
             if (renewResponse.getStatusCode().value() == 202) {
-                // The connector accepted the renewal but completion is non-synchronous; the new
+                // The connector accepted the renewal but completion is asynchronous; the new
                 // certificate moves to PENDING_ISSUE while the predecessor remains ISSUED.
                 transitionToPendingIssue(certificate, renewResponse.getBody(), ResourceAction.RENEW);
                 certificateEventHistoryService.addEventHistory(oldCertificate.getUuid(), CertificateEvent.RENEW,
-                        CertificateEventStatus.SUCCESS, "Renewal accepted; awaiting external completion.",
+                        CertificateEventStatus.SUCCESS, "Renewal accepted; awaiting asynchronous completion.",
                         MetaDefinitions.serialize(additionalInformation));
                 return;
             }
@@ -749,11 +749,11 @@ public class ClientOperationServiceImpl implements ClientOperationService {
                     caRequest);
 
             if (rekeyResponse.getStatusCode().value() == 202) {
-                // The connector accepted the rekey but completion is non-synchronous; the new
+                // The connector accepted the rekey but completion is asynchronous; the new
                 // certificate moves to PENDING_ISSUE while the predecessor remains ISSUED.
                 transitionToPendingIssue(certificate, rekeyResponse.getBody(), ResourceAction.REKEY);
                 certificateEventHistoryService.addEventHistory(oldCertificate.getUuid(), CertificateEvent.REKEY,
-                        CertificateEventStatus.SUCCESS, "Rekey accepted; awaiting external completion.",
+                        CertificateEventStatus.SUCCESS, "Rekey accepted; awaiting asynchronous completion.",
                         MetaDefinitions.serialize(additionalInformation));
                 return;
             }
@@ -855,7 +855,7 @@ public class ClientOperationServiceImpl implements ClientOperationService {
                     caRequest);
 
             if (revokeResponse.getStatusCode().value() == 202) {
-                // The connector accepted the revocation but completion is non-synchronous; the
+                // The connector accepted the revocation but completion is asynchronous; the
                 // certificate moves to PENDING_REVOKE. Preserve revoke parameters so the operation
                 // can be finalized later (key destruction happens at finalization, not here).
                 transitionToPendingRevoke(certificate, request, revokeResponse.getBody());
@@ -894,7 +894,7 @@ public class ClientOperationServiceImpl implements ClientOperationService {
     /**
      * Transitions the certificate to {@code PENDING_REVOKE} and preserves the parameters needed to
      * finalize the revocation later (destroy-key flag, revoke attributes). Key destruction is
-     * deliberately deferred until the revocation is confirmed externally. Optional metadata from
+     * deliberately deferred until the revocation is confirmed by the operator. Optional metadata from
      * the connector's {@code 202 Accepted} body is persisted via the standard attribute pipeline.
      */
     private void transitionToPendingRevoke(Certificate certificate, ClientCertificateRevocationDto request, CertificateDataResponseDto acceptedBody) {
@@ -919,7 +919,7 @@ public class ClientOperationServiceImpl implements ClientOperationService {
                 certificate.getUuid(),
                 CertificateEvent.REVOKE,
                 CertificateEventStatus.SUCCESS,
-                "Revocation accepted; awaiting external completion.",
+                "Revocation accepted; awaiting asynchronous completion.",
                 "");
 
         eventProducer.produceMessage(

@@ -251,7 +251,7 @@ public class Certificate extends UniquelyIdentifiedAndAudited implements Complia
 
     /**
      * Preserves the {@code destroyKey} flag from a revocation request whose connector response
-     * was non-synchronous. Read at manual revoke confirmation time, cleared on confirm or cancel.
+     * was asynchronous. Read at manual revoke confirmation time, cleared on confirm or cancel.
      * Always {@code null} outside the {@code PENDING_REVOKE} state.
      */
     @Column(name = "pending_revoke_destroy_key")
@@ -259,7 +259,7 @@ public class Certificate extends UniquelyIdentifiedAndAudited implements Complia
 
     /**
      * Preserves the revoke attributes from a revocation request whose connector response was
-     * non-synchronous. Applied at manual revoke confirmation time, cleared on confirm or cancel.
+     * asynchronous. Applied at manual revoke confirmation time, cleared on confirm or cancel.
      * Always {@code null} outside the {@code PENDING_REVOKE} state.
      */
     @Column(name = "pending_revoke_attributes", columnDefinition = "jsonb")

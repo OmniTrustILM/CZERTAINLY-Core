@@ -1,6 +1,7 @@
 -- Track the original CMP request body type on each cmp_transaction so that an inbound
 -- pollReq message can be answered with the correct response body type (ip vs cp vs kup vs rp)
--- once the in-flight operation completes externally (offline RA).
+-- once an asynchronous operation (one where the authority provider connector returned
+-- HTTP 202 Accepted) completes asynchronously.
 --
 -- Values are the small integers from BouncyCastle PKIBody.TYPE_* constants:
 --   0  = ir  (TYPE_INIT_REQ)

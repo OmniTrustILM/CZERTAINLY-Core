@@ -190,9 +190,9 @@ public class CrmfMessageHandler implements MessageHandler<PKIMessage> {
                     e.getMessage());
         }
 
-        // Non-synchronous (offline-RA) signal: the connector returned 202 Accepted and the
-        // certificate is in PENDING_ISSUE / PENDING_REVOKE. Per RFC 4210 §5.2.6 we respond with
-        // a pollRep so the client knows to retry later.
+        // Non-synchronous-completion signal: the authority provider connector returned
+        // 202 Accepted and the certificate is in PENDING_ISSUE / PENDING_REVOKE. Per RFC 4210
+        // §5.2.6 we respond with a pollRep so the client knows to retry later.
         if (polledCert == null) {
             // Persist the transaction so a subsequent pollReq from the client can be correlated
             // back to the in-flight certificate.
@@ -215,7 +215,7 @@ public class CrmfMessageHandler implements MessageHandler<PKIMessage> {
                         .addBody(PkiMessageBuilder.createPollRepBody(
                                 crmf.getCertReqId(),
                                 60L /* checkAfter, seconds */,
-                                "Awaiting external completion"))
+                                "Awaiting asynchronous completion"))
                         .addExtraCerts(null)
                         .build();
             } catch (Exception e) {

@@ -26,7 +26,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
  * carrying a list of {@link RequestAttribute}).
  *
  * <p>Both columns are populated only when a revocation request whose connector responded
- * non-synchronously moves the certificate to {@code PENDING_REVOKE}; outside that state they
+ * asynchronously moves the certificate to {@code PENDING_REVOKE}; outside that state they
  * are always {@code null}.</p>
  */
 class CertificatePendingRevokeFieldsTest extends BaseSpringBootTest {
