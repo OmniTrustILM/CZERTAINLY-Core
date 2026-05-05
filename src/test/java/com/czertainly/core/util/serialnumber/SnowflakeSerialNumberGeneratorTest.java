@@ -145,6 +145,18 @@ class SnowflakeSerialNumberGeneratorTest {
     }
 
     @Test
+    void shouldThrowWhenClockIsBeforeEpoch() {
+        // given
+        var clock = TestClockSource.ofWallTimeMillis(EPOCH - 1);
+        var generator = new SnowflakeSerialNumberGenerator(clock, INSTANCE_ID);
+
+        // then
+        assertThatThrownBy(generator::generate)
+                .isInstanceOf(ClockDriftException.class)
+                .hasMessageContaining("before epoch");
+    }
+
+    @Test
     @Timeout(2)
     void shouldThrowOnLargeBackwardClockJump() {
         // given

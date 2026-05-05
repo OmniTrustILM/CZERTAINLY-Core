@@ -61,7 +61,11 @@ final class SnowflakeSerialNumberGenerator implements SerialNumberGenerator {
     }
 
     private long computeTick() {
-        return (clockSource.wallTimeMillis() - EPOCH_MILLIS) / TICK_MS;
+        long millis = clockSource.wallTimeMillis();
+        if (millis < EPOCH_MILLIS) {
+            throw new ClockDriftException("System clock is before epoch: " + Instant.ofEpochMilli(millis));
+        }
+        return (millis - EPOCH_MILLIS) / TICK_MS;
     }
 
     private long waitForClockCatchUp(long currentTick) {
