@@ -1766,4 +1766,183 @@ class ClientOperationServiceV2Test extends BaseSpringBootTest {
         Assertions.assertTrue(ex.getMessage().toLowerCase().contains("identify"),
                 "expected error mentioning connector identify, got: " + ex.getMessage());
     }
+
+    // ---------------------------------------------------------------------------------------
+    // End-to-end smoke tests with stub connector
+    //
+    // These exercise the full async lifecycle in a single test (REQUESTED → 202 → PENDING_*
+    // → operator finalize/cancel → terminal state). The per-transition unit tests above cover
+    // each step in isolation; the smoke tests prove the steps compose correctly across the
+    // whole lifecycle and serve as the documentation of how authority providers that complete
+    // operations asynchronously are integrated.
+    // ---------------------------------------------------------------------------------------
+
+    /** Set the test certificate to REQUESTED with a real CSR ready for issuance, returns the keypair. */
+    private KeyPair setupRequestedCertWithRealCsr() throws Exception {
+        KeyPairGenerator kpg = KeyPairGenerator.getInstance("RSA");
+        kpg.initialize(2048);
+        KeyPair kp = kpg.generateKeyPair();
+
+        X500Name subject = new X500Name("CN=smoke-async");
+        JcaPKCS10CertificationRequestBuilder csrBuilder = new JcaPKCS10CertificationRequestBuilder(subject, kp.getPublic());
+        ContentSigner signer = new JcaContentSignerBuilder("SHA256WithRSA").build(kp.getPrivate());
+        PKCS10CertificationRequest csr = csrBuilder.build(signer);
+        String csrBase64 = Base64.getEncoder().encodeToString(csr.getEncoded());
+
+        CertificateRequestEntity csrEntity = new CertificateRequestEntity();
+        csrEntity.setContent(csrBase64);
+        csrEntity.setCertificateRequestFormat(CertificateRequestFormat.PKCS10);
+        csrEntity.setSubjectDn("CN=smoke-async");
+        csrEntity.setPublicKeyAlgorithm("RSA");
+        csrEntity.setSignatureAlgorithm("SHA256WithRSA");
+        certificateRequestRepository.save(csrEntity);
+
+        certificate.setState(CertificateState.REQUESTED);
+        certificate.setCertificateRequest(csrEntity);
+        certificate.setCertificateRequestUuid(csrEntity.getUuid());
+        certificateRepository.save(certificate);
+        return kp;
+    }
+
+    @Test
+    void smoke_asyncIssueLifecycle_endToEnd() throws Exception {
+        KeyPair kp = setupRequestedCertWithRealCsr();
+
+        // Step 1: connector accepts the issue request asynchronously (HTTP 202)
+        mockServer.stubFor(WireMock
+                .post(WireMock.urlPathMatching("/v2/authorityProvider/authorities/[^/]+/certificates/issue"))
+                .willReturn(WireMock.aResponse().withStatus(202)));
+
+        clientOperationService.issueCertificateAction(certificate.getUuid(), true);
+
+        Certificate afterIssue = certificateRepository.findByUuid(certificate.getUuid()).orElseThrow();
+        Assertions.assertEquals(CertificateState.PENDING_ISSUE, afterIssue.getState(),
+                "after 202 from connector cert must be in PENDING_ISSUE");
+
+        // Step 2: out-of-band, the certificate is issued. Operator uploads it via finalize.
+        String certBase64 = buildSelfSignedCertBase64(kp, "smoke-async");
+        mockServer.stubFor(WireMock
+                .post(WireMock.urlPathMatching("/v2/authorityProvider/authorities/[^/]+/certificates/identify"))
+                .willReturn(WireMock.okJson("{\"meta\":[]}")));
+
+        UploadCertificateRequestDto finalizeReq = new UploadCertificateRequestDto();
+        finalizeReq.setCertificate(certBase64);
+        finalizeReq.setCustomAttributes(List.of());
+
+        clientOperationService.manuallyIssueCertificate(
+                SecuredParentUUID.fromUUID(raProfile.getAuthorityInstanceReferenceUuid()),
+                raProfile.getSecuredUuid(),
+                certificate.getUuid().toString(),
+                finalizeReq);
+
+        Certificate afterFinalize = certificateRepository.findByUuid(certificate.getUuid()).orElseThrow();
+        Assertions.assertEquals(CertificateState.ISSUED, afterFinalize.getState(),
+                "after manual finalize cert must be in ISSUED");
+        Assertions.assertNotNull(afterFinalize.getFingerprint(),
+                "fingerprint must be populated after finalize");
+    }
+
+    @Test
+    void smoke_asyncRevokeLifecycle_endToEnd() {
+        // certificate is in ISSUED state from setUp()
+
+        // Step 1: connector accepts the revoke request asynchronously (HTTP 202)
+        mockServer.stubFor(WireMock
+                .post(WireMock.urlPathMatching("/v2/authorityProvider/authorities/[^/]+/certificates/revoke"))
+                .willReturn(WireMock.aResponse().withStatus(202)));
+
+        ClientCertificateRevocationDto revokeReq = new ClientCertificateRevocationDto();
+        revokeReq.setAttributes(List.of());
+        revokeReq.setDestroyKey(false);
+
+        Assertions.assertDoesNotThrow(() ->
+                clientOperationService.revokeCertificateAction(certificate.getUuid(), revokeReq, true));
+
+        Certificate afterRevoke = certificateRepository.findByUuid(certificate.getUuid()).orElseThrow();
+        Assertions.assertEquals(CertificateState.PENDING_REVOKE, afterRevoke.getState(),
+                "after 202 from connector cert must be in PENDING_REVOKE");
+        Assertions.assertNotNull(afterRevoke.getPendingRevokeAttributes(),
+                "preserved revoke attributes must be present while pending");
+
+        // Step 2: out-of-band, the revoke completed. Operator confirms via manuallyConfirmRevoke.
+        Assertions.assertDoesNotThrow(() ->
+                clientOperationService.manuallyConfirmRevoke(
+                        SecuredParentUUID.fromUUID(raProfile.getAuthorityInstanceReferenceUuid()),
+                        raProfile.getSecuredUuid(),
+                        certificate.getUuid().toString()));
+
+        Certificate afterConfirm = certificateRepository.findByUuid(certificate.getUuid()).orElseThrow();
+        Assertions.assertEquals(CertificateState.REVOKED, afterConfirm.getState(),
+                "after manual confirm cert must be in REVOKED");
+        Assertions.assertNull(afterConfirm.getPendingRevokeAttributes(),
+                "preserved revoke attributes must be cleared after confirmation");
+        Assertions.assertNull(afterConfirm.getPendingRevokeDestroyKey(),
+                "preserved destroyKey flag must be cleared after confirmation");
+    }
+
+    @Test
+    void smoke_cancelPendingIssue_204_endToEnd() throws Exception {
+        setupRequestedCertWithRealCsr();
+
+        // Step 1: connector returns 202 → PENDING_ISSUE
+        mockServer.stubFor(WireMock
+                .post(WireMock.urlPathMatching("/v2/authorityProvider/authorities/[^/]+/certificates/issue"))
+                .willReturn(WireMock.aResponse().withStatus(202)));
+
+        clientOperationService.issueCertificateAction(certificate.getUuid(), true);
+        Assertions.assertEquals(CertificateState.PENDING_ISSUE,
+                certificateRepository.findByUuid(certificate.getUuid()).orElseThrow().getState());
+
+        // Step 2: cancel; connector aborts upstream and returns 204 → cert moves to FAILED
+        mockServer.stubFor(WireMock
+                .post(WireMock.urlPathMatching("/v2/authorityProvider/authorities/[^/]+/certificates/issue/cancel"))
+                .willReturn(WireMock.aResponse().withStatus(204)));
+
+        CancelPendingCertificateRequestDto cancelReq = new CancelPendingCertificateRequestDto();
+        cancelReq.setReason("smoke test cancel");
+
+        Assertions.assertDoesNotThrow(() ->
+                clientOperationService.cancelPendingCertificateOperation(
+                        SecuredParentUUID.fromUUID(raProfile.getAuthorityInstanceReferenceUuid()),
+                        raProfile.getSecuredUuid(),
+                        certificate.getUuid().toString(), cancelReq));
+
+        Certificate afterCancel = certificateRepository.findByUuid(certificate.getUuid()).orElseThrow();
+        Assertions.assertEquals(CertificateState.FAILED, afterCancel.getState(),
+                "after 204 cancel cert must be in FAILED");
+    }
+
+    @Test
+    void smoke_cancelPendingIssue_422_preservesState() throws Exception {
+        setupRequestedCertWithRealCsr();
+
+        mockServer.stubFor(WireMock
+                .post(WireMock.urlPathMatching("/v2/authorityProvider/authorities/[^/]+/certificates/issue"))
+                .willReturn(WireMock.aResponse().withStatus(202)));
+
+        clientOperationService.issueCertificateAction(certificate.getUuid(), true);
+        Assertions.assertEquals(CertificateState.PENDING_ISSUE,
+                certificateRepository.findByUuid(certificate.getUuid()).orElseThrow().getState());
+
+        // Connector hard-refuses cancel (422): cert MUST remain in PENDING_ISSUE.
+        mockServer.stubFor(WireMock
+                .post(WireMock.urlPathMatching("/v2/authorityProvider/authorities/[^/]+/certificates/issue/cancel"))
+                .willReturn(WireMock.aResponse().withStatus(422)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("[\"Issuance is past the point of no return\"]")));
+
+        CancelPendingCertificateRequestDto cancelReq = new CancelPendingCertificateRequestDto();
+
+        ValidationException ex = Assertions.assertThrows(ValidationException.class, () ->
+                clientOperationService.cancelPendingCertificateOperation(
+                        SecuredParentUUID.fromUUID(raProfile.getAuthorityInstanceReferenceUuid()),
+                        raProfile.getSecuredUuid(),
+                        certificate.getUuid().toString(), cancelReq));
+        Assertions.assertTrue(ex.getMessage().contains("past the point of no return"),
+                "expected upstream reason in error message, got: " + ex.getMessage());
+
+        Certificate afterCancel = certificateRepository.findByUuid(certificate.getUuid()).orElseThrow();
+        Assertions.assertEquals(CertificateState.PENDING_ISSUE, afterCancel.getState(),
+                "state MUST NOT change on hard 422 refusal");
+    }
 }
