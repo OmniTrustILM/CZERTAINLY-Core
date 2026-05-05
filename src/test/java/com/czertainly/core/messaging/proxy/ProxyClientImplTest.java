@@ -851,6 +851,106 @@ class ProxyClientImplTest {
                 .hasMessageContaining("Failed to deserialize");
     }
 
+    // ==================== sendRequestForEntity (status-preserving) ====================
+
+    @Test
+    @Timeout(value = 5, unit = TimeUnit.SECONDS)
+    void sendRequestForEntity_with200_returnsOkWithBody() throws Exception {
+        ConnectorDto connector = createConnector("proxy-001");
+        CompletableFuture<ProxyMessage> future = new CompletableFuture<>();
+        when(correlator.registerRequest(anyString(), any(Duration.class))).thenReturn(future);
+
+        future.complete(ProxyMessage.builder()
+                .correlationId("test-corr")
+                .proxyId("proxy-001")
+                .timestamp(Instant.now())
+                .connectorResponse(ConnectorResponse.builder()
+                        .statusCode(200)
+                        .body(Map.of("certificateData", "BASE64="))
+                        .build())
+                .build());
+
+        org.springframework.http.ResponseEntity<Map> result = proxyClient.sendRequestForEntity(
+                connector, "/v1/test", "POST", null, Map.class);
+
+        assertThat(result.getStatusCode()).isEqualTo(org.springframework.http.HttpStatus.OK);
+        assertThat(result.getBody()).isNotNull();
+        assertThat(result.getBody().get("certificateData")).isEqualTo("BASE64=");
+    }
+
+    @Test
+    @Timeout(value = 5, unit = TimeUnit.SECONDS)
+    void sendRequestForEntity_with202_preservesAcceptedStatus() throws Exception {
+        // The whole reason for sendRequestForEntity: a 202 from the upstream connector
+        // must NOT be collapsed to 200. Core uses the status to decide PENDING_ISSUE/PENDING_REVOKE.
+        ConnectorDto connector = createConnector("proxy-001");
+        CompletableFuture<ProxyMessage> future = new CompletableFuture<>();
+        when(correlator.registerRequest(anyString(), any(Duration.class))).thenReturn(future);
+
+        future.complete(ProxyMessage.builder()
+                .correlationId("test-corr")
+                .proxyId("proxy-001")
+                .timestamp(Instant.now())
+                .connectorResponse(ConnectorResponse.builder()
+                        .statusCode(202)
+                        .body(Map.of("meta", java.util.List.of()))
+                        .build())
+                .build());
+
+        org.springframework.http.ResponseEntity<Map> result = proxyClient.sendRequestForEntity(
+                connector, "/v1/test", "POST", null, Map.class);
+
+        assertThat(result.getStatusCode()).isEqualTo(org.springframework.http.HttpStatus.ACCEPTED);
+        assertThat(result.getBody()).isNotNull();
+    }
+
+    @Test
+    @Timeout(value = 5, unit = TimeUnit.SECONDS)
+    void sendRequestForEntity_with204_returnsNoContentWithNullBody() throws Exception {
+        ConnectorDto connector = createConnector("proxy-001");
+        CompletableFuture<ProxyMessage> future = new CompletableFuture<>();
+        when(correlator.registerRequest(anyString(), any(Duration.class))).thenReturn(future);
+
+        future.complete(ProxyMessage.builder()
+                .correlationId("test-corr")
+                .proxyId("proxy-001")
+                .timestamp(Instant.now())
+                .connectorResponse(ConnectorResponse.builder()
+                        .statusCode(204)
+                        .body(null)
+                        .build())
+                .build());
+
+        org.springframework.http.ResponseEntity<Map> result = proxyClient.sendRequestForEntity(
+                connector, "/v1/test", "POST", null, Map.class);
+
+        assertThat(result.getStatusCode()).isEqualTo(org.springframework.http.HttpStatus.NO_CONTENT);
+        assertThat(result.getBody()).isNull();
+    }
+
+    @Test
+    @Timeout(value = 5, unit = TimeUnit.SECONDS)
+    void sendRequestForEntity_with422_throwsValidationException() {
+        // 4xx upstream errors must still throw (consistent with sendRequest); never returned as ResponseEntity.
+        ConnectorDto connector = createConnector("proxy-001");
+        CompletableFuture<ProxyMessage> future = new CompletableFuture<>();
+        when(correlator.registerRequest(anyString(), any(Duration.class))).thenReturn(future);
+
+        future.complete(ProxyMessage.builder()
+                .correlationId("test-corr")
+                .proxyId("proxy-001")
+                .timestamp(Instant.now())
+                .connectorResponse(ConnectorResponse.builder()
+                        .statusCode(0)
+                        .error("Validation failed")
+                        .errorCategory("validation")
+                        .build())
+                .build());
+
+        assertThatThrownBy(() -> proxyClient.sendRequestForEntity(connector, "/v1/test", "POST", null, Map.class))
+                .isInstanceOf(ValidationException.class);
+    }
+
     // ==================== Helper Methods ====================
 
     private ConnectorDto createConnector(String proxyCode) {

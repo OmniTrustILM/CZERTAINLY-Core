@@ -11,6 +11,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
@@ -84,6 +85,81 @@ public class ProxyClientImpl implements ProxyClient {
             Object body,
             Class<T> responseType) throws ConnectorException {
         return sendRequest(connector, path, method, pathVariables, body, responseType, proxyProperties.requestTimeout());
+    }
+
+    @Override
+    public <T> ResponseEntity<T> sendRequestForEntity(
+            ApiClientConnectorInfo connector,
+            String path,
+            String method,
+            Object body,
+            Class<T> responseType) throws ConnectorException {
+        Duration timeout = proxyProperties.requestTimeout();
+        try {
+            CompletableFuture<ResponseEntity<T>> future =
+                    sendRequestForEntityAsync(connector, path, method, body, responseType, timeout);
+            return future.get(timeout.toMillis() + 5000, TimeUnit.MILLISECONDS);
+        } catch (TimeoutException e) {
+            throw new ConnectorCommunicationException(
+                    "Proxy request timed out after " + timeout, e, connector);
+        } catch (ExecutionException e) {
+            Throwable cause = e.getCause();
+            if (cause instanceof java.util.concurrent.CompletionException ce && ce.getCause() != null) {
+                cause = ce.getCause();
+            }
+            if (cause instanceof ConnectorException ce) {
+                throw ce;
+            }
+            if (cause instanceof RuntimeException re) {
+                throw re;
+            }
+            throw new ConnectorCommunicationException(
+                    "Proxy request failed: " + cause.getMessage(), cause, connector);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new ConnectorCommunicationException(
+                    "Proxy request interrupted", e, connector);
+        }
+    }
+
+    private <T> CompletableFuture<ResponseEntity<T>> sendRequestForEntityAsync(
+            ApiClientConnectorInfo connector,
+            String path,
+            String method,
+            Object body,
+            Class<T> responseType,
+            Duration timeout) {
+
+        String correlationId = UUID.randomUUID().toString();
+        String proxyCode = connector.getProxy() != null ? connector.getProxy().getCode() : null;
+
+        if (proxyCode == null || proxyCode.isBlank()) {
+            throw new IllegalArgumentException("Connector proxy code must be set to use ProxyClient");
+        }
+
+        String resolvedPath = resolvePath(path, null);
+
+        log.debug("Sending async proxy request (entity) correlationId={} proxyCode={} method={} path={}",
+                correlationId, proxyCode, method, resolvedPath);
+
+        CoreMessage message = CoreMessage.builder()
+                .correlationId(correlationId)
+                .messageType(toMessageType(method, resolvedPath))
+                .timestamp(Instant.now())
+                .connectorRequest(ConnectorRequest.builder()
+                        .connectorUrl(connector.getUrl())
+                        .method(method)
+                        .path(resolvedPath)
+                        .connectorAuth(authConverter.convert(connector))
+                        .body(body)
+                        .timeout(formatTimeout(timeout))
+                        .build())
+                .build();
+
+        CompletableFuture<ProxyMessage> messageFuture = correlator.registerRequest(correlationId, timeout);
+        producer.send(message, proxyCode);
+
+        return messageFuture.thenApply(proxyMessage -> handleResponseForEntity(proxyMessage, responseType, connector));
     }
 
     private <T> T sendRequest(
@@ -192,6 +268,55 @@ public class ProxyClientImpl implements ProxyClient {
 
         // Transform the response
         return messageFuture.thenApply(proxyMessage -> handleResponse(proxyMessage, responseType, connector));
+    }
+
+    /**
+     * Handle proxy message preserving the upstream HTTP status. Returns a
+     * {@link ResponseEntity} so callers can distinguish 200 OK (synchronous completion)
+     * from 202 Accepted (asynchronous completion). Body is {@code null} when the upstream
+     * response had no body (e.g. 204 No Content) or when the upstream response was 202
+     * with an empty body.
+     */
+    private <T> ResponseEntity<T> handleResponseForEntity(ProxyMessage message, Class<T> responseType, ApiClientConnectorInfo connector) {
+        ConnectorResponse response = message.getConnectorResponse();
+
+        if (response == null) {
+            if (message.isHealthCheck()) {
+                return ResponseEntity.ok().build();
+            }
+            sneakyThrow(new ConnectorCommunicationException(
+                    "Received proxy message without connector response", connector));
+            return null;
+        }
+
+        if (response.hasError()) {
+            throwProxyError(response, connector);
+        }
+
+        int statusCode = response.getStatusCode();
+        if (statusCode >= 400) {
+            throwHttpError(response, connector);
+        }
+
+        HttpStatus status = HttpStatus.resolve(statusCode);
+        if (status == null) {
+            // Defensive: an unrecognised 1xx/2xx/3xx — treat as 200 to keep contract simple.
+            status = HttpStatus.OK;
+        }
+
+        T body = null;
+        if (responseType != Void.class && responseType != void.class && response.getBody() != null) {
+            try {
+                body = objectMapper.convertValue(response.getBody(), responseType);
+            } catch (Exception e) {
+                sneakyThrow(new ConnectorCommunicationException(
+                        "Failed to deserialize proxy response body to " + responseType.getSimpleName(),
+                        e, connector));
+                return null;
+            }
+        }
+
+        return ResponseEntity.status(status).body(body);
     }
 
     /**
