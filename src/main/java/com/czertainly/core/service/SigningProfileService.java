@@ -44,6 +44,8 @@ public interface SigningProfileService extends ResourceExtensionService {
 
     SecuredList<SigningProfile> listSigningProfilesAssociatedWithTsp(SecuredUUID tspProfileUuid, SecurityFilter filter);
 
+    void notifyTimeQualityConfigurationChange(UUID timeQualityConfigurationUuid);
+
     SigningProfileDto getSigningProfile(SecuredUUID uuid, Integer version) throws NotFoundException;
 
     /**

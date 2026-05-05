@@ -164,6 +164,7 @@ public class TimeQualityConfigurationServiceImpl implements TimeQualityConfigura
         configuration.setLeapSecondGuard(request.isLeapSecondGuard());
         TimeQualityConfiguration saved = timeQualityConfigurationRepository.save(configuration);
         applicationEventPublisher.publishEvent(new TimeQualityConfigChangedEvent(this));
+        signingProfileService.notifyTimeQualityConfigurationChange(saved.getUuid());
 
         List<ResponseAttribute> customAttributes = attributeEngine.updateObjectCustomAttributesContent(Resource.TIME_QUALITY_CONFIGURATION, saved.getUuid(), request.getCustomAttributes());
         return TimeQualityConfigurationMapper.toDto(saved, customAttributes);
@@ -250,6 +251,7 @@ public class TimeQualityConfigurationServiceImpl implements TimeQualityConfigura
 
         attributeEngine.deleteObjectAttributeContent(Resource.TIME_QUALITY_CONFIGURATION, configuration.getUuid());
         timeQualityConfigurationRepository.delete(configuration);
+        signingProfileService.notifyTimeQualityConfigurationChange(configuration.uuid);
         applicationEventPublisher.publishEvent(new TimeQualityConfigChangedEvent(this));
     }
 

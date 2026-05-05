@@ -823,6 +823,12 @@ public class SigningProfileServiceImpl implements SigningProfileService {
         findByUuid(uuid);
     }
 
+    @Override
+    public void notifyTimeQualityConfigurationChange(UUID timeQualityConfigurationUuid) {
+        signingProfileRepository.findAllByTimeQualityConfigurationUuid(timeQualityConfigurationUuid)
+                .forEach(p -> evictSigningProfileCache(p.getName()));
+    }
+
     // ──────────────────────────────────────────────────────────────────────────
     // Helpers
     // ──────────────────────────────────────────────────────────────────────────
