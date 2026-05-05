@@ -887,7 +887,7 @@ public class ClientOperationServiceImpl implements ClientOperationService {
             caRequest.setCertificate(certificate.getCertificateContent().getContent());
 
             var connectorDto = raProfile.getAuthorityInstanceReference().getConnector().mapToApiClientDtoV1();
-            ResponseEntity<CertificateDataResponseDto> revokeResponse = connectorApiFactory.getCertificateApiClientV2(connectorDto).revokeCertificate(
+            ResponseEntity<Void> revokeResponse = connectorApiFactory.getCertificateApiClientV2(connectorDto).revokeCertificate(
                     connectorDto,
                     raProfile.getAuthorityInstanceReference().getAuthorityInstanceUuid(),
                     caRequest);
@@ -896,7 +896,8 @@ public class ClientOperationServiceImpl implements ClientOperationService {
                 // The connector accepted the revocation but completion is asynchronous; the
                 // certificate moves to PENDING_REVOKE. Preserve revoke parameters so the operation
                 // can be finalized later (key destruction happens at finalization, not here).
-                transitionToPendingRevoke(certificate, request, revokeResponse.getBody());
+                // Body is empty for revoke regardless of status — only the status is meaningful.
+                transitionToPendingRevoke(certificate, request);
                 return;
             }
 
@@ -932,22 +933,11 @@ public class ClientOperationServiceImpl implements ClientOperationService {
     /**
      * Transitions the certificate to {@code PENDING_REVOKE} and preserves the parameters needed to
      * finalize the revocation later (destroy-key flag, revoke attributes). Key destruction is
-     * deliberately deferred until the revocation is confirmed by the operator. Optional metadata from
-     * the connector's {@code 202 Accepted} body is persisted via the standard attribute pipeline.
+     * deliberately deferred until the revocation is confirmed by the operator. The connector's
+     * {@code 202 Accepted} response carries no body for revoke (per the v2 contract); the platform
+     * tracks the operation by transactionId / certificate identity.
      */
-    private void transitionToPendingRevoke(Certificate certificate, ClientCertificateRevocationDto request, CertificateDataResponseDto acceptedBody) {
-        if (acceptedBody != null && acceptedBody.getMeta() != null && !acceptedBody.getMeta().isEmpty()) {
-            try {
-                attributeEngine.updateMetadataAttributes(acceptedBody.getMeta(),
-                        ObjectAttributeContentInfo.builder(Resource.CERTIFICATE, certificate.getUuid())
-                                .connector(certificate.getRaProfile().getAuthorityInstanceReference().getConnectorUuid())
-                                .build());
-            } catch (Exception metaEx) {
-                logger.warn("Failed to persist metadata from 202 revoke response for cert {}: {}",
-                        certificate.getUuid(), metaEx.getMessage(), metaEx);
-            }
-        }
-
+    private void transitionToPendingRevoke(Certificate certificate, ClientCertificateRevocationDto request) {
         certificate.setPendingRevokeDestroyKey(request.isDestroyKey());
         certificate.setPendingRevokeAttributes(request.getAttributes());
         certificate.setState(CertificateState.PENDING_REVOKE);

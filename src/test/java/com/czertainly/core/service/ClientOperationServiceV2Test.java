@@ -1078,47 +1078,6 @@ class ClientOperationServiceV2Test extends BaseSpringBootTest {
     }
 
     @Test
-    void revokeCertificateAction_persistsMeta_when202CarriesMetadata() throws Exception {
-        mockServer.stubFor(WireMock
-                .post(WireMock.urlPathMatching("/v2/authorityProvider/authorities/[^/]+/certificates/revoke"))
-                .willReturn(WireMock.aResponse().withStatus(202)
-                        .withHeader("Content-Type", "application/json")
-                        .withBody("""
-                                {
-                                  "meta": [
-                                    {
-                                      "uuid": "00000000-0000-0000-0000-000000000002",
-                                      "name": "revokeOrderId",
-                                      "type": "meta",
-                                      "label": "Revoke Order ID",
-                                      "contentType": "string",
-                                      "content": [{"data": "REV-456"}],
-                                      "properties": {"label": "Revoke Order ID", "global": false, "overwrite": false},
-                                      "version": 2
-                                    }
-                                  ]
-                                }
-                                """)));
-
-        ClientCertificateRevocationDto request = new ClientCertificateRevocationDto();
-        request.setAttributes(List.of());
-        request.setDestroyKey(false);
-
-        clientOperationService.revokeCertificateAction(certificate.getUuid(), request, true);
-
-        Certificate fetched = certificateRepository.findByUuid(certificate.getUuid()).orElseThrow();
-        Assertions.assertEquals(CertificateState.PENDING_REVOKE, fetched.getState());
-
-        var storedMeta = attributeEngine.getMetadataAttributesDefinitionContent(
-                ObjectAttributeContentInfo.builder(Resource.CERTIFICATE, fetched.getUuid())
-                        .connector(connector.getUuid()).build());
-        Assertions.assertNotNull(storedMeta);
-        Assertions.assertFalse(storedMeta.isEmpty(),
-                "expected the connector's revoke meta to be persisted against the certificate");
-        Assertions.assertEquals("revokeOrderId", storedMeta.getFirst().getName());
-    }
-
-    @Test
     void revokeCertificateAction_completesSynchronously_on200WithEmptyBodyAndNoContentType() {
         // Default WireMock 200 response: no Content-Length, no Content-Type, no body.
         // This is the typical synchronous-success response from a v2 connector

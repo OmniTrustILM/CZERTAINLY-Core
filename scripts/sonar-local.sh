@@ -3,7 +3,17 @@
 # Spins up an ephemeral SonarQube Community container, runs mvn verify with
 # JaCoCo coverage, then mvn sonar:sonar against the local instance, and
 # prints the quality gate + open issues.
-# Usage: ./hack/sonar-local.sh
+# Usage: ./scripts/sonar-local.sh
+#
+# IMPORTANT — Limitation of ephemeral SonarQube:
+# The SonarQube container is freshly started on every run, so it has no
+# previous analysis to use as a "new code" baseline. The Quality Gate's
+# new-code conditions therefore evaluate trivially OK and do NOT match the
+# behaviour you'll see on SonarCloud (where a real baseline exists). To
+# approximate PR-style focus locally, this script intersects the Sonar
+# issue list with `git diff --name-only main...HEAD` and reports only
+# issues on changed files. Use it as a smoke-check; treat SonarCloud on
+# the actual PR as authoritative.
 set -euo pipefail
 
 CONTAINER_NAME="ilm-core-sonarqube"
@@ -36,6 +46,11 @@ for i in $(seq 1 120); do
 done
 
 echo "Configuring SonarQube..."
+# SonarQube ships with `admin/admin` as the factory default; the server forces
+# this password to be changed on first login. We rotate it to `Admin12345678!`
+# (a value that satisfies SonarQube's password policy) so the rest of the script
+# can authenticate. Both credentials are scoped to this ephemeral container only —
+# the container is removed by the EXIT trap, so neither value is persisted.
 curl -s -o /dev/null -u admin:admin -X POST \
     "${SONAR_URL}/api/users/change_password?login=admin&previousPassword=admin&password=Admin12345678!" 2>/dev/null || true
 
@@ -58,10 +73,6 @@ if [ -z "${TOKEN}" ]; then
     exit 1
 fi
 
-# Note: -Dmaven.compiler.proc=full is required because the parent POM
-# (com.czertainly:dependencies:1.4.0) doesn't configure annotation processor
-# paths explicitly, and maven-compiler-plugin 3.13+ no longer auto-discovers
-# Lombok from the classpath without it.
 echo "Running mvn verify with JaCoCo..."
 mvn -B -U verify -Dmaven.compiler.proc=full
 
@@ -109,6 +120,16 @@ else
 fi
 
 echo ""
+echo "================================================================================"
+echo "EPHEMERAL SONARQUBE — LIMITATION"
+echo "================================================================================"
+echo "  This run uses a freshly-started SonarQube container with no previous"
+echo "  analysis to act as a 'new code' baseline. The Quality Gate evaluates"
+echo "  trivially OK and does NOT match SonarCloud, where a real baseline exists."
+echo "  Treat this as a smoke check; SonarCloud on the actual PR is authoritative."
+echo "================================================================================"
+
+echo ""
 echo "Quality Gate (whole project; new-code conditions trivially OK without baseline):"
 echo "${PROBE}" | python3 -c "
 import sys, json
@@ -122,7 +143,7 @@ except Exception as e:
 "
 
 echo ""
-echo "Issues — ${SCOPE_DESC}:"
+echo "Issues — ${SCOPE_DESC} (filtered to git diff vs ${BASE_BRANCH}; not a full project view):"
 curl -s -u "${SONAR_CREDS}" \
     "${SONAR_URL}/api/issues/search?projectKeys=${PROJECT_KEY}&statuses=OPEN&ps=500" \
     | CHANGED_LIST="${CHANGED}" python3 -c "
