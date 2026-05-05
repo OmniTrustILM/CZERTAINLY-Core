@@ -97,14 +97,15 @@ class InstanceIdResolverTest {
     }
 
     @Test
-    void shouldProduceValidIdFromNoArgResolve() {
-        // given — no ILM_INSTANCE_ID env var is expected to be set in test environment
-        // when — exercises the fallback chain (getLocalHost → NetworkInterface)
-        var resolution = InstanceIdResolver.resolve();
+    void shouldProduceValidIdFromIpFallback() throws UnknownHostException {
+        // given — explicit blank env value and deterministic IP to avoid depending on process environment
+        InetAddress address = InetAddress.getByAddress(new byte[]{(byte) 172, 16, 1, 7});
 
-        // then
-        assertThat(resolution.source()).isEqualTo(InstanceIdResolver.Source.IP_ADDRESS);
-        assertThat(resolution.id()).isBetween(0, 65535);
+        // when — exercises the fallback-to-IP path
+        int id = InstanceIdResolver.resolve(null, () -> address);
+
+        // then — lower 16 bits of 172.16.1.7 = (1 << 8) | 7 = 263
+        assertThat(id).isEqualTo((1 << 8) | 7);
     }
 
     static Stream<InetAddress> nonUsableLocalHostAddresses() throws UnknownHostException {
