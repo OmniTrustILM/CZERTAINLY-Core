@@ -52,8 +52,7 @@ public class CzertainlyAuthenticationCache implements AuthenticationCache {
         if (jti == null) {
             return loader.get();
         }
-        Cache tokenCache = cacheManager.getCache(CacheConfig.TOKEN_AUTH_CACHE);
-        assert tokenCache != null;
+        Cache tokenCache = Objects.requireNonNull(cacheManager.getCache(CacheConfig.TOKEN_AUTH_CACHE));
         Cache.ValueWrapper cached = tokenCache.get(jti);
         if (cached != null) {
             return (AuthenticationInfo) cached.get();
@@ -89,8 +88,7 @@ public class CzertainlyAuthenticationCache implements AuthenticationCache {
     private void evictTokensByUserUuid(String userUuid) {
         Set<String> jtis = userJtiIndex.remove(userUuid);
         if (jtis == null) return;
-        Cache tokenCache = cacheManager.getCache(CacheConfig.TOKEN_AUTH_CACHE);
-        assert tokenCache != null;
+        Cache tokenCache = Objects.requireNonNull(cacheManager.getCache(CacheConfig.TOKEN_AUTH_CACHE));
         jtis.forEach(tokenCache::evict);
     }
 
