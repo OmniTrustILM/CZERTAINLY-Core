@@ -295,6 +295,41 @@ public class CrmfMessageHandlerITest extends BaseSpringBootTest {
         );
     }
 
+    @Test
+    public void test_handle_ir_returnsPollRep_whenPollFeatureSignalsAsynchronousAcceptance() throws Exception {
+        // When the authority provider connector returns HTTP 202, PollFeature returns
+        // null to signal asynchronous acceptance — the handler must respond with a CMP
+        // pollRep so the client knows to retry later (RFC 4210 §5.2.6), and persist a
+        // CmpTransaction so the subsequent pollReq can be correlated back to the cert.
+        String trxId = "780";
+        KeyPair keyPair = CmpTestUtil.generateKeyPairEC();
+
+        PKIBody body = CmpTestUtil.createCrmfBody(keyPair, 987654321L);
+        PKIMessage request = CmpTestUtil.createSignatureBasedMessage(
+                        trxId, keyPair.getPrivate(), body)
+                .toASN1Structure();
+
+        // Asynchronous-acceptance signal: PollFeature returns null when the cert lands
+        // in PENDING_ISSUE / PENDING_REVOKE.
+        given(pollFeature.pollCertificate(any(), any(), any(), any()))
+                .willReturn(null);
+
+        PKIMessage response = testedHandler.handle(request,
+                new Mobile3gppProfileContext(cmpProfileSigPrt,
+                        raProfile,
+                        request,
+                        certificateKeyService,
+                        null,
+                        null));
+
+        assertNotNull(response);
+        assertEquals(PKIBody.TYPE_POLL_REP, response.getBody().getType(),
+                "expected pollRep response when PollFeature signals asynchronous acceptance");
+        assertEquals(new DEROctetString(trxId.getBytes()).toString(),
+                response.getHeader().getTransactionID().toString());
+        assertInstanceOf(PollRepContent.class, response.getBody().getContent());
+    }
+
     // ----------------------------------------------------------------------------------------------------------
     // HELPER METHODS
     // ----------------------------------------------------------------------------------------------------------

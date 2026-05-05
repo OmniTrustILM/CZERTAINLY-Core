@@ -951,6 +951,115 @@ class ProxyClientImplTest {
                 .isInstanceOf(ValidationException.class);
     }
 
+    @Test
+    @Timeout(value = 5, unit = TimeUnit.SECONDS)
+    void sendRequestForEntity_withConnectionError_throwsConnectorCommunicationException() {
+        ConnectorDto connector = createConnector("proxy-001");
+        CompletableFuture<ProxyMessage> future = new CompletableFuture<>();
+        when(correlator.registerRequest(anyString(), any(Duration.class))).thenReturn(future);
+
+        future.complete(ProxyMessage.builder()
+                .correlationId("test-corr")
+                .proxyId("proxy-001")
+                .timestamp(Instant.now())
+                .connectorResponse(ConnectorResponse.builder()
+                        .statusCode(0)
+                        .error("Connection refused")
+                        .errorCategory("connection")
+                        .build())
+                .build());
+
+        assertThatThrownBy(() -> proxyClient.sendRequestForEntity(connector, "/v1/test", "POST", null, Map.class))
+                .isInstanceOf(ConnectorCommunicationException.class);
+    }
+
+    @Test
+    @Timeout(value = 5, unit = TimeUnit.SECONDS)
+    void sendRequestForEntity_withServerError_throwsConnectorServerException() {
+        ConnectorDto connector = createConnector("proxy-001");
+        CompletableFuture<ProxyMessage> future = new CompletableFuture<>();
+        when(correlator.registerRequest(anyString(), any(Duration.class))).thenReturn(future);
+
+        future.complete(ProxyMessage.builder()
+                .correlationId("test-corr")
+                .proxyId("proxy-001")
+                .timestamp(Instant.now())
+                .connectorResponse(ConnectorResponse.builder()
+                        .statusCode(503)
+                        .error("Service unavailable")
+                        .errorCategory("server_error")
+                        .build())
+                .build());
+
+        assertThatThrownBy(() -> proxyClient.sendRequestForEntity(connector, "/v1/test", "POST", null, Map.class))
+                .isInstanceOf(ConnectorServerException.class);
+    }
+
+    @Test
+    @Timeout(value = 5, unit = TimeUnit.SECONDS)
+    void sendRequestForEntity_withMissingConnectorResponse_throwsConnectorCommunicationException() {
+        // Defensive: ProxyMessage with no connector response and not a health check —
+        // surfaced as a comms exception with a clear message.
+        ConnectorDto connector = createConnector("proxy-001");
+        CompletableFuture<ProxyMessage> future = new CompletableFuture<>();
+        when(correlator.registerRequest(anyString(), any(Duration.class))).thenReturn(future);
+
+        future.complete(ProxyMessage.builder()
+                .correlationId("test-corr")
+                .proxyId("proxy-001")
+                .timestamp(Instant.now())
+                .connectorResponse(null)
+                .build());
+
+        assertThatThrownBy(() -> proxyClient.sendRequestForEntity(connector, "/v1/test", "POST", null, Map.class))
+                .isInstanceOf(ConnectorCommunicationException.class)
+                .hasMessageContaining("without connector response");
+    }
+
+    @Test
+    @Timeout(value = 5, unit = TimeUnit.SECONDS)
+    void sendRequestForEntity_with401_throwsConnectorClientException() {
+        ConnectorDto connector = createConnector("proxy-001");
+        CompletableFuture<ProxyMessage> future = new CompletableFuture<>();
+        when(correlator.registerRequest(anyString(), any(Duration.class))).thenReturn(future);
+
+        future.complete(ProxyMessage.builder()
+                .correlationId("test-corr")
+                .proxyId("proxy-001")
+                .timestamp(Instant.now())
+                .connectorResponse(ConnectorResponse.builder()
+                        .statusCode(0)
+                        .error("Bad credentials")
+                        .errorCategory("authentication")
+                        .build())
+                .build());
+
+        assertThatThrownBy(() -> proxyClient.sendRequestForEntity(connector, "/v1/test", "POST", null, Map.class))
+                .isInstanceOf(ConnectorClientException.class);
+    }
+
+    @Test
+    @Timeout(value = 5, unit = TimeUnit.SECONDS)
+    void sendRequestForEntity_with404_throwsConnectorEntityNotFoundException() {
+        ConnectorDto connector = createConnector("proxy-001");
+        CompletableFuture<ProxyMessage> future = new CompletableFuture<>();
+        when(correlator.registerRequest(anyString(), any(Duration.class))).thenReturn(future);
+
+        future.complete(ProxyMessage.builder()
+                .correlationId("test-corr")
+                .proxyId("proxy-001")
+                .timestamp(Instant.now())
+                .connectorResponse(ConnectorResponse.builder()
+                        .statusCode(0)
+                        .error("Not tracked")
+                        .errorCategory("not_found")
+                        .build())
+                .build());
+
+        assertThatThrownBy(() -> proxyClient.sendRequestForEntity(connector, "/v1/test", "POST", null, Map.class))
+                .isInstanceOf(ConnectorEntityNotFoundException.class);
+    }
+
     // ==================== Helper Methods ====================
 
     private ConnectorDto createConnector(String proxyCode) {
