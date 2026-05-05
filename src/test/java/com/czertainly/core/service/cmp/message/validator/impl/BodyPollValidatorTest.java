@@ -91,6 +91,44 @@ class BodyPollValidatorTest {
                 .hasMessageContaining("at least one certReqId is required");
     }
 
+    @Test
+    void validateDispatcher_routesPollReq_toValidateIn() throws Exception {
+        // The convenience dispatcher (kept for completeness — BodyValidator goes via type)
+        // must route TYPE_POLL_REQ messages to validateIn so direct callers can use the
+        // same validator without knowing the direction up front.
+        PKIMessage msg = pkiMessage(new PKIBody(PKIBody.TYPE_POLL_REQ,
+                new PollReqContent(CERT_REQ_ID)));
+
+        new BodyPollValidator().validate(msg, null);
+    }
+
+    @Test
+    void validateDispatcher_routesPollRep_toValidateOut() throws Exception {
+        PKIMessage msg = pkiMessage(new PKIBody(PKIBody.TYPE_POLL_REP,
+                new PollRepContent(CERT_REQ_ID, CHECK_AFTER)));
+
+        new BodyPollValidator().validate(msg, null);
+    }
+
+    @Test
+    void validateDispatcher_rejectsMalformedPollReq() {
+        PKIMessage msg = pkiMessage(new PKIBody(PKIBody.TYPE_POLL_REQ, new PollReqContent(new ASN1Integer[0])));
+
+        assertThatThrownBy(() -> new BodyPollValidator().validate(msg, null))
+                .isInstanceOf(CmpProcessingException.class)
+                .hasMessageContaining("at least one certReqId is required");
+    }
+
+    @Test
+    void validateDispatcher_rejectsMalformedPollRep_negativeCheckAfter() {
+        PKIMessage msg = pkiMessage(new PKIBody(PKIBody.TYPE_POLL_REP,
+                new PollRepContent(CERT_REQ_ID, new ASN1Integer(BigInteger.ONE.negate()))));
+
+        assertThatThrownBy(() -> new BodyPollValidator().validate(msg, null))
+                .isInstanceOf(CmpProcessingException.class)
+                .hasMessageContaining("checkAfter must be a non-negative integer");
+    }
+
     private static PKIMessage pkiMessage(PKIBody body) {
         PKIHeader header = new PKIHeaderBuilder(
                 PKIHeader.CMP_2000,

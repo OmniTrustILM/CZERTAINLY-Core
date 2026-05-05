@@ -975,7 +975,7 @@ class ClientOperationServiceV2Test extends BaseSpringBootTest {
     /**
      * Sets the certificate to REQUESTED with a CSR ready for issuance, then returns its UUID.
      */
-    private UUID prepareCertificateForIssuance() throws java.security.NoSuchAlgorithmException {
+    private UUID prepareCertificateForIssuance() throws NoSuchAlgorithmException {
         CertificateRequestEntity csr = new CertificateRequestEntity();
         csr.setContent("content");
         certificateRequestRepository.save(csr);
@@ -1181,7 +1181,7 @@ class ClientOperationServiceV2Test extends BaseSpringBootTest {
      * {@code certificate} field re-purposed as the REQUESTED successor with a CSR. Returns
      * the predecessor UUID; the successor UUID is {@code certificate.getUuid()}.
      */
-    private UUID prepareCertificateForRenewal() throws java.security.NoSuchAlgorithmException {
+    private UUID prepareCertificateForRenewal() throws NoSuchAlgorithmException {
         CertificateContent predContent = new CertificateContent();
         predContent.setContent("predContent");
         predContent = certificateContentRepository.save(predContent);
@@ -1742,7 +1742,7 @@ class ClientOperationServiceV2Test extends BaseSpringBootTest {
 
         // Set entities only; JPA's @MapsId derives the embedded id from the entity references.
         // (Explicitly setting the id conflicts with @MapsId and breaks deletion later.)
-        com.czertainly.core.dao.entity.CertificateRelation relation = new com.czertainly.core.dao.entity.CertificateRelation();
+        CertificateRelation relation = new CertificateRelation();
         relation.setPredecessorCertificate(predecessor);
         relation.setSuccessorCertificate(certificate);
         relation.setRelationType(CertificateRelationType.PENDING);
@@ -2074,5 +2074,101 @@ class ClientOperationServiceV2Test extends BaseSpringBootTest {
                 "expected RA profile binding rejection, got: " + ex.getMessage());
 
         raProfileRepository.delete(foreignRaProfile);
+    }
+
+    @Test
+    void manuallyIssueCertificate_rejected_whenAuthorityMismatch() throws Exception {
+        // Authority binding is the second guard: even if the RA profile id matches, an
+        // authorityUuid that doesn't match the cert's underlying authority must be rejected.
+        setupRequestedCertWithRealCsr();
+        certificate.setState(CertificateState.PENDING_ISSUE);
+        certificateRepository.save(certificate);
+
+        UploadCertificateRequestDto req = new UploadCertificateRequestDto();
+        req.setCertificate("dGVzdA==");
+        req.setCustomAttributes(List.of());
+
+        UUID strangerAuthority = UUID.randomUUID();
+
+        ValidationException ex = Assertions.assertThrows(ValidationException.class, () ->
+                clientOperationService.manuallyIssueCertificate(
+                        SecuredParentUUID.fromUUID(strangerAuthority),
+                        raProfile.getSecuredUuid(),
+                        certificate.getUuid().toString(),
+                        req));
+        Assertions.assertTrue(ex.getMessage().contains("authority is different"),
+                "expected authority binding rejection, got: " + ex.getMessage());
+    }
+
+    @Test
+    void manuallyConfirmRevoke_rejected_whenAuthorityMismatch() {
+        certificate.setState(CertificateState.PENDING_REVOKE);
+        certificate.setPendingRevokeDestroyKey(false);
+        certificate.setPendingRevokeAttributes(List.of());
+        certificateRepository.save(certificate);
+
+        UUID strangerAuthority = UUID.randomUUID();
+
+        ValidationException ex = Assertions.assertThrows(ValidationException.class, () ->
+                clientOperationService.manuallyConfirmRevoke(
+                        SecuredParentUUID.fromUUID(strangerAuthority),
+                        raProfile.getSecuredUuid(),
+                        certificate.getUuid().toString()));
+        Assertions.assertTrue(ex.getMessage().contains("authority is different"),
+                "expected authority binding rejection, got: " + ex.getMessage());
+    }
+
+    @Test
+    void cancelPendingCertificateOperation_rejected_whenAuthorityMismatch() {
+        certificate.setState(CertificateState.PENDING_ISSUE);
+        certificateRepository.save(certificate);
+
+        UUID strangerAuthority = UUID.randomUUID();
+        CancelPendingCertificateRequestDto req = new CancelPendingCertificateRequestDto();
+
+        ValidationException ex = Assertions.assertThrows(ValidationException.class, () ->
+                clientOperationService.cancelPendingCertificateOperation(
+                        SecuredParentUUID.fromUUID(strangerAuthority),
+                        raProfile.getSecuredUuid(),
+                        certificate.getUuid().toString(), req));
+        Assertions.assertTrue(ex.getMessage().contains("authority is different"),
+                "expected authority binding rejection, got: " + ex.getMessage());
+    }
+
+    @Test
+    void manuallyIssueCertificate_throwsNotFound_whenCertificateMissing() {
+        UUID missing = UUID.randomUUID();
+        UploadCertificateRequestDto req = new UploadCertificateRequestDto();
+        req.setCertificate("dGVzdA==");
+
+        Assertions.assertThrows(NotFoundException.class, () ->
+                clientOperationService.manuallyIssueCertificate(
+                        SecuredParentUUID.fromUUID(authorityInstanceReference.getUuid()),
+                        raProfile.getSecuredUuid(),
+                        missing.toString(),
+                        req));
+    }
+
+    @Test
+    void manuallyConfirmRevoke_throwsNotFound_whenCertificateMissing() {
+        UUID missing = UUID.randomUUID();
+
+        Assertions.assertThrows(NotFoundException.class, () ->
+                clientOperationService.manuallyConfirmRevoke(
+                        SecuredParentUUID.fromUUID(authorityInstanceReference.getUuid()),
+                        raProfile.getSecuredUuid(),
+                        missing.toString()));
+    }
+
+    @Test
+    void cancelPendingCertificateOperation_throwsNotFound_whenCertificateMissing() {
+        UUID missing = UUID.randomUUID();
+        CancelPendingCertificateRequestDto req = new CancelPendingCertificateRequestDto();
+
+        Assertions.assertThrows(NotFoundException.class, () ->
+                clientOperationService.cancelPendingCertificateOperation(
+                        SecuredParentUUID.fromUUID(authorityInstanceReference.getUuid()),
+                        raProfile.getSecuredUuid(),
+                        missing.toString(), req));
     }
 }

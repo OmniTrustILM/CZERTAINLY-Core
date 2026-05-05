@@ -1,5 +1,6 @@
 package com.czertainly.core.service.cmp.message.handler;
 
+import com.czertainly.api.interfaces.core.cmp.error.CmpProcessingException;
 import com.czertainly.api.model.client.connector.v2.ConnectorVersion;
 import com.czertainly.api.model.common.enums.cryptography.KeyAlgorithm;
 import com.czertainly.api.model.common.enums.cryptography.KeyType;
@@ -268,6 +269,47 @@ class RevocationMessageHandlerITest extends BaseSpringBootTest {
                         CmpTransactionState.CERT_REVOKED,
                         cmpTransaction.getState())
         );
+    }
+
+    @Test
+    @Transactional
+    void test_handle_revocation_rejectsCleanly_whenAuthorityAcceptsAsynchronously() throws Exception {
+        // When the authority provider connector accepts revocation asynchronously (HTTP 202),
+        // PollFeature returns null because the certificate transitions to PENDING_REVOKE.
+        // RFC 4210 §5.2.6 limits the poll-request/poll-response loop to ip/cp/kup contexts;
+        // CMP has no in-protocol way to represent a pending revocation, so the handler must
+        // surface this as a per-certificate rejection inside the revocation response — not
+        // a "revocationNotification" on a certificate that is not yet revoked. The handler's
+        // outer per-cert catch turns the internal CmpProcessingException into a
+        // {@code PKIStatus.rejection} status entry; the certificate must remain in
+        // {@code PENDING_REVOKE} (no further state change at this point).
+        String trxId = "778";
+        PKIMessage request = CmpTestUtil.createSignatureBasedMessage(
+                        trxId,
+                        CmpTestUtil.generateKeyPairEC().getPrivate(),
+                        CmpTestUtil.createRevocationBody(
+                                x509Certificate.getSerialNumber()))
+                .toASN1Structure();
+
+        given(pollFeature.pollCertificate(any(), any(), any(), any()))
+                .willReturn(null);
+
+        PKIMessage response = testedHandler.handle(request,
+                new Mobile3gppProfileContext(cmpProfileSigPrt,
+                        raProfile,
+                        request,
+                        certificateKeyService,
+                        null,
+                        null));
+
+        assertNotNull(response);
+        assertEquals(PKIBody.TYPE_REVOCATION_REP, response.getBody().getType());
+        RevRepContent body = (RevRepContent) response.getBody().getContent();
+        // Status must be rejection (not revocationNotification) — the inner async-rejection
+        // throw at the if-polled-is-null branch is converted by the per-cert catch.
+        // pkiStatus=2 is "rejection" per RFC 4210 §3.2.3.
+        assertEquals(2, body.getStatus()[0].getStatus().intValueExact(),
+                "expected pkiStatus=rejection when authority accepts revocation asynchronously");
     }
 
     // ----------------------------------------------------------------------------------------------------------

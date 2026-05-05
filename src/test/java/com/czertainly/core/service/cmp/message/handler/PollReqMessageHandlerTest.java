@@ -7,24 +7,40 @@ import com.czertainly.core.dao.entity.CertificateContent;
 import com.czertainly.core.dao.entity.cmp.CmpTransaction;
 import com.czertainly.core.service.cmp.configurations.ConfigurationContext;
 import com.czertainly.core.service.cmp.message.CmpTransactionService;
+import com.czertainly.core.service.cmp.message.protection.ProtectionStrategy;
 import org.bouncycastle.asn1.ASN1Integer;
+import org.bouncycastle.asn1.ASN1ObjectIdentifier;
+import org.bouncycastle.asn1.DERBitString;
 import org.bouncycastle.asn1.DEROctetString;
 import org.bouncycastle.asn1.cmp.PKIBody;
 import org.bouncycastle.asn1.cmp.PKIConfirmContent;
 import org.bouncycastle.asn1.cmp.PKIHeader;
 import org.bouncycastle.asn1.cmp.PKIHeaderBuilder;
 import org.bouncycastle.asn1.cmp.PKIMessage;
+import org.bouncycastle.asn1.cmp.PollRepContent;
 import org.bouncycastle.asn1.cmp.PollReqContent;
 import org.bouncycastle.asn1.x500.X500Name;
+import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
 import org.bouncycastle.asn1.x509.GeneralName;
+import org.bouncycastle.cert.X509v3CertificateBuilder;
+import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
+import org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder;
+import org.bouncycastle.operator.ContentSigner;
+import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
 import java.math.BigInteger;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.security.cert.X509Certificate;
+import java.util.Base64;
+import java.util.Date;
 import java.util.List;
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
@@ -176,5 +192,231 @@ class PollReqMessageHandlerTest {
     private static PKIMessage pollReqMessage() {
         return new PKIMessage(pkiHeader(),
                 new PKIBody(PKIBody.TYPE_POLL_REQ, new PollReqContent(new ASN1Integer(BigInteger.ZERO))));
+    }
+
+    // ==================== Happy paths ====================
+
+    @Test
+    void buildsPollRep_whenCertificateInPendingIssue() throws Exception {
+        // Asynchronous-acceptance from the connector keeps the certificate in PENDING_ISSUE.
+        // The handler must respond with a CMP pollRep so the client knows to retry later.
+        configuration = configurationWithMockedProtection();
+        CmpTransaction trx = transactionWithCert(certificateInState(CertificateState.PENDING_ISSUE));
+        trx.setOriginalRequestBodyType(PKIBody.TYPE_INIT_REQ);
+        Mockito.when(cmpTransactionService.findByTransactionId(Mockito.anyString()))
+                .thenReturn(List.of(trx));
+
+        PKIMessage response = handler.handle(pollReqMessage(), configuration);
+
+        assertThat(response).isNotNull();
+        assertThat(response.getBody().getType()).isEqualTo(PKIBody.TYPE_POLL_REP);
+        assertThat(response.getBody().getContent()).isInstanceOf(PollRepContent.class);
+    }
+
+    @Test
+    void buildsPollRep_whenCertificateInRequestedOrPendingApprovalState() throws Exception {
+        configuration = configurationWithMockedProtection();
+        for (CertificateState inProgress : List.of(CertificateState.REQUESTED, CertificateState.PENDING_APPROVAL)) {
+            CmpTransaction trx = transactionWithCert(certificateInState(inProgress));
+            trx.setOriginalRequestBodyType(PKIBody.TYPE_INIT_REQ);
+            Mockito.when(cmpTransactionService.findByTransactionId(Mockito.anyString()))
+                    .thenReturn(List.of(trx));
+
+            PKIMessage response = handler.handle(pollReqMessage(), configuration);
+
+            assertThat(response.getBody().getType()).isEqualTo(PKIBody.TYPE_POLL_REP);
+        }
+    }
+
+    @Test
+    void buildsCertReadyResponse_whenCertificateNowIssued_forInitRequest() throws Exception {
+        // After the asynchronous issuance completes, a subsequent pollReq should receive
+        // an ip / cp / kup response (depending on original request body type) carrying the
+        // issued certificate.
+        configuration = configurationWithMockedProtection();
+        Certificate cert = certificateInState(UUID.randomUUID(), CertificateState.ISSUED);
+        cert.setCertificateContent(certificateContentWithRealPem());
+        CmpTransaction trx = transactionWithCert(cert);
+        trx.setOriginalRequestBodyType(PKIBody.TYPE_INIT_REQ);
+        Mockito.when(cmpTransactionService.findByTransactionId(Mockito.anyString()))
+                .thenReturn(List.of(trx));
+
+        PKIMessage response = handler.handle(pollReqMessage(), configuration);
+
+        assertThat(response).isNotNull();
+        // ir originated → ip response (TYPE_INIT_REQ + 1)
+        assertThat(response.getBody().getType()).isEqualTo(PKIBody.TYPE_INIT_REP);
+    }
+
+    @Test
+    void buildsCertReadyResponse_withCpType_whenCertificateNowIssued_forCertRequest() throws Exception {
+        configuration = configurationWithMockedProtection();
+        Certificate cert = certificateInState(UUID.randomUUID(), CertificateState.ISSUED);
+        cert.setCertificateContent(certificateContentWithRealPem());
+        CmpTransaction trx = transactionWithCert(cert);
+        trx.setOriginalRequestBodyType(PKIBody.TYPE_CERT_REQ);
+        Mockito.when(cmpTransactionService.findByTransactionId(Mockito.anyString()))
+                .thenReturn(List.of(trx));
+
+        PKIMessage response = handler.handle(pollReqMessage(), configuration);
+
+        assertThat(response.getBody().getType()).isEqualTo(PKIBody.TYPE_CERT_REP);
+    }
+
+    @Test
+    void buildsCertReadyResponse_withKupType_whenCertificateNowIssued_forKurRequest() throws Exception {
+        configuration = configurationWithMockedProtection();
+        Certificate cert = certificateInState(UUID.randomUUID(), CertificateState.ISSUED);
+        cert.setCertificateContent(certificateContentWithRealPem());
+        CmpTransaction trx = transactionWithCert(cert);
+        trx.setOriginalRequestBodyType(PKIBody.TYPE_KEY_UPDATE_REQ);
+        Mockito.when(cmpTransactionService.findByTransactionId(Mockito.anyString()))
+                .thenReturn(List.of(trx));
+
+        PKIMessage response = handler.handle(pollReqMessage(), configuration);
+
+        assertThat(response.getBody().getType()).isEqualTo(PKIBody.TYPE_KEY_UPDATE_REP);
+    }
+
+    @Test
+    void buildsCertReadyResponse_withCpType_whenLegacyTransactionWithoutOriginalBodyType() throws Exception {
+        // Pre-existing transactions (created before the original_request_body_type column
+        // existed) have NULL original body type; default to cp (TYPE_CERT_REP).
+        configuration = configurationWithMockedProtection();
+        Certificate cert = certificateInState(UUID.randomUUID(), CertificateState.ISSUED);
+        cert.setCertificateContent(certificateContentWithRealPem());
+        CmpTransaction trx = transactionWithCert(cert);
+        trx.setOriginalRequestBodyType(null);
+        Mockito.when(cmpTransactionService.findByTransactionId(Mockito.anyString()))
+                .thenReturn(List.of(trx));
+
+        PKIMessage response = handler.handle(pollReqMessage(), configuration);
+
+        assertThat(response.getBody().getType()).isEqualTo(PKIBody.TYPE_CERT_REP);
+    }
+
+    @Test
+    void rejectsPoll_whenCertificateContentMissing_forIssuedCert() {
+        // Defensive: if the cert is reported as ISSUED but its content is missing in the DB,
+        // the handler must not silently emit a malformed body — fail clean.
+        configuration = configurationWithMockedProtection();
+        Certificate cert = certificateInState(UUID.randomUUID(), CertificateState.ISSUED);
+        cert.setCertificateContent(null);
+        CmpTransaction trx = transactionWithCert(cert);
+        trx.setOriginalRequestBodyType(PKIBody.TYPE_INIT_REQ);
+        Mockito.when(cmpTransactionService.findByTransactionId(Mockito.anyString()))
+                .thenReturn(List.of(trx));
+
+        assertThatThrownBy(() -> handler.handle(pollReqMessage(), configuration))
+                .isInstanceOf(CmpProcessingException.class)
+                .hasMessageContaining("certificate has no parseable content");
+    }
+
+    @Test
+    void rejectsPoll_whenTransactionHasNoAssociatedCertificate() {
+        // Defensive: a transaction row with a NULL certificate reference should not trip
+        // a NullPointerException in the handler — must surface a clean systemFailure.
+        CmpTransaction trx = new CmpTransaction();
+        trx.setUuid(UUID.randomUUID());
+        trx.setCertificate(null);
+        trx.setTransactionId("test-tid");
+        Mockito.when(cmpTransactionService.findByTransactionId(Mockito.anyString()))
+                .thenReturn(List.of(trx));
+
+        assertThatThrownBy(() -> handler.handle(pollReqMessage(), configuration))
+                .isInstanceOf(CmpProcessingException.class)
+                .hasMessageContaining("CMP transaction has no associated certificate");
+    }
+
+    @Test
+    void rejectsPoll_whenPollRepBuildingFails() throws Exception {
+        // The pollRep builder catches generic Exception so a misbehaving ProtectionStrategy
+        // (createProtection throws) must produce a CmpProcessingException, not an opaque
+        // runtime error. The thrown exception is wrapped at the message-builder layer; we
+        // verify both the resulting exception type and that the underlying RuntimeException
+        // is preserved in the cause chain.
+        ConfigurationContext cfg = configurationWithMockedProtection();
+        Mockito.when(cfg.getProtectionStrategy().createProtection(Mockito.any(PKIHeader.class), Mockito.any(PKIBody.class)))
+                .thenThrow(new RuntimeException("forced protection failure"));
+
+        CmpTransaction trx = transactionWithCert(certificateInState(CertificateState.PENDING_ISSUE));
+        trx.setOriginalRequestBodyType(PKIBody.TYPE_INIT_REQ);
+        Mockito.when(cmpTransactionService.findByTransactionId(Mockito.anyString()))
+                .thenReturn(List.of(trx));
+
+        assertThatThrownBy(() -> handler.handle(pollReqMessage(), cfg))
+                .isInstanceOf(CmpProcessingException.class)
+                .hasRootCauseMessage("forced protection failure");
+    }
+
+    @Test
+    void rejectsPoll_whenCertReadyResponseBuildingFails() throws Exception {
+        // The cert-ready builder catches generic Exception so a misbehaving ProtectionStrategy
+        // must produce a CmpProcessingException with the underlying failure preserved in the
+        // cause chain.
+        ConfigurationContext cfg = configurationWithMockedProtection();
+        Mockito.when(cfg.getProtectionStrategy().createProtection(Mockito.any(PKIHeader.class), Mockito.any(PKIBody.class)))
+                .thenThrow(new RuntimeException("forced protection failure"));
+
+        Certificate cert = certificateInState(UUID.randomUUID(), CertificateState.ISSUED);
+        cert.setCertificateContent(certificateContentWithRealPem());
+        CmpTransaction trx = transactionWithCert(cert);
+        trx.setOriginalRequestBodyType(PKIBody.TYPE_INIT_REQ);
+        Mockito.when(cmpTransactionService.findByTransactionId(Mockito.anyString()))
+                .thenReturn(List.of(trx));
+
+        assertThatThrownBy(() -> handler.handle(pollReqMessage(), cfg))
+                .isInstanceOf(CmpProcessingException.class)
+                .hasRootCauseMessage("forced protection failure");
+    }
+
+    private static Certificate certificateInState(UUID uuid, CertificateState state) {
+        Certificate cert = new Certificate();
+        cert.setUuid(uuid);
+        cert.setState(state);
+        cert.setSerialNumber("01");
+        cert.setSubjectDn("CN=test");
+        return cert;
+    }
+
+    private static CertificateContent certificateContentWithRealPem() {
+        // Generate a real self-signed X.509 cert at runtime so the handler's parse step
+        // (CertificateUtil.parseCertificate) succeeds.
+        try {
+            KeyPairGenerator kpg = KeyPairGenerator.getInstance("RSA");
+            kpg.initialize(2048);
+            KeyPair kp = kpg.generateKeyPair();
+            X500Name name = new X500Name("CN=test-poll");
+            Date notBefore = new Date();
+            Date notAfter = new Date(notBefore.getTime() + 365L * 24 * 60 * 60 * 1000);
+            X509v3CertificateBuilder builder = new JcaX509v3CertificateBuilder(
+                    name, BigInteger.ONE, notBefore, notAfter, name, kp.getPublic());
+            ContentSigner signer = new JcaContentSignerBuilder("SHA256WithRSA").build(kp.getPrivate());
+            X509Certificate x509 = new JcaX509CertificateConverter().getCertificate(builder.build(signer));
+            CertificateContent content = new CertificateContent();
+            content.setContent(Base64.getEncoder().encodeToString(x509.getEncoded()));
+            return content;
+        } catch (Exception e) {
+            throw new RuntimeException("test setup failed: cannot build self-signed cert", e);
+        }
+    }
+
+    private ConfigurationContext configurationWithMockedProtection() {
+        ConfigurationContext cfg = Mockito.mock(ConfigurationContext.class);
+        ProtectionStrategy strategy = Mockito.mock(ProtectionStrategy.class);
+        try {
+            Mockito.when(cfg.getProtectionStrategy()).thenReturn(strategy);
+            Mockito.when(cfg.getRecipient()).thenReturn(new GeneralName(new X500Name("CN=test-recipient")));
+            Mockito.when(strategy.getSender()).thenReturn(new GeneralName(new X500Name("CN=test-sender")));
+            Mockito.when(strategy.getProtectionAlg()).thenReturn(new AlgorithmIdentifier(
+                    new ASN1ObjectIdentifier("1.3.6.1.5.5.8.1.2")));
+            Mockito.when(strategy.getSenderKID()).thenReturn(new DEROctetString(new byte[]{1, 2, 3}));
+            Mockito.when(strategy.getProtectingExtraCerts()).thenReturn(List.of());
+            Mockito.when(strategy.createProtection(Mockito.any(PKIHeader.class), Mockito.any(PKIBody.class)))
+                    .thenReturn(new DERBitString(new byte[]{0x01, 0x02}));
+        } catch (Exception e) {
+            throw new RuntimeException("test setup failed", e);
+        }
+        return cfg;
     }
 }

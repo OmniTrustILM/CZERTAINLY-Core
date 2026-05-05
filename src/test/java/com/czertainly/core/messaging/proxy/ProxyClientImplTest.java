@@ -16,11 +16,16 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 
+import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.*;
@@ -870,10 +875,10 @@ class ProxyClientImplTest {
                         .build())
                 .build());
 
-        org.springframework.http.ResponseEntity<Map> result = proxyClient.sendRequestForEntity(
+        ResponseEntity<Map> result = proxyClient.sendRequestForEntity(
                 connector, "/v1/test", "POST", null, Map.class);
 
-        assertThat(result.getStatusCode()).isEqualTo(org.springframework.http.HttpStatus.OK);
+        assertThat(result.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(result.getBody()).isNotNull();
         assertThat(result.getBody().get("certificateData")).isEqualTo("BASE64=");
     }
@@ -893,14 +898,14 @@ class ProxyClientImplTest {
                 .timestamp(Instant.now())
                 .connectorResponse(ConnectorResponse.builder()
                         .statusCode(202)
-                        .body(Map.of("meta", java.util.List.of()))
+                        .body(Map.of("meta", List.of()))
                         .build())
                 .build());
 
-        org.springframework.http.ResponseEntity<Map> result = proxyClient.sendRequestForEntity(
+        ResponseEntity<Map> result = proxyClient.sendRequestForEntity(
                 connector, "/v1/test", "POST", null, Map.class);
 
-        assertThat(result.getStatusCode()).isEqualTo(org.springframework.http.HttpStatus.ACCEPTED);
+        assertThat(result.getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
         assertThat(result.getBody()).isNotNull();
     }
 
@@ -921,10 +926,10 @@ class ProxyClientImplTest {
                         .build())
                 .build());
 
-        org.springframework.http.ResponseEntity<Map> result = proxyClient.sendRequestForEntity(
+        ResponseEntity<Map> result = proxyClient.sendRequestForEntity(
                 connector, "/v1/test", "POST", null, Map.class);
 
-        assertThat(result.getStatusCode()).isEqualTo(org.springframework.http.HttpStatus.NO_CONTENT);
+        assertThat(result.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
         assertThat(result.getBody()).isNull();
     }
 
@@ -1058,6 +1063,128 @@ class ProxyClientImplTest {
 
         assertThatThrownBy(() -> proxyClient.sendRequestForEntity(connector, "/v1/test", "POST", null, Map.class))
                 .isInstanceOf(ConnectorEntityNotFoundException.class);
+    }
+
+    @Test
+    @Timeout(value = 5, unit = TimeUnit.SECONDS)
+    void sendRequestForEntity_withMissingProxyCode_throwsIllegalArgumentException() {
+        // Defensive: a connector without a proxy code cannot be routed; surface the
+        // misconfiguration as a clean IllegalArgumentException at the call site instead
+        // of a downstream NPE.
+        ConnectorDto connector = createConnector(null);
+
+        assertThatThrownBy(() -> proxyClient.sendRequestForEntity(connector, "/v1/test", "POST", null, Map.class))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Connector proxy code must be set");
+    }
+
+    @Test
+    @Timeout(value = 5, unit = TimeUnit.SECONDS)
+    void sendRequestForEntity_withBlankProxyCode_throwsIllegalArgumentException() {
+        ConnectorDto connector = createConnector("   ");
+
+        assertThatThrownBy(() -> proxyClient.sendRequestForEntity(connector, "/v1/test", "POST", null, Map.class))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Connector proxy code must be set");
+    }
+
+    @Test
+    @Timeout(value = 5, unit = TimeUnit.SECONDS)
+    void sendRequestForEntity_withDeserializationFailure_throwsConnectorCommunicationException() {
+        // A 200 OK with a body the ObjectMapper cannot map to the requested type must
+        // not silently produce a null-bodied response; surface as ConnectorCommunicationException
+        // so the caller sees the upstream contract was violated.
+        ConnectorDto connector = createConnector("proxy-001");
+        CompletableFuture<ProxyMessage> future = new CompletableFuture<>();
+        when(correlator.registerRequest(anyString(), any(Duration.class))).thenReturn(future);
+
+        // Body is a map, but we ask for a String — Jackson will attempt convertValue(map, String.class)
+        // and fail. NotASimpleType causes IllegalArgumentException from convertValue.
+        future.complete(ProxyMessage.builder()
+                .correlationId("test-corr")
+                .proxyId("proxy-001")
+                .timestamp(Instant.now())
+                .connectorResponse(ConnectorResponse.builder()
+                        .statusCode(200)
+                        .body(Map.of("nested", Map.of("deeper", List.of("a", "b"))))
+                        .build())
+                .build());
+
+        assertThatThrownBy(() -> proxyClient.sendRequestForEntity(
+                connector, "/v1/test", "POST", null, java.net.URL.class))
+                .isInstanceOf(ConnectorCommunicationException.class)
+                .hasMessageContaining("deserialize");
+    }
+
+    @Test
+    @Timeout(value = 5, unit = TimeUnit.SECONDS)
+    void sendRequestForEntity_withCheckedExceptionCause_wrapsInConnectorCommunicationException() {
+        // ExecutionException whose cause is a checked exception (not a ConnectorException
+        // and not a RuntimeException) must be wrapped — otherwise the caller sees an
+        // opaque ExecutionException with no proxy/connector context.
+        ConnectorDto connector = createConnector("proxy-001");
+        CompletableFuture<ProxyMessage> future = new CompletableFuture<>();
+        when(correlator.registerRequest(anyString(), any(Duration.class))).thenReturn(future);
+        future.completeExceptionally(new IOException("forced io failure"));
+
+        assertThatThrownBy(() -> proxyClient.sendRequestForEntity(connector, "/v1/test", "POST", null, Map.class))
+                .isInstanceOf(ConnectorCommunicationException.class)
+                .hasMessageContaining("Proxy request failed");
+    }
+
+    @Test
+    @Timeout(value = 5, unit = TimeUnit.SECONDS)
+    void sendRequestForEntity_withCompletionExceptionWrappedRuntime_unwrapsAndRethrows() {
+        // The unwrapping branch: a CompletionException wrapping a RuntimeException must be
+        // unwrapped and the inner RuntimeException re-thrown, not the outer CompletionException.
+        ConnectorDto connector = createConnector("proxy-001");
+        CompletableFuture<ProxyMessage> future = new CompletableFuture<>();
+        when(correlator.registerRequest(anyString(), any(Duration.class))).thenReturn(future);
+        IllegalStateException inner = new IllegalStateException("forced runtime failure");
+        future.completeExceptionally(new CompletionException("wrapper", inner));
+
+        assertThatThrownBy(() -> proxyClient.sendRequestForEntity(connector, "/v1/test", "POST", null, Map.class))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("forced runtime failure");
+    }
+
+    @Test
+    @Timeout(value = 5, unit = TimeUnit.SECONDS)
+    void sendRequestForEntity_withDirectRuntime_rethrowsWithoutWrapping() {
+        ConnectorDto connector = createConnector("proxy-001");
+        CompletableFuture<ProxyMessage> future = new CompletableFuture<>();
+        when(correlator.registerRequest(anyString(), any(Duration.class))).thenReturn(future);
+        future.completeExceptionally(new IllegalStateException("forced direct runtime"));
+
+        assertThatThrownBy(() -> proxyClient.sendRequestForEntity(connector, "/v1/test", "POST", null, Map.class))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("forced direct runtime");
+    }
+
+    @Test
+    @Timeout(value = 5, unit = TimeUnit.SECONDS)
+    void sendRequestForEntity_withNon4xxNon5xxNonOk_normalizesToOk() throws Exception {
+        // Defensive: an unrecognised status outside 4xx/5xx (e.g. 299) is normalised to OK
+        // so downstream callers can rely on a stable contract.
+        ConnectorDto connector = createConnector("proxy-001");
+        CompletableFuture<ProxyMessage> future = new CompletableFuture<>();
+        when(correlator.registerRequest(anyString(), any(Duration.class))).thenReturn(future);
+
+        future.complete(ProxyMessage.builder()
+                .correlationId("test-corr")
+                .proxyId("proxy-001")
+                .timestamp(Instant.now())
+                .connectorResponse(ConnectorResponse.builder()
+                        .statusCode(299) // unrecognised 2xx
+                        .body(Map.of("ok", true))
+                        .build())
+                .build());
+
+        ResponseEntity<Map> result = proxyClient.sendRequestForEntity(
+                connector, "/v1/test", "POST", null, Map.class);
+
+        // HttpStatus.resolve(299) is null → normalised to OK.
+        assertThat(result.getStatusCode().value()).isEqualTo(200);
     }
 
     // ==================== Helper Methods ====================
