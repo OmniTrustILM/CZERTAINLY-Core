@@ -51,7 +51,10 @@ final class SnowflakeSerialNumberGenerator implements SerialNumberGenerator {
             }
 
             lastTick = currentTick;
-            return BigInteger.valueOf((currentTick << 24) | ((long) instanceId << 8) | sequence);
+            return BigInteger.valueOf(currentTick)
+                    .shiftLeft(24)
+                    .or(BigInteger.valueOf(instanceId).shiftLeft(8))
+                    .or(BigInteger.valueOf(sequence));
         } finally {
             lock.unlock();
         }
