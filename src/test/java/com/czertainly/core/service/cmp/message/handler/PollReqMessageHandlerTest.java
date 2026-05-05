@@ -34,6 +34,7 @@ import org.mockito.Mockito;
 import java.math.BigInteger;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
+import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 import java.util.Base64;
 import java.util.Date;
@@ -293,6 +294,29 @@ class PollReqMessageHandlerTest {
         PKIMessage response = handler.handle(pollReqMessage(), configuration);
 
         assertThat(response.getBody().getType()).isEqualTo(PKIBody.TYPE_CERT_REP);
+    }
+
+    @Test
+    void rejectsPoll_whenStoredCertificateContentIsMalformed() {
+        // The cert has CertificateContent with non-empty (but malformed) base64 — passes the
+        // null-content guard at lines 165-166 but fails X.509 parsing at line 170. Must
+        // surface a clean CmpProcessingException, not propagate CertificateException.
+        configuration = configurationWithMockedProtection();
+        Certificate cert = certificateInState(UUID.randomUUID(), CertificateState.ISSUED);
+        CertificateContent malformed = new CertificateContent();
+        // Valid base64 but the bytes are not a parseable X.509 — triggers CertificateException
+        // inside CertificateUtil.parseCertificate (instead of an IllegalArgumentException
+        // from base64 decoding, which would not be caught by the CertificateException handler).
+        malformed.setContent(Base64.getEncoder().encodeToString("not-an-x509-certificate".getBytes()));
+        cert.setCertificateContent(malformed);
+        CmpTransaction trx = transactionWithCert(cert);
+        trx.setOriginalRequestBodyType(PKIBody.TYPE_INIT_REQ);
+        Mockito.when(cmpTransactionService.findByTransactionId(Mockito.anyString()))
+                .thenReturn(List.of(trx));
+
+        assertThatThrownBy(() -> handler.handle(pollReqMessage(), configuration))
+                .isInstanceOf(CmpProcessingException.class)
+                .hasCauseInstanceOf(CertificateException.class);
     }
 
     @Test

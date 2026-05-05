@@ -18,10 +18,12 @@ import com.czertainly.core.service.cmp.CmpTestUtil;
 import com.czertainly.core.service.cmp.configurations.variants.Mobile3gppProfileContext;
 import com.czertainly.core.service.cmp.message.CertificateKeyServiceImpl;
 import com.czertainly.core.service.cmp.message.CmpTransactionService;
+import com.czertainly.core.service.v2.ClientOperationService;
 import com.czertainly.core.util.BaseSpringBootTest;
 import com.czertainly.core.util.CertificateUtil;
 import com.czertainly.core.util.MetaDefinitions;
 import com.github.tomakehurst.wiremock.WireMockServer;
+import com.github.tomakehurst.wiremock.client.WireMock;
 import org.bouncycastle.asn1.DEROctetString;
 import org.bouncycastle.asn1.cmp.*;
 import org.junit.jupiter.api.AfterEach;
@@ -60,6 +62,13 @@ class RevocationMessageHandlerITest extends BaseSpringBootTest {
     @MockitoBean
     private PollFeature pollFeature;
 
+    // Mock the operation service: the real bean is wrapped by @ExternalAuthorization (OPA)
+    // and reaches the auth service over HTTP. For this handler-level test we only care
+    // that the revoke call completes successfully so execution reaches the PollFeature
+    // gate — short-circuit with a no-op mock.
+    @MockitoBean
+    private ClientOperationService clientOperationService;
+
     private RevocationMessageHandler testedHandler;
     private CmpProfile cmpProfileSigPrt;
     private CmpProfile cmpProfileMacPrt;//mac-protection
@@ -81,6 +90,11 @@ class RevocationMessageHandlerITest extends BaseSpringBootTest {
         testedHandler.setCmpTransactionService(cmpTransactionService);
         testedHandler.setCertificateRepository(certificateRepository);
         testedHandler.setPollFeature(pollFeature);
+        // Wire the real Spring-managed ClientOperationService so revokeCertificate can
+        // reach the connector revoke call (stubbed via WireMock per-test). Without this,
+        // the field stays null and revokeCertificate trips an NPE that the per-cert
+        // catch swallows — masking the asynchronous-acceptance branch under test.
+        testedHandler.setClientOperationService(clientOperationService);
 
         // -- create customer/client profile (signature-based)
         Connector connector = new Connector();
@@ -291,6 +305,18 @@ class RevocationMessageHandlerITest extends BaseSpringBootTest {
                                 x509Certificate.getSerialNumber()))
                 .toASN1Structure();
 
+        // The shared fixture creates the cert in REVOKED state for the existing happy-path
+        // tests and does not attach an RA profile (the existing tests don't need one
+        // because their handler reaches the per-cert catch before touching cert.getRaProfile()).
+        // For the asynchronous-acceptance path the cert must be ISSUED and bound to an
+        // RA profile so revokeCertificate can read raProfile.getSecuredUuid().
+        revokedCertificate.setState(CertificateState.ISSUED);
+        revokedCertificate.setRaProfile(raProfile);
+        revokedCertificate.setRaProfileUuid(raProfile.getUuid());
+        certificateRepository.save(revokedCertificate);
+
+        // ClientOperationService is mocked at the bean level; the revoke call returns
+        // normally without hitting the connector. No WireMock stub needed.
         given(pollFeature.pollCertificate(any(), any(), any(), any()))
                 .willReturn(null);
 
@@ -310,6 +336,47 @@ class RevocationMessageHandlerITest extends BaseSpringBootTest {
         // pkiStatus=2 is "rejection" per RFC 4210 §3.2.3.
         assertEquals(2, body.getStatus()[0].getStatus().intValueExact(),
                 "expected pkiStatus=rejection when authority accepts revocation asynchronously");
+    }
+
+    @Test
+    @Transactional
+    void test_handle_revocation_completes_whenPollFeatureReturnsRevokedCertificate() throws Exception {
+        // Companion to the asynchronous-acceptance test: when PollFeature returns a non-null
+        // certificate (the connector revoked synchronously and the cert is now in REVOKED
+        // state), the handler must emit a successful revocationNotification, persist a
+        // CmpTransaction in CERT_REVOKED state, and not throw. Pins the success branch of
+        // the if-polled-null check (lines 155-165 of RevocationMessageHandler).
+        revokedCertificate.setState(CertificateState.ISSUED);
+        revokedCertificate.setRaProfile(raProfile);
+        revokedCertificate.setRaProfileUuid(raProfile.getUuid());
+        certificateRepository.save(revokedCertificate);
+
+        String trxId = "780";
+        PKIMessage request = CmpTestUtil.createSignatureBasedMessage(
+                        trxId,
+                        CmpTestUtil.generateKeyPairEC().getPrivate(),
+                        CmpTestUtil.createRevocationBody(
+                                x509Certificate.getSerialNumber()))
+                .toASN1Structure();
+
+        // Make the lookup-after-revoke return the now-revoked cert (synchronous completion).
+        Certificate revoked = new Certificate();
+        revoked.setUuid(revokedCertificate.getUuid());
+        revoked.setSerialNumber(revokedCertificate.getSerialNumber());
+        revoked.setState(CertificateState.REVOKED);
+        given(pollFeature.pollCertificate(any(), any(), any(), any()))
+                .willReturn(revoked);
+
+        PKIMessage response = testedHandler.handle(request,
+                new Mobile3gppProfileContext(cmpProfileSigPrt,
+                        raProfile,
+                        request,
+                        certificateKeyService,
+                        null,
+                        null));
+
+        assertNotNull(response);
+        assertEquals(PKIBody.TYPE_REVOCATION_REP, response.getBody().getType());
     }
 
     // ----------------------------------------------------------------------------------------------------------

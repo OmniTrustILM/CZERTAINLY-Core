@@ -186,6 +186,41 @@ public class CertConfirmMessageHandlerTest {
     }
 
     @Test
+    public void test_handleFingerprintComputationFails_whenCertificateContentInvalid() throws Exception {
+        // When the stored certificate content cannot be parsed (malformed/truncated), the
+        // fingerprint computation must surface a CmpProcessingException with badMessageCheck
+        // rather than propagating an opaque CertificateException upward. Forced here by
+        // pointing the transaction at a Certificate whose CertificateContent is base64 garbage.
+        String trxId = "999";
+        PKIBody body = CmpTestUtil.createCertConfBody(x509certificate, serialNumber);
+        PKIMessage request = CmpTestUtil.createSignatureBasedMessage(
+                        trxId,
+                        CmpTestUtil.generateKeyPairEC().getPrivate(),
+                        body)
+                .toASN1Structure();
+        ConfigurationContext configuration = new Mobile3gppProfileContext(
+                new CmpProfile(), raProfile, request, certificateKeyService,
+                null, null);
+
+        CertificateContent garbage = new CertificateContent();
+        garbage.setContent("not-valid-base64-cert-content");
+        Certificate cert = new Certificate();
+        cert.setCertificateContent(garbage);
+        CmpTransaction transaction = new CmpTransaction();
+        transaction.setCertificate(cert);
+        given(cmpTransactionService.findByTransactionId(any())).willReturn(List.of(transaction));
+
+        CmpProcessingException response = assertThrows(
+                CmpProcessingException.class, () -> tested.handle(request, configuration));
+        // Either the fingerprint catch (badMessageCheck) or the per-cert lookup
+        // catch (badCertId) — both lead to a clean CmpProcessingException, not a runtime.
+        assertTrue(
+                response.getFailureInfo() == PKIFailureInfo.badMessageCheck
+                        || response.getFailureInfo() == PKIFailureInfo.badCertId,
+                "expected badMessageCheck or badCertId, got " + response.getFailureInfo());
+    }
+
+    @Test
     public void test_handleRelatedTransactionNotFound() throws Exception {
         // No transaction matches the incoming transactionID; handler returns the same
         // "no related cert" outcome (current implementation collapses both cases).
