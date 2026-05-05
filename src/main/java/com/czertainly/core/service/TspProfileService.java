@@ -10,11 +10,9 @@ import com.czertainly.api.model.common.BulkActionMessageDto;
 import com.czertainly.api.model.client.certificate.SearchRequestDto;
 import com.czertainly.api.model.common.PaginationResponseDto;
 import com.czertainly.api.model.core.search.SearchFieldDataByGroupDto;
-import com.czertainly.core.dao.entity.signing.TspProfile;
 import com.czertainly.core.model.signing.TspProfileModel;
 import com.czertainly.core.security.authz.SecuredUUID;
 import com.czertainly.core.security.authz.SecurityFilter;
-import com.czertainly.core.service.model.SecuredList;
 
 import java.util.List;
 

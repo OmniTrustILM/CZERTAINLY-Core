@@ -24,13 +24,12 @@ public class TspProfileMapper {
     }
 
     public static TspProfileModel toModel(TspProfile profile, List<ResponseAttribute> customAttributes) {
-        String signingUrl = null;
         return new TspProfileModel(
                 profile.getUuid(),
                 profile.getName(),
                 profile.getDescription(),
                 profile.getEnabled() != null ? profile.getEnabled() : false,
-                signingUrl,
+                null,
                 customAttributes
         );
     }

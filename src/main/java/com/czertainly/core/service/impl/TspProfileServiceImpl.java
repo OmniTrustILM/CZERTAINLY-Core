@@ -42,6 +42,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.function.TriFunction;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -61,6 +62,7 @@ public class TspProfileServiceImpl implements TspProfileService {
     private TspProfileRepository tspProfileRepository;
 
     @Override
+    @ExternalAuthorization(resource = Resource.TSP_PROFILE, action = ResourceAction.LIST)
     @Transactional(readOnly = true)
     public List<SearchFieldDataByGroupDto> getSearchableFieldInformation() {
         List<SearchFieldDataByGroupDto> searchFieldDataByGroupDtos = attributeEngine.getResourceSearchableFields(Resource.TSP_PROFILE, false);
@@ -106,7 +108,7 @@ public class TspProfileServiceImpl implements TspProfileService {
     @ExternalAuthorization(resource = Resource.TSP_PROFILE, action = ResourceAction.DETAIL)
     public TspProfileModel getTspProfile(String name) throws NotFoundException {
         TspProfile tspConfiguration = tspProfileRepository.findWithAssociationsByName(name)
-                .orElseThrow(() -> new NotFoundException("TSP Configuration not found: " + name));
+                .orElseThrow(() -> new NotFoundException("TSP Profile not found: " + name));
 
         List<ResponseAttribute> customAttributes = attributeEngine.getObjectCustomAttributesContent(Resource.TSP_PROFILE, tspConfiguration.getUuid());
         return TspProfileMapper.toModel(tspConfiguration, customAttributes);
@@ -177,8 +179,7 @@ public class TspProfileServiceImpl implements TspProfileService {
     @Transactional
     public void enableTspProfile(SecuredUUID uuid) throws NotFoundException {
         TspProfile profile = getTspProfileEntity(uuid);
-        profile.setEnabled(true);
-        tspProfileRepository.save(profile);
+        enableTspProfile(profile);
     }
 
     @Override
@@ -187,11 +188,13 @@ public class TspProfileServiceImpl implements TspProfileService {
     public List<BulkActionMessageDto> bulkEnableTspProfiles(List<SecuredUUID> uuids) {
         List<BulkActionMessageDto> messages = new ArrayList<>();
         for (SecuredUUID uuid : uuids) {
+            TspProfile profile = null;
             try {
-                enableTspProfile(uuid);
+                profile = getTspProfileEntity(uuid);
+                enableInOwnTransaction(profile);
             } catch (Exception e) {
-                log.error(e.getMessage());
-                messages.add(new BulkActionMessageDto(uuid.toString(), "", e.getMessage()));
+                log.error("Failed to enable TSP Profile {}", uuid, e);
+                messages.add(new BulkActionMessageDto(uuid.toString(), profile != null ? profile.getName() : "", e.getMessage()));
             }
         }
         return messages;
@@ -202,8 +205,7 @@ public class TspProfileServiceImpl implements TspProfileService {
     @Transactional
     public void disableTspProfile(SecuredUUID uuid) throws NotFoundException {
         TspProfile profile = getTspProfileEntity(uuid);
-        profile.setEnabled(false);
-        tspProfileRepository.save(profile);
+        disableTspProfile(profile);
     }
 
     @Override
@@ -212,14 +214,26 @@ public class TspProfileServiceImpl implements TspProfileService {
     public List<BulkActionMessageDto> bulkDisableTspProfiles(List<SecuredUUID> uuids) {
         List<BulkActionMessageDto> messages = new ArrayList<>();
         for (SecuredUUID uuid : uuids) {
+            TspProfile profile = null;
             try {
-                disableTspProfile(uuid);
+                profile = getTspProfileEntity(uuid);
+                disableInOwnTransaction(profile);
             } catch (Exception e) {
-                log.error(e.getMessage());
-                messages.add(new BulkActionMessageDto(uuid.toString(), "", e.getMessage()));
+                log.error("Failed to disable TSP Profile {}", uuid, e);
+                messages.add(new BulkActionMessageDto(uuid.toString(), profile != null ? profile.getName() : "", e.getMessage()));
             }
         }
         return messages;
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    void enableInOwnTransaction(TspProfile profile) {
+        enableTspProfile(profile);
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    void disableInOwnTransaction(TspProfile profile) {
+        disableTspProfile(profile);
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -261,10 +275,15 @@ public class TspProfileServiceImpl implements TspProfileService {
         attributeEngine.validateCustomAttributesContent(Resource.TSP_PROFILE, request.getCustomAttributes());
     }
 
-    private TspProfileDto updateAndMapToDto(TspProfile profile, TspProfileRequestDto request) throws AttributeException, NotFoundException {
+    private TspProfileDto updateAndMapToDto(TspProfile profile, TspProfileRequestDto request) throws AlreadyExistException, AttributeException, NotFoundException {
         profile.setName(request.getName());
         profile.setDescription(request.getDescription());
-        TspProfile saved = tspProfileRepository.save(profile);
+        TspProfile saved;
+        try {
+            saved = tspProfileRepository.saveAndFlush(profile);
+        } catch (DataIntegrityViolationException e) {
+            throw new AlreadyExistException("TSP Profile with name '" + request.getName() + "' already exists.");
+        }
 
         List<ResponseAttribute> customAttributes = attributeEngine.updateObjectCustomAttributesContent(Resource.TSP_PROFILE, saved.getUuid(), request.getCustomAttributes());
         return TspProfileMapper.toDto(saved, customAttributes);
@@ -274,6 +293,16 @@ public class TspProfileServiceImpl implements TspProfileService {
     private void deleteTspProfile(TspProfile profile) {
         attributeEngine.deleteObjectAttributeContent(Resource.TSP_PROFILE, profile.getUuid());
         tspProfileRepository.delete(profile);
+    }
+
+    private void enableTspProfile(TspProfile profile) {
+        profile.setEnabled(true);
+        tspProfileRepository.save(profile);
+    }
+
+    private void disableTspProfile(TspProfile profile) {
+        profile.setEnabled(false);
+        tspProfileRepository.save(profile);
     }
 
     private TspProfile getTspProfileEntity(SecuredUUID uuid) throws NotFoundException {
