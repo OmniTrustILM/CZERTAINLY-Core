@@ -120,7 +120,7 @@ public class ClientOperationControllerImpl implements ClientOperationController 
     }
 
     @Override
-    @AuditLogged(module = Module.CERTIFICATES, resource = Resource.CERTIFICATE, affiliatedResource = Resource.RA_PROFILE, operation = Operation.ISSUE)
+    @AuditLogged(module = Module.CERTIFICATES, resource = Resource.CERTIFICATE, affiliatedResource = Resource.RA_PROFILE, operation = Operation.FINALIZE_ISSUE)
     public com.czertainly.api.model.core.certificate.CertificateDetailDto manuallyIssueCertificate(
             String authorityUuid,
             @LogResource(uuid = true, affiliated = true) String raProfileUuid,
@@ -134,7 +134,7 @@ public class ClientOperationControllerImpl implements ClientOperationController 
     }
 
     @Override
-    @AuditLogged(module = Module.CERTIFICATES, resource = Resource.CERTIFICATE, affiliatedResource = Resource.RA_PROFILE, operation = Operation.REVOKE)
+    @AuditLogged(module = Module.CERTIFICATES, resource = Resource.CERTIFICATE, affiliatedResource = Resource.RA_PROFILE, operation = Operation.CONFIRM_REVOKE)
     public void manuallyConfirmRevoke(
             String authorityUuid,
             @LogResource(uuid = true, affiliated = true) String raProfileUuid,
@@ -146,7 +146,7 @@ public class ClientOperationControllerImpl implements ClientOperationController 
     }
 
     @Override
-    @AuditLogged(module = Module.CERTIFICATES, resource = Resource.CERTIFICATE, affiliatedResource = Resource.RA_PROFILE, operation = Operation.UPDATE)
+    @AuditLogged(module = Module.CERTIFICATES, resource = Resource.CERTIFICATE, affiliatedResource = Resource.RA_PROFILE, operation = Operation.CANCEL)
     public com.czertainly.api.model.core.certificate.CertificateDetailDto cancelPendingCertificateOperation(
             String authorityUuid,
             @LogResource(uuid = true, affiliated = true) String raProfileUuid,
