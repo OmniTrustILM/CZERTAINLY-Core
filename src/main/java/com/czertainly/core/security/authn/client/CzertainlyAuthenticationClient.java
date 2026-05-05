@@ -107,7 +107,7 @@ public class CzertainlyAuthenticationClient extends CzertainlyBaseAuthentication
                 throw new CzertainlyAuthenticationException(message);
             }
             return createAuthenticationInfo(authRequest.getAuthMethod(), response);
-        } catch (WebClientResponseException.InternalServerError | WebClientRequestException e) {
+        } catch (WebClientResponseException.InternalServerError | WebClientRequestException | IllegalStateException e) {
             String message = "An error occurred when calling authentication service: " + e.getMessage();
             AuthHelper.logAndAuditAuthFailure(logger, auditLogService, message, authRequest.getAuthData(false));
             throw new CzertainlyAuthenticationException(message, e);
