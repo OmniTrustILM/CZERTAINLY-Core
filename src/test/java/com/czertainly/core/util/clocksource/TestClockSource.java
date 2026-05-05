@@ -6,8 +6,8 @@ import java.time.Instant;
 
 public final class TestClockSource implements ClockSource {
 
-    long wallTimeMillis;
-    long monotonicNanos;
+    volatile long wallTimeMillis;
+    volatile long monotonicNanos;
 
     public static TestClockSource aTestClock() {
         return new TestClockSource(1_709_546_700_000L, 1_000_000_000L);
