@@ -124,6 +124,7 @@ class SnowflakeSerialNumberGeneratorTest {
     }
 
     @Test
+    @Timeout(2)
     void shouldWaitOnSmallBackwardClockJump() {
         // given
         long startTime = EPOCH + 200;
