@@ -1390,13 +1390,10 @@ public class CertificateServiceImpl implements CertificateService, AttributeReso
             throw new ValidationException("Certificate with UUID %s is archived and user with UUID %s cannot be set.".formatted(certificateUuid, userUuid));
         }
         UUID oldUserUuid = certificate.getUserUuid();
-        if (userUuid == null) {
-            certificate.setUserUuid(null);
-        } else {
-            certificate.setUserUuid(UUID.fromString(userUuid));
-        }
+        UUID newUserUuid = userUuid == null ? null : UUID.fromString(userUuid);
+        certificate.setUserUuid(newUserUuid);
         certificateRepository.save(certificate);
-        if (oldUserUuid != null && !oldUserUuid.toString().equals(userUuid)) {
+        if (oldUserUuid != null && !Objects.equals(oldUserUuid, newUserUuid)) {
             authenticationCache.evictByCertificateFingerprint(certificate.getFingerprint());
         }
     }
