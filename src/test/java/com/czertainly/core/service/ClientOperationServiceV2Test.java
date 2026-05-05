@@ -1689,6 +1689,87 @@ class ClientOperationServiceV2Test extends BaseSpringBootTest {
     }
 
     @Test
+    void cancelPendingCertificateOperation_isRejectedAndStateUnchanged_when4xxClientErrorFromConnector() {
+        // Regression for Copilot review on PR #1439: previously every non-422 exception
+        // was treated as a soft failure and the cert state was flipped locally even though
+        // the connector never cancelled the upstream operation. With the refined exception
+        // mapping, 4xx errors other than 404 (e.g. 400 / 401 / 403) must now hard-fail and
+        // preserve the cert state.
+        certificate.setState(CertificateState.PENDING_ISSUE);
+        certificateRepository.save(certificate);
+
+        mockServer.stubFor(WireMock
+                .post(WireMock.urlPathMatching("/v2/authorityProvider/authorities/[^/]+/certificates/issue/cancel"))
+                .willReturn(WireMock.aResponse().withStatus(403)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("[\"forbidden\"]")));
+
+        CancelPendingCertificateRequestDto req = new CancelPendingCertificateRequestDto();
+
+        ValidationException ex = Assertions.assertThrows(ValidationException.class, () ->
+                clientOperationService.cancelPendingCertificateOperation(
+                        SecuredParentUUID.fromUUID(raProfile.getAuthorityInstanceReferenceUuid()),
+                        raProfile.getSecuredUuid(),
+                        certificate.getUuid().toString(), req));
+        Assertions.assertTrue(ex.getMessage().contains("403") || ex.getMessage().toLowerCase().contains("rejected"),
+                "expected error mentioning the connector's 403 rejection, got: " + ex.getMessage());
+
+        Certificate after = certificateRepository.findByUuid(certificate.getUuid()).orElseThrow();
+        Assertions.assertEquals(CertificateState.PENDING_ISSUE, after.getState(),
+                "state MUST NOT change on 4xx connector rejection — the upstream operation was not cancelled");
+    }
+
+    @Test
+    void cancelPendingCertificateOperation_clearsPredecessorRelations_whenCancellingPendingIssue() {
+        // Regression for Copilot review on PR #1439: cancel-issue sends the cert to FAILED.
+        // Other failure paths in this class delete getPredecessorRelations() so that a
+        // renew/rekey predecessor doesn't keep a dangling PENDING relation pointing at a
+        // now-FAILED successor; cancel must do the same.
+        // Set up: predecessor (an existing ISSUED cert) -- PENDING --> successor (the
+        // cert being cancelled, in PENDING_ISSUE).
+        Certificate predecessor = new Certificate();
+        predecessor.setSubjectDn("CN=predecessor");
+        predecessor.setIssuerDn("CN=test-issuer");
+        predecessor.setSerialNumber("PRED-" + System.currentTimeMillis());
+        predecessor.setCertificateContent(certificateContent);
+        predecessor.setState(CertificateState.ISSUED);
+        predecessor.setValidationStatus(CertificateValidationStatus.VALID);
+        predecessor.setCertificateContentId(certificateContent.getId());
+        predecessor.setRaProfile(raProfile);
+        predecessor = certificateRepository.save(predecessor);
+
+        certificate.setState(CertificateState.PENDING_ISSUE);
+        certificateRepository.save(certificate);
+
+        // Set entities only; JPA's @MapsId derives the embedded id from the entity references.
+        // (Explicitly setting the id conflicts with @MapsId and breaks deletion later.)
+        com.czertainly.core.dao.entity.CertificateRelation relation = new com.czertainly.core.dao.entity.CertificateRelation();
+        relation.setPredecessorCertificate(predecessor);
+        relation.setSuccessorCertificate(certificate);
+        relation.setRelationType(CertificateRelationType.PENDING);
+        certificateRelationRepository.save(relation);
+
+        mockServer.stubFor(WireMock
+                .post(WireMock.urlPathMatching("/v2/authorityProvider/authorities/[^/]+/certificates/issue/cancel"))
+                .willReturn(WireMock.aResponse().withStatus(204)));
+
+        CancelPendingCertificateRequestDto req = new CancelPendingCertificateRequestDto();
+
+        Assertions.assertDoesNotThrow(() ->
+                clientOperationService.cancelPendingCertificateOperation(
+                        SecuredParentUUID.fromUUID(raProfile.getAuthorityInstanceReferenceUuid()),
+                        raProfile.getSecuredUuid(),
+                        certificate.getUuid().toString(), req));
+
+        Certificate after = certificateRepository.findByUuid(certificate.getUuid()).orElseThrow();
+        Assertions.assertEquals(CertificateState.FAILED, after.getState());
+        Assertions.assertFalse(certificateRelationRepository.existsById(relation.getId()),
+                "PENDING predecessor relation must be removed after cancel-issue → FAILED");
+
+        certificateRepository.delete(predecessor);
+    }
+
+    @Test
     void manuallyConfirmRevoke_blocksWhenCertNotInPendingRevoke() {
         // certificate is in ISSUED state from setUp()
         ValidationException ex = Assertions.assertThrows(ValidationException.class, () ->
@@ -1903,5 +1984,96 @@ class ClientOperationServiceV2Test extends BaseSpringBootTest {
         Certificate afterCancel = certificateRepository.findByUuid(certificate.getUuid()).orElseThrow();
         Assertions.assertEquals(CertificateState.PENDING_ISSUE, afterCancel.getState(),
                 "state MUST NOT change on hard 422 refusal");
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // Authorization-binding regression tests
+    //
+    // The class-level @ExternalAuthorization(RA_PROFILE/DETAIL) on the operator-driven
+    // endpoints authorizes use of the RA profile referenced by the URL but does NOT verify
+    // the supplied certificateUuid actually belongs to that profile. Without an explicit
+    // belongs-to check, a caller authorised for some RA profile A plus generic
+    // ISSUE/REVOKE permission could finalize / confirm / cancel a pending certificate from
+    // RA profile B. These tests pin that scenario as rejected.
+    // ---------------------------------------------------------------------------------------
+
+    @Test
+    void manuallyIssueCertificate_rejected_whenCertificateBelongsToDifferentRaProfile() throws Exception {
+        setupRequestedCertWithRealCsr();
+        // Move cert into PENDING_ISSUE state (the precondition for finalize)
+        certificate.setState(CertificateState.PENDING_ISSUE);
+        certificateRepository.save(certificate);
+
+        RaProfile foreignRaProfile = new RaProfile();
+        foreignRaProfile.setName("foreign-ra-profile");
+        foreignRaProfile.setAuthorityInstanceReference(authorityInstanceReference);
+        foreignRaProfile.setAuthorityInstanceReferenceUuid(authorityInstanceReference.getUuid());
+        foreignRaProfile.setEnabled(true);
+        raProfileRepository.save(foreignRaProfile);
+
+        UploadCertificateRequestDto req = new UploadCertificateRequestDto();
+        req.setCertificate("dGVzdA==");
+        req.setCustomAttributes(List.of());
+
+        ValidationException ex = Assertions.assertThrows(ValidationException.class, () ->
+                clientOperationService.manuallyIssueCertificate(
+                        SecuredParentUUID.fromUUID(foreignRaProfile.getAuthorityInstanceReferenceUuid()),
+                        foreignRaProfile.getSecuredUuid(),
+                        certificate.getUuid().toString(),
+                        req));
+        Assertions.assertTrue(ex.getMessage().contains("RA profile is different"),
+                "expected RA profile binding rejection, got: " + ex.getMessage());
+
+        raProfileRepository.delete(foreignRaProfile);
+    }
+
+    @Test
+    void manuallyConfirmRevoke_rejected_whenCertificateBelongsToDifferentRaProfile() {
+        certificate.setState(CertificateState.PENDING_REVOKE);
+        certificate.setPendingRevokeDestroyKey(false);
+        certificate.setPendingRevokeAttributes(List.of());
+        certificateRepository.save(certificate);
+
+        RaProfile foreignRaProfile = new RaProfile();
+        foreignRaProfile.setName("foreign-ra-profile");
+        foreignRaProfile.setAuthorityInstanceReference(authorityInstanceReference);
+        foreignRaProfile.setAuthorityInstanceReferenceUuid(authorityInstanceReference.getUuid());
+        foreignRaProfile.setEnabled(true);
+        raProfileRepository.save(foreignRaProfile);
+
+        ValidationException ex = Assertions.assertThrows(ValidationException.class, () ->
+                clientOperationService.manuallyConfirmRevoke(
+                        SecuredParentUUID.fromUUID(foreignRaProfile.getAuthorityInstanceReferenceUuid()),
+                        foreignRaProfile.getSecuredUuid(),
+                        certificate.getUuid().toString()));
+        Assertions.assertTrue(ex.getMessage().contains("RA profile is different"),
+                "expected RA profile binding rejection, got: " + ex.getMessage());
+
+        raProfileRepository.delete(foreignRaProfile);
+    }
+
+    @Test
+    void cancelPendingCertificateOperation_rejected_whenCertificateBelongsToDifferentRaProfile() {
+        certificate.setState(CertificateState.PENDING_ISSUE);
+        certificateRepository.save(certificate);
+
+        RaProfile foreignRaProfile = new RaProfile();
+        foreignRaProfile.setName("foreign-ra-profile");
+        foreignRaProfile.setAuthorityInstanceReference(authorityInstanceReference);
+        foreignRaProfile.setAuthorityInstanceReferenceUuid(authorityInstanceReference.getUuid());
+        foreignRaProfile.setEnabled(true);
+        raProfileRepository.save(foreignRaProfile);
+
+        CancelPendingCertificateRequestDto req = new CancelPendingCertificateRequestDto();
+
+        ValidationException ex = Assertions.assertThrows(ValidationException.class, () ->
+                clientOperationService.cancelPendingCertificateOperation(
+                        SecuredParentUUID.fromUUID(foreignRaProfile.getAuthorityInstanceReferenceUuid()),
+                        foreignRaProfile.getSecuredUuid(),
+                        certificate.getUuid().toString(), req));
+        Assertions.assertTrue(ex.getMessage().contains("RA profile is different"),
+                "expected RA profile binding rejection, got: " + ex.getMessage());
+
+        raProfileRepository.delete(foreignRaProfile);
     }
 }

@@ -135,8 +135,23 @@ public class RevocationMessageHandler implements MessageHandler<PKIMessage> {
                 Certificate certificate = getCertificate(serialNumber, tid);
                 LoggingHelper.putLogResourceInfo(Resource.CERTIFICATE, false, certificate.getUuid().toString(), certificate.getSubjectDn());
                 revokeCertificate(tid, revocation, certificate, configuration);
-                pollFeature.pollCertificate(tid,
+                Certificate polled = pollFeature.pollCertificate(tid,
                         certificate.getSerialNumber(), certificate.getUuid().toString(), CertificateState.REVOKED);
+                // PollFeature returns null when the certificate is in PENDING_REVOKE — the
+                // authority provider connector accepted the revocation asynchronously
+                // (HTTP 202) and the operation has not yet completed. RFC 4210 §5.2.6 limits
+                // the poll-request/poll-response loop to ip/cp/kup contexts (issue / renew /
+                // rekey), so CMP has no in-protocol way to represent a pending revocation.
+                // Surface this as a clean rejection rather than reporting a successful
+                // revocationNotification on a certificate that is not yet revoked. The
+                // revocation can still be confirmed (or cancelled) through the v2 client API
+                // via manuallyConfirmRevoke / cancelPendingCertificateOperation.
+                if (polled == null) {
+                    throw new CmpProcessingException(tid, PKIFailureInfo.systemFailure,
+                            "SN=" + serialNumber + " | revocation accepted asynchronously by authority "
+                                    + "(certificate is in PENDING_REVOKE); CMP does not support pending "
+                                    + "revocation. Use the platform API to confirm or cancel.");
+                }
                 cmpTransactionService.save(cmpTransactionService.createTransactionEntity(
                         tid.toString(),
                         configuration.getCmpProfile(),

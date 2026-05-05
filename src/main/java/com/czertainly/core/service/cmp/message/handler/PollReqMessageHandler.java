@@ -97,10 +97,28 @@ public class PollReqMessageHandler implements MessageHandler<PKIMessage> {
         CertificateState state = certificate.getState();
         LOG.debug("TID={} | pollReq lookup: cert={}, state={}", tid, certificate.getUuid(), state);
 
+        // RFC 4210 §5.2.6 limits polling to ip / cp / kup contexts (issue, renew, rekey).
+        // Reject polls correlated to revocation transactions cleanly — wrapping a revocation
+        // outcome in CertRepMessage (the body type the cert-ready / pollRep helpers below
+        // produce) would be a protocol violation.
+        Integer originalBodyType = transaction.getOriginalRequestBodyType();
+        if (originalBodyType != null && originalBodyType == PKIBody.TYPE_REVOCATION_REQ) {
+            throw new CmpProcessingException(tid, PKIFailureInfo.systemFailure,
+                    "pollReq is not supported for revocation transactions; CMP polling applies "
+                            + "only to issue / renew / rekey requests (RFC 4210 §5.2.6)");
+        }
+
         return switch (state) {
-            case PENDING_ISSUE, PENDING_REVOKE ->
+            case PENDING_ISSUE ->
                     buildPollRep(request, configuration, certReqId,
                             "Awaiting asynchronous completion (state=" + state.getCode() + ")");
+            case PENDING_REVOKE ->
+                    // Reachable only for legacy transactions where originalRequestBodyType is
+                    // NULL but the cert is in PENDING_REVOKE — defensively reject rather than
+                    // emit a CMP body that doesn't match the original operation.
+                    throw new CmpProcessingException(tid, PKIFailureInfo.systemFailure,
+                            "pollReq cannot resolve a PENDING_REVOKE certificate; CMP does not "
+                                    + "support pending revocation. Use the platform API to confirm or cancel.");
             case ISSUED ->
                     buildCertReadyResponse(request, configuration, tid, certReqId, transaction, certificate);
             case REVOKED, REJECTED, FAILED ->
