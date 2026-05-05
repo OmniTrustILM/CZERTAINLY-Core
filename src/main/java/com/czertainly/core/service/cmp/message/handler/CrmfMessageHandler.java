@@ -190,6 +190,41 @@ public class CrmfMessageHandler implements MessageHandler<PKIMessage> {
                     e.getMessage());
         }
 
+        // Non-synchronous (offline-RA) signal: the connector returned 202 Accepted and the
+        // certificate is in PENDING_ISSUE / PENDING_REVOKE. Per RFC 4210 §5.2.6 we respond with
+        // a pollRep so the client knows to retry later.
+        if (polledCert == null) {
+            // Persist the transaction so a subsequent pollReq from the client can be correlated
+            // back to the in-flight certificate.
+            CmpTransactionState trxState = switch (request.getBody().getType()) {
+                case PKIBody.TYPE_INIT_REQ, PKIBody.TYPE_CERT_REQ -> crmfIrCrMessageHandler.getTransactionState();
+                case PKIBody.TYPE_KEY_UPDATE_REQ -> kurMessageHandler.getTransactionState();
+                default -> throw new CmpProcessingException(tid, PKIFailureInfo.badRequest,
+                        "CRMF message cannot be handled - type is not supported, type=" + msgBodyType);
+            };
+            cmpTransactionService.save(cmpTransactionService.createTransactionEntity(
+                    tid.toString(),
+                    configuration.getCmpProfile(),
+                    requestedCert.getUuid(),
+                    trxState,
+                    request.getBody().getType()));
+
+            try {
+                return new PkiMessageBuilder(configuration)
+                        .addHeader(PkiMessageBuilder.buildBasicHeaderTemplate(request))
+                        .addBody(PkiMessageBuilder.createPollRepBody(
+                                crmf.getCertReqId(),
+                                60L /* checkAfter, seconds */,
+                                "Awaiting external completion"))
+                        .addExtraCerts(null)
+                        .build();
+            } catch (Exception e) {
+                LOG.error("CRMF pollRep message cannot be built", e);
+                throw new CmpCrmfValidationException(tid, request.getBody().getType(), PKIFailureInfo.systemFailure,
+                        "CRMF pollRep cannot be built, type=" + PkiMessageDumper.msgTypeAsString(request.getBody().getType()));
+            }
+        }
+
         // -- parse polled certificate (as X509)
         X509Certificate parsedCert = parseCertificate(tid, bodyType, polledCert);
         // -- field: caPubs
@@ -206,7 +241,8 @@ public class CrmfMessageHandler implements MessageHandler<PKIMessage> {
                 tid.toString(),
                 configuration.getCmpProfile(),
                 polledCert.getUuid().toString(),
-                trxState));
+                trxState,
+                request.getBody().getType()));
 
         // -- create cert response
         try {
