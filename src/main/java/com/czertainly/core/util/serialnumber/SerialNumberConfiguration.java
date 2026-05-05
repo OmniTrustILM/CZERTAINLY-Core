@@ -13,10 +13,10 @@ class SerialNumberConfiguration {
 
     @Bean
     SerialNumberGenerator serialNumberGenerator(ClockSource clockSource) {
-        String envValue = System.getenv("TSA_INSTANCE_ID");
+        String envValue = System.getenv("ILM_INSTANCE_ID");
         int instanceId = InstanceIdResolver.resolve();
         if (envValue != null && !envValue.isBlank()) {
-            log.info("Instance ID resolved from TSA_INSTANCE_ID environment variable: {}", instanceId);
+            log.info("Instance ID resolved from ILM_INSTANCE_ID environment variable: {}", instanceId);
         } else {
             log.info("Instance ID resolved from IP address: {}", instanceId);
         }

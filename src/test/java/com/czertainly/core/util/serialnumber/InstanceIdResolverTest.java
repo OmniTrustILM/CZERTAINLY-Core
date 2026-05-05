@@ -2,12 +2,21 @@ package com.czertainly.core.util.serialnumber;
 
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
+import org.mockito.MockedStatic;
 
 import java.net.InetAddress;
+import java.net.NetworkInterface;
 import java.net.UnknownHostException;
+import java.util.Collections;
+import java.util.List;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Answers.CALLS_REAL_METHODS;
+import static org.mockito.Mockito.*;
 
 class InstanceIdResolverTest {
 
@@ -89,12 +98,44 @@ class InstanceIdResolverTest {
 
     @Test
     void shouldProduceValidIdFromNoArgResolve() {
-        // given — no TSA_INSTANCE_ID env var is expected to be set in test environment
+        // given — no ILM_INSTANCE_ID env var is expected to be set in test environment
         // when — exercises the fallback chain (getLocalHost → NetworkInterface)
         int id = InstanceIdResolver.resolve();
 
         // then
         assertThat(id).isBetween(0, 65535);
+    }
+
+    static Stream<InetAddress> nonUsableLocalHostAddresses() throws UnknownHostException {
+        return Stream.of(
+                InetAddress.getByAddress(new byte[]{127, 0, 0, 1}),           // loopback
+                InetAddress.getByAddress(new byte[]{(byte) 169, (byte) 254, 1, 1}), // link-local
+                InetAddress.getByAddress(new byte[]{(byte) 224, 0, 0, 1}),    // multicast
+                InetAddress.getByAddress(new byte[]{0, 0, 0, 0})              // any-local (wildcard)
+        );
+    }
+
+    @ParameterizedTest
+    @MethodSource("nonUsableLocalHostAddresses")
+    void shouldFallBackToUsableAddressWhenLocalhostReturnsNonUsableAddress(InetAddress nonUsable) throws Exception {
+        // given — getLocalHost() returns a non-usable address, but a routable address exists on an interface
+        InetAddress routable = InetAddress.getByAddress(new byte[]{10, 0, 1, 5});
+
+        NetworkInterface ni = mock(NetworkInterface.class);
+        when(ni.getInetAddresses()).thenReturn(Collections.enumeration(List.of(routable)));
+
+        try (MockedStatic<InetAddress> mockedAddr = mockStatic(InetAddress.class, CALLS_REAL_METHODS);
+             MockedStatic<NetworkInterface> mockedNI = mockStatic(NetworkInterface.class)) {
+            mockedAddr.when(InetAddress::getLocalHost).thenReturn(nonUsable);
+            mockedNI.when(NetworkInterface::getNetworkInterfaces)
+                    .thenReturn(Collections.enumeration(List.of(ni)));
+
+            // when
+            int id = InstanceIdResolver.resolve();
+
+            // then — ID must be derived from the routable address, not the non-usable one
+            assertThat(id).isEqualTo((1 << 8) | 5); // 10.0.1.5 → lower 16 bits
+        }
     }
 
     @Test

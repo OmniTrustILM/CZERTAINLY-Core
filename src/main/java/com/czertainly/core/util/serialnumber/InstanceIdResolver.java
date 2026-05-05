@@ -6,7 +6,7 @@ import java.util.function.Supplier;
 
 final class InstanceIdResolver {
 
-    private static final String ENV_VAR = "TSA_INSTANCE_ID";
+    private static final String ENV_VAR = "ILM_INSTANCE_ID";
 
     private InstanceIdResolver() {
     }
@@ -17,7 +17,8 @@ final class InstanceIdResolver {
 
     private static InetAddress findLocalAddress() {
         try {
-            return InetAddress.getLocalHost();
+            InetAddress localAddress = InetAddress.getLocalHost();
+            return isUsableAddress(localAddress) ? localAddress : findUsableAddress();
         } catch (UnknownHostException e) {
             return findUsableAddress();
         }
@@ -65,11 +66,11 @@ final class InstanceIdResolver {
                 id = Integer.parseInt(envValue.strip());
             } catch (NumberFormatException e) {
                 throw new IllegalArgumentException(
-                        "TSA_INSTANCE_ID must be a valid integer, got: '" + envValue.strip() + "'");
+                        "ILM_INSTANCE_ID must be a valid integer, got: '" + envValue.strip() + "'");
             }
             if (id < 0 || id > 65535) {
                 throw new IllegalArgumentException(
-                        "TSA_INSTANCE_ID must be between 0 and 65535, got: " + id);
+                        "ILM_INSTANCE_ID must be between 0 and 65535, got: " + id);
             }
             return id;
         }
