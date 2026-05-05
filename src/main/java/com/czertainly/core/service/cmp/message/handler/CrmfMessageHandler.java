@@ -190,7 +190,7 @@ public class CrmfMessageHandler implements MessageHandler<PKIMessage> {
                     e.getMessage());
         }
 
-        // Non-synchronous-completion signal: the authority provider connector returned
+        // Asynchronous-completion signal: the authority provider connector returned
         // 202 Accepted and the certificate is in PENDING_ISSUE / PENDING_REVOKE. Per RFC 4210
         // §5.2.6 we respond with a pollRep so the client knows to retry later.
         if (polledCert == null) {
@@ -210,6 +210,8 @@ public class CrmfMessageHandler implements MessageHandler<PKIMessage> {
                     request.getBody().getType()));
 
             try {
+                LOG.info("TID={} | CRMF {} accepted asynchronously (cert {}); returning pollRep",
+                        tid, msgBodyType, requestedCert.getUuid());
                 return new PkiMessageBuilder(configuration)
                         .addHeader(PkiMessageBuilder.buildBasicHeaderTemplate(request))
                         .addBody(PkiMessageBuilder.createPollRepBody(
@@ -219,7 +221,7 @@ public class CrmfMessageHandler implements MessageHandler<PKIMessage> {
                         .addExtraCerts(null)
                         .build();
             } catch (Exception e) {
-                LOG.error("CRMF pollRep message cannot be built", e);
+                LOG.error("TID={} | CRMF pollRep message cannot be built (type={})", tid, msgBodyType, e);
                 throw new CmpCrmfValidationException(tid, request.getBody().getType(), PKIFailureInfo.systemFailure,
                         "CRMF pollRep cannot be built, type=" + PkiMessageDumper.msgTypeAsString(request.getBody().getType()));
             }

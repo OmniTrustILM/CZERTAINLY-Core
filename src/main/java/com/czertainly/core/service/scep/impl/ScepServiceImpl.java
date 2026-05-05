@@ -581,6 +581,9 @@ public class ScepServiceImpl implements ScepService {
         scepResponse.setPkiStatus(pkiStatus);
         if (pkiStatus == PkiStatus.SUCCESS) {
             scepResponse.setCertificateChain(getIssuedCertificateChain(certificate));
+        } else if (pkiStatus == PkiStatus.PENDING) {
+            logger.debug("SCEP transactionId={} returning PENDING (cert {} state={})",
+                    transactionId, certificate.getUuid(), certificate.getState());
         }
         return scepResponse;
     }
@@ -620,10 +623,14 @@ public class ScepServiceImpl implements ScepService {
                 X509Certificate x509Certificate = CertificateUtil.parseCertificate(certificate.getCertificateContent().getContent());
                 scepResponse.setCertificateChain(getIssuedCertificateChain(certificate));
                 sendIntuneSuccessNotification(intuneClient, scepRequest, x509Certificate);
+            } else if (pkiStatus == PkiStatus.PENDING) {
+                logger.debug("SCEP poll on transactionId={} returning PENDING (cert {} state={})",
+                        scepRequest.getTransactionId(), certificate.getUuid(), certificate.getState());
             }
             prepareMessage(scepRequest, scepResponse);
         } catch (Exception e) {
-            logger.error(e.getMessage());
+            logger.error("SCEP poll failed for transactionId={}: {}",
+                    scepRequest.getTransactionId(), e.getMessage(), e);
         }
         return scepResponse;
     }

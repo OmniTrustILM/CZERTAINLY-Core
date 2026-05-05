@@ -94,7 +94,7 @@ public class PollFeature {
             } while ((endRequest - startRequest < timeout)
                     && !expectedState.equals(polledCert.getState()));
             if (isPendingAsynchronous) {
-                LOG.trace("TID={}, SN={} | certificate uuid={} reached asynchronous {} state — caller will return pollRep",
+                LOG.debug("TID={}, SN={} | certificate uuid={} reached asynchronous {} state — caller will return pollRep",
                         tid, serialNumber, certUUID, polledCert.getState());
                 return null;
             }
@@ -104,7 +104,7 @@ public class PollFeature {
                     "SN=" + serialNumber + " | cannot poll certificate - processing thread has been interrupted", e);
         } catch (NotFoundException e) {
             throw new CmpProcessingException(tid, PKIFailureInfo.badDataFormat,
-                    "SN=" + serialNumber + " | issued certificate from CA cannot be found, uuid=" + certUUID);
+                    "SN=" + serialNumber + " | issued certificate from CA cannot be found, uuid=" + certUUID, e);
         } finally {
             LOG.trace("<<<<< CERT polling (  end) <<<<< ");
         }

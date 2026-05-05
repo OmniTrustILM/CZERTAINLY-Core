@@ -152,7 +152,8 @@ public class CertConfirmMessageHandler implements MessageHandler<PKIMessage> {
         }
 
         if (!confirmed) {
-            LOG.error("TID={}, FP={} | given transactionId and related certificate are not found", tid, incomingFingerprint);
+            LOG.warn("TID={}, FP={} | certConf fingerprint does not match any certificate in this transaction",
+                    tid, incomingFingerprint);
             throw new CmpProcessingException(tid, PKIFailureInfo.badCertId,
                     ImplFailureInfo.CMPHANCERTCONF002);
         }

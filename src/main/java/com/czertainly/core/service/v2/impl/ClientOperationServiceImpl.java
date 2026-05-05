@@ -19,6 +19,10 @@ import com.czertainly.api.model.core.certificate.*;
 import com.czertainly.api.model.core.compliance.ComplianceStatus;
 import com.czertainly.api.model.core.compliance.v2.ComplianceCheckResultDto;
 import com.czertainly.api.model.core.enums.CertificateRequestFormat;
+import com.czertainly.api.model.core.logging.enums.Module;
+import com.czertainly.api.model.core.logging.enums.Operation;
+import com.czertainly.api.model.core.logging.enums.OperationResult;
+import com.czertainly.api.model.core.logging.records.ResourceObjectIdentity;
 import com.czertainly.api.model.core.v2.*;
 import com.czertainly.core.attribute.CsrAttributes;
 import com.czertainly.core.attribute.engine.AttributeContentPurpose;
@@ -30,6 +34,7 @@ import com.czertainly.core.dao.repository.CertificateRelationRepository;
 import com.czertainly.core.dao.repository.CertificateRepository;
 import com.czertainly.core.dao.repository.RaProfileRepository;
 import com.czertainly.core.events.handlers.CertificateActionPerformedEventHandler;
+import com.czertainly.core.logging.LoggerWrapper;
 import com.czertainly.core.messaging.jms.producers.ActionProducer;
 import com.czertainly.core.messaging.jms.producers.EventProducer;
 import com.czertainly.core.messaging.model.ActionMessage;
@@ -72,6 +77,13 @@ import java.util.*;
 @Transactional
 public class ClientOperationServiceImpl implements ClientOperationService {
     private static final Logger logger = LoggerFactory.getLogger(ClientOperationServiceImpl.class);
+
+    // Structured event-log surface (per CZERTAINLY contributors logging guide).
+    // Used for system-level state-transition events that are not directly user-triggered
+    // (audit log via @AuditLogged on the controller already covers user invocation).
+    private static final LoggerWrapper eventLogger = new LoggerWrapper(
+            ClientOperationServiceImpl.class, Module.CERTIFICATES, Resource.CERTIFICATE);
+
     private PlatformTransactionManager transactionManager;
 
     private RaProfileRepository raProfileRepository;
@@ -355,7 +367,7 @@ public class ClientOperationServiceImpl implements ClientOperationService {
                                 .build());
             } catch (Exception metaEx) {
                 logger.warn("Failed to persist metadata from 202 response for cert {}: {}",
-                        certificate.getUuid(), metaEx.getMessage());
+                        certificate.getUuid(), metaEx.getMessage(), metaEx);
             }
         }
 
@@ -373,7 +385,33 @@ public class ClientOperationServiceImpl implements ClientOperationService {
                 CertificateActionPerformedEventHandler.constructEventMessage(
                         certificate.getUuid(), originatingAction));
 
-        logger.info("Certificate {} transitioned to PENDING_ISSUE", certificate.getUuid());
+        // Structured event log: the system observed the connector's HTTP 202 and decided to
+        // transition to PENDING_ISSUE. Distinct from the @AuditLogged record on the controller,
+        // which captures the user invocation itself.
+        eventLogger.logEvent(
+                operationForAction(originatingAction),
+                OperationResult.SUCCESS,
+                null,
+                List.of(new ResourceObjectIdentity(certificate.getSerialNumber(), certificate.getUuid())),
+                "Connector accepted asynchronously (HTTP 202); certificate transitioned to PENDING_ISSUE");
+
+        logger.info("Certificate {} transitioned to PENDING_ISSUE (originating action: {})",
+                certificate.getUuid(), originatingAction.getCode());
+    }
+
+    /**
+     * Map a {@link ResourceAction} originating from the v2 client API to the matching
+     * {@link Operation} used by the structured event-log surface. Keeps audit-log and
+     * event-log operation tags consistent (ISSUE → ISSUE, RENEW → RENEW, etc.).
+     */
+    private static Operation operationForAction(ResourceAction action) {
+        return switch (action) {
+            case ISSUE -> Operation.ISSUE;
+            case RENEW -> Operation.RENEW;
+            case REKEY -> Operation.REKEY;
+            case REVOKE -> Operation.REVOKE;
+            default -> Operation.UNKNOWN;
+        };
     }
 
     private boolean isRequestNotCompliant(UUID certificateUuid, UUID certificateRequestUuid, CertificateEvent certificateEvent) throws NotFoundException {
@@ -906,7 +944,7 @@ public class ClientOperationServiceImpl implements ClientOperationService {
                                 .build());
             } catch (Exception metaEx) {
                 logger.warn("Failed to persist metadata from 202 revoke response for cert {}: {}",
-                        certificate.getUuid(), metaEx.getMessage());
+                        certificate.getUuid(), metaEx.getMessage(), metaEx);
             }
         }
 
@@ -925,6 +963,14 @@ public class ClientOperationServiceImpl implements ClientOperationService {
         eventProducer.produceMessage(
                 CertificateActionPerformedEventHandler.constructEventMessage(
                         certificate.getUuid(), ResourceAction.REVOKE));
+
+        // Structured event log: connector accepted the revoke asynchronously.
+        eventLogger.logEvent(
+                Operation.REVOKE,
+                OperationResult.SUCCESS,
+                null,
+                List.of(new ResourceObjectIdentity(certificate.getSerialNumber(), certificate.getUuid())),
+                "Connector accepted asynchronously (HTTP 202); certificate transitioned to PENDING_REVOKE");
 
         logger.info("Certificate {} transitioned to PENDING_REVOKE", certificate.getUuid());
     }
@@ -1359,7 +1405,8 @@ public class ClientOperationServiceImpl implements ClientOperationService {
             try {
                 locationService.pushRequestedCertificateToLocationAction(cl.getId(), false);
             } catch (Exception e) {
-                logger.error("Failed to push manually-finalized certificate to location: {}", e.getMessage());
+                logger.error("Failed to push manually-finalized certificate {} to location {}: {}",
+                        certificate.getUuid(), cl.getId().getLocationUuid(), e.getMessage(), e);
             }
         }
 
@@ -1401,7 +1448,7 @@ public class ClientOperationServiceImpl implements ClientOperationService {
                         cert.getPendingRevokeAttributes());
             } catch (AttributeException e) {
                 logger.warn("Failed to apply preserved revoke attributes on manual revoke confirm for cert {}: {}",
-                        cert.getUuid(), e.getMessage());
+                        cert.getUuid(), e.getMessage(), e);
             }
         }
 
@@ -1418,7 +1465,8 @@ public class ClientOperationServiceImpl implements ClientOperationService {
                 logger.debug("Manual revoke confirm: destroying key for cert {}", cert.getUuid());
                 keyService.destroyKey(List.of(cert.getKeyUuid().toString()));
             } catch (Exception e) {
-                logger.warn("Failed to destroy certificate key on manual revoke confirm: {}", e.getMessage());
+                logger.warn("Failed to destroy certificate key on manual revoke confirm for cert {}: {}",
+                        cert.getUuid(), e.getMessage(), e);
             }
         }
 
@@ -1482,7 +1530,7 @@ public class ClientOperationServiceImpl implements ClientOperationService {
                             .connector(raProfile.getAuthorityInstanceReference().getConnectorUuid()).build()));
         } catch (Exception attrEx) {
             logger.warn("Failed to assemble cancel request attributes for cert {}: {}",
-                    cert.getUuid(), attrEx.getMessage());
+                    cert.getUuid(), attrEx.getMessage(), attrEx);
         }
 
         try {
@@ -1498,6 +1546,19 @@ public class ClientOperationServiceImpl implements ClientOperationService {
             certificateEventHistoryService.addEventHistory(cert.getUuid(), eventKind,
                     CertificateEventStatus.FAILED,
                     "Cancel rejected by authority: " + upstreamRefused.getMessage(), "");
+            logger.warn("Authority refused to cancel pending {} for cert {}: {}",
+                    isCancelIssue ? "issuance" : "revocation", cert.getUuid(), upstreamRefused.getMessage(), upstreamRefused);
+            // Structured event log: the system observed an upstream hard-refusal and decided
+            // NOT to transition local state. The user-facing audit record (CANCEL/FAILURE) is
+            // emitted by the @AuditLogged aspect on the controller.
+            eventLogger.logEvent(
+                    Operation.CANCEL,
+                    OperationResult.FAILURE,
+                    null,
+                    List.of(new ResourceObjectIdentity(cert.getSerialNumber(), cert.getUuid())),
+                    "Authority refused to cancel pending "
+                            + (isCancelIssue ? "issuance" : "revocation")
+                            + ": " + upstreamRefused.getMessage());
             throw new ValidationException(
                     "Authority refused to cancel the operation: " + upstreamRefused.getMessage());
         } catch (Exception soft) {
@@ -1505,8 +1566,19 @@ public class ClientOperationServiceImpl implements ClientOperationService {
             certificateEventHistoryService.addEventHistory(cert.getUuid(), eventKind,
                     CertificateEventStatus.FAILED,
                     "Connector cancel call failed (proceeding with local cancel): " + soft.getMessage(), "");
-            logger.warn("Connector cancel call failed for cert {} (proceeding with local cancel): {}",
-                    cert.getUuid(), soft.getMessage());
+            logger.warn("Connector cancel call failed for cert {} ({}: {}) — proceeding with local cancel",
+                    cert.getUuid(), soft.getClass().getSimpleName(), soft.getMessage(), soft);
+            // Structured event log: the system observed a soft connector failure and decided
+            // to proceed locally. Recorded as a system event distinct from the user-facing
+            // audit record on the controller.
+            eventLogger.logEvent(
+                    Operation.CANCEL,
+                    OperationResult.SUCCESS,
+                    null,
+                    List.of(new ResourceObjectIdentity(cert.getSerialNumber(), cert.getUuid())),
+                    "Connector cancel call failed ("
+                            + soft.getClass().getSimpleName()
+                            + "); proceeding with local cancel");
         }
 
         // Local transition (only reached when 422 was NOT thrown above).
