@@ -10,21 +10,20 @@ import org.springframework.stereotype.Component;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 
 @Component
 public class CzertainlyAuthenticationCache implements AuthenticationCache {
 
     private final CacheManager cacheManager;
-
-    // userUuid → set of `jti` claims cached for that user; enables targeted per-user token eviction.
-    // We cache using jti, but during eviction, jti is not known - only userUuid is known.
-    private final ConcurrentHashMap<String, Set<String>> userJtiIndex = new ConcurrentHashMap<>();
+    private final TokenJtiIndex tokenJtiIndex;
+    private final Cache tokenCache;
 
     @Autowired
-    public CzertainlyAuthenticationCache(CacheManager cacheManager) {
+    public CzertainlyAuthenticationCache(CacheManager cacheManager, TokenJtiIndex tokenJtiIndex) {
         this.cacheManager = cacheManager;
+        this.tokenJtiIndex = tokenJtiIndex;
+        this.tokenCache = Objects.requireNonNull(cacheManager.getCache(CacheConfig.TOKEN_AUTH_CACHE));
     }
 
     @Override
@@ -45,14 +44,13 @@ public class CzertainlyAuthenticationCache implements AuthenticationCache {
         return loader.get();
     }
 
-    // Manual caching (instead of @Cacheable) keeps the userJtiIndex in sync, enabling targeted
+    // Manual caching (instead of @Cacheable) keeps tokenJtiIndex in sync, enabling targeted
     // per-user eviction via evictTokensByUserUuid().
     @Override
     public AuthenticationInfo getOrAuthenticateByToken(String jti, Supplier<AuthenticationInfo> loader) {
         if (jti == null) {
             return loader.get();
         }
-        Cache tokenCache = Objects.requireNonNull(cacheManager.getCache(CacheConfig.TOKEN_AUTH_CACHE));
         Cache.ValueWrapper cached = tokenCache.get(jti);
         if (cached != null) {
             return (AuthenticationInfo) cached.get();
@@ -60,7 +58,7 @@ public class CzertainlyAuthenticationCache implements AuthenticationCache {
         AuthenticationInfo result = loader.get();
         if (!result.isAnonymous()) {
             tokenCache.put(jti, result);
-            userJtiIndex.computeIfAbsent(result.getUserUuid(), k -> ConcurrentHashMap.newKeySet()).add(jti);
+            tokenJtiIndex.add(result.getUserUuid(), jti);
         }
         return result;
     }
@@ -76,19 +74,18 @@ public class CzertainlyAuthenticationCache implements AuthenticationCache {
 
     @Override
     public void evictAll() {
-        userJtiIndex.clear();
+        tokenJtiIndex.clear();
         Objects.requireNonNull(cacheManager.getCache(CacheConfig.SYSTEM_USER_AUTH_CACHE)).clear();
         Objects.requireNonNull(cacheManager.getCache(CacheConfig.USER_UUID_AUTH_CACHE)).clear();
         Objects.requireNonNull(cacheManager.getCache(CacheConfig.CERTIFICATE_AUTH_CACHE)).clear();
-        Objects.requireNonNull(cacheManager.getCache(CacheConfig.TOKEN_AUTH_CACHE)).clear();
+        tokenCache.clear();
     }
 
-    // Looks up jtis for the user in the secondary index and evicts each one individually.
+    // Looks up jtis for the user in the index and evicts each one from the token cache.
     // No-op if the user has no cached tokens.
     private void evictTokensByUserUuid(String userUuid) {
-        Set<String> jtis = userJtiIndex.remove(userUuid);
+        Set<String> jtis = tokenJtiIndex.removeUser(userUuid);
         if (jtis == null) return;
-        Cache tokenCache = Objects.requireNonNull(cacheManager.getCache(CacheConfig.TOKEN_AUTH_CACHE));
         jtis.forEach(tokenCache::evict);
     }
 
