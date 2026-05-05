@@ -41,6 +41,7 @@ class CzertainlyAuthenticationClientTest extends BaseSpringBootTest {
             "\"authenticated\": true," +
             "\"data\": {" +
             "\"user\": {" +
+            "\"uuid\": \"a1b2c3d4-0000-0000-0000-000000000001\"," +
             "\"username\": \"FrantisekJednicka\"," +
             "\"enabled\": true" +
             "}," +
@@ -92,6 +93,7 @@ class CzertainlyAuthenticationClientTest extends BaseSpringBootTest {
         // @formatter:off
         assertEquals("{" +
                         "\"user\":{" +
+                        "\"uuid\":\"a1b2c3d4-0000-0000-0000-000000000001\"," +
                         "\"username\":\"FrantisekJednicka\"," +
                         "\"enabled\":true" +
                         "}," +

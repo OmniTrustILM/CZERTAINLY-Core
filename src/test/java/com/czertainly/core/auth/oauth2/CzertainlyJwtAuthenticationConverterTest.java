@@ -21,7 +21,6 @@ import org.mockito.Mock;
 import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.AbstractAuthenticationToken;
-import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -65,7 +64,7 @@ class CzertainlyJwtAuthenticationConverterTest {
     @Test
     void nullJwt_returnsCurrentSecurityContextAuthentication() {
         // given - a prior filter already placed an authenticated token in the context
-        Authentication existingAuth = mock(Authentication.class);
+        AbstractAuthenticationToken existingAuth = mock(AbstractAuthenticationToken.class);
         var ctx = SecurityContextHolder.createEmptyContext();
         ctx.setAuthentication(existingAuth);
         SecurityContextHolder.setContext(ctx);
