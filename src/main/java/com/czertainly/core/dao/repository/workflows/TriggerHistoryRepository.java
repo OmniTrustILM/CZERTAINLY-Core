@@ -32,7 +32,7 @@ public interface TriggerHistoryRepository extends SecurityFilterRepository<Trigg
     @Query("SELECT DISTINCT t.objectUuid FROM TriggerHistory t WHERE t.eventHistoryUuid = :uuid")
     Page<UUID> findDistinctObjectUuidsByEventHistoryUuid(@Param("uuid") UUID uuid, Pageable pageable);
 
-    List<TriggerHistory> findByEventHistoryUuidAndObjectUuidOrderByObjectUuidAscTriggeredAtDesc(UUID eventHistoryUuid, UUID objectUuid);
+    List<TriggerHistory> findByEventHistoryUuidAndObjectUuidInOrderByObjectUuidAscTriggeredAtDesc(UUID eventHistoryUuid, List<UUID> objectUuids);
 
     int countDistinctObjectUuidByEventHistoryUuid(UUID triggerHistoryUuid);
 

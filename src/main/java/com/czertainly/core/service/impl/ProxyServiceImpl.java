@@ -197,6 +197,13 @@ public class ProxyServiceImpl implements ProxyService {
         // Since there are is no parent to the Proxy, exclusive parent permission evaluation need not be done
     }
 
+    @Override
+    @ExternalAuthorization(resource = Resource.PROXY, action = ResourceAction.DETAIL)
+    public void evaluatePermissionChainOnDetails(SecuredUUID securedUUID) throws NotFoundException {
+            getProxyEntity(securedUUID);
+            // Since there are is no parent to the Proxy, exclusive parent permission evaluation need not be done
+    }
+
     private List<ProxyListDto> filterByStatus(List<ProxyListDto> proxies, ProxyStatus status) {
         return proxies.stream()
             .filter(proxyDto -> proxyDto.getStatus().equals(status))

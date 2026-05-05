@@ -22,7 +22,7 @@ ALTER TABLE trigger_history ADD CONSTRAINT trigger_history_trigger_uuid_fkey
     FOREIGN KEY (trigger_uuid) REFERENCES trigger(uuid) ON UPDATE CASCADE ON DELETE SET NULL;
 
 -- Migrate existing data: group trigger_history records into event_history sessions.
--- Records sharing the same (event, object_uuid) and triggered within 5 seconds of each other
+-- Records sharing the same (event, object_uuid) and triggered within 2 seconds of each other
 -- are considered part of the same event firing.
 CREATE TEMP TABLE temp_session_map AS
 SELECT
@@ -53,14 +53,14 @@ FROM (
 -- One event_history row per session; derive resource from trigger_association or trigger
 CREATE TEMP TABLE temp_event_history AS
 SELECT DISTINCT ON (event, object_uuid, session_num)
-    gen_random_uuid()                                                                             AS uuid,
+    gen_random_uuid() AS uuid,
     tsm.event,
-    ta.resource                                                            AS resource,
+    ta.resource AS resource,
     ta.object_uuid as event_object_uuid,
     tsm.object_uuid as object_uuid,
     tsm.session_num,
-    MIN(tsm.triggered_at) OVER (PARTITION BY tsm.event, tsm.object_uuid, tsm.session_num)       AS started_at,
-    MAX(tsm.triggered_at) OVER (PARTITION BY tsm.event, tsm.object_uuid, tsm.session_num)       AS finished_at
+    MIN(tsm.triggered_at) OVER (PARTITION BY tsm.event, tsm.object_uuid, tsm.session_num) AS started_at,
+    MAX(tsm.triggered_at) OVER (PARTITION BY tsm.event, tsm.object_uuid, tsm.session_num) AS finished_at
 FROM temp_session_map tsm
 LEFT JOIN trigger_association ta ON ta.uuid = tsm.trigger_association_uuid
 ORDER BY event, object_uuid, session_num, triggered_at;

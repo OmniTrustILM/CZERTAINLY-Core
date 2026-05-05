@@ -21,7 +21,7 @@ import java.util.UUID;
 @Table(name = "trigger_history")
 public class TriggerHistory extends UniquelyIdentified {
 
-    @Column(name = "trigger_uuid", nullable = false)
+    @Column(name = "trigger_uuid")
     private UUID triggerUuid;
 
     @ManyToOne(fetch = FetchType.LAZY)

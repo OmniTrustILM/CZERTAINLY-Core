@@ -193,6 +193,9 @@ public abstract class EventHandler<T extends UniquelyIdentifiedObject> implement
 
             // If some trigger ignored this object, processing is stopped
             if (isIgnored) {
+                eventHistory.setStatus(EventStatus.FINISHED);
+                eventHistory.setFinishedAt(OffsetDateTime.now());
+                eventHistoryRepository.save(eventHistory);
                 return;
             }
 
