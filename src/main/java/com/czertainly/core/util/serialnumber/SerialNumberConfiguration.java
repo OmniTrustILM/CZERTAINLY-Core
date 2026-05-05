@@ -13,13 +13,12 @@ class SerialNumberConfiguration {
 
     @Bean
     SerialNumberGenerator serialNumberGenerator(ClockSource clockSource) {
-        String envValue = System.getenv("ILM_INSTANCE_ID");
-        int instanceId = InstanceIdResolver.resolve();
-        if (envValue != null && !envValue.isBlank()) {
-            log.info("Instance ID resolved from ILM_INSTANCE_ID environment variable: {}", instanceId);
+        var resolution = InstanceIdResolver.resolve();
+        if (resolution.source() == InstanceIdResolver.Source.ENV_VAR) {
+            log.info("Instance ID resolved from {} environment variable: {}", InstanceIdResolver.ENV_VAR, resolution.id());
         } else {
-            log.info("Instance ID resolved from IP address: {}", instanceId);
+            log.info("Instance ID resolved from IP address: {}", resolution.id());
         }
-        return new SnowflakeSerialNumberGenerator(clockSource, instanceId);
+        return new SnowflakeSerialNumberGenerator(clockSource, resolution.id());
     }
 }

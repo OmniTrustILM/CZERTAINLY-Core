@@ -100,10 +100,11 @@ class InstanceIdResolverTest {
     void shouldProduceValidIdFromNoArgResolve() {
         // given — no ILM_INSTANCE_ID env var is expected to be set in test environment
         // when — exercises the fallback chain (getLocalHost → NetworkInterface)
-        int id = InstanceIdResolver.resolve();
+        var resolution = InstanceIdResolver.resolve();
 
         // then
-        assertThat(id).isBetween(0, 65535);
+        assertThat(resolution.source()).isEqualTo(InstanceIdResolver.Source.IP_ADDRESS);
+        assertThat(resolution.id()).isBetween(0, 65535);
     }
 
     static Stream<InetAddress> nonUsableLocalHostAddresses() throws UnknownHostException {
@@ -131,10 +132,11 @@ class InstanceIdResolverTest {
                     .thenReturn(Collections.enumeration(List.of(ni)));
 
             // when
-            int id = InstanceIdResolver.resolve();
+            var resolution = InstanceIdResolver.resolve();
 
             // then — ID must be derived from the routable address, not the non-usable one
-            assertThat(id).isEqualTo((1 << 8) | 5); // 10.0.1.5 → lower 16 bits
+            assertThat(resolution.source()).isEqualTo(InstanceIdResolver.Source.IP_ADDRESS);
+            assertThat(resolution.id()).isEqualTo((1 << 8) | 5); // 10.0.1.5 → lower 16 bits
         }
     }
 

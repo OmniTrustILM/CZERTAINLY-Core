@@ -6,13 +6,20 @@ import java.util.function.Supplier;
 
 final class InstanceIdResolver {
 
-    private static final String ENV_VAR = "ILM_INSTANCE_ID";
+    static final String ENV_VAR = "ILM_INSTANCE_ID";
+
+    enum Source { ENV_VAR, IP_ADDRESS }
+
+    record Resolution(int id, Source source) {}
 
     private InstanceIdResolver() {
     }
 
-    static int resolve() {
-        return resolve(System.getenv(ENV_VAR), InstanceIdResolver::findLocalAddress);
+    static Resolution resolve() {
+        String envValue = System.getenv(ENV_VAR);
+        int id = resolve(envValue, InstanceIdResolver::findLocalAddress);
+        Source source = (envValue != null && !envValue.isBlank()) ? Source.ENV_VAR : Source.IP_ADDRESS;
+        return new Resolution(id, source);
     }
 
     private static InetAddress findLocalAddress() {
