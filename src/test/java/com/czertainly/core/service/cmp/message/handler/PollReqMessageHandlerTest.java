@@ -30,14 +30,13 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /**
  * Unit tests for {@link PollReqMessageHandler}.
  *
- * <p>Several regression cases are pinned here:</p>
+ * <p>Pinned cases:</p>
  * <ul>
  *   <li>A pollReq for a transaction whose originating body was a revocation request must
- *       be cleanly rejected — Copilot review on PR #1439 flagged that the handler was
- *       wrapping the response in {@code CertRepMessage} regardless of original type, which
- *       would have produced an invalid CMP body for revocation polls.</li>
+ *       be cleanly rejected: wrapping the response in {@code CertRepMessage} regardless of
+ *       original type would produce an invalid CMP body for revocation polls.</li>
  *   <li>A pollReq landing on a {@code PENDING_REVOKE} certificate must be rejected — RFC
- *       4210 §5.2.6 limits polling to ip/cp/kup contexts (issue/renew/rekey), CMP has no
+ *       4210 §5.2.6 limits polling to ip/cp/kup contexts (issue/renew/rekey); CMP has no
  *       in-protocol way to represent a pending revocation.</li>
  * </ul>
  */
@@ -61,10 +60,9 @@ class PollReqMessageHandlerTest {
 
     @Test
     void rejectsRevocationPoll_whenTransactionOriginatedFromRevocationRequest() {
-        // Regression for Copilot #6: the handler used to wrap whatever response in
-        // CertRepMessage, even for transactions originating from a revocation request.
-        // That would emit a body whose type+content combination is invalid CMP. The
-        // handler must now reject these polls explicitly.
+        // The handler must not wrap a revocation-originated pollReq response in
+        // CertRepMessage — that body type+content combination is invalid CMP. Reject
+        // these polls explicitly instead.
         CmpTransaction trx = transactionWithCert(certificateInState(CertificateState.PENDING_REVOKE));
         trx.setOriginalRequestBodyType(PKIBody.TYPE_REVOCATION_REQ);
         Mockito.when(cmpTransactionService.findByTransactionId(Mockito.anyString()))

@@ -1690,11 +1690,10 @@ class ClientOperationServiceV2Test extends BaseSpringBootTest {
 
     @Test
     void cancelPendingCertificateOperation_isRejectedAndStateUnchanged_when4xxClientErrorFromConnector() {
-        // Regression for Copilot review on PR #1439: previously every non-422 exception
-        // was treated as a soft failure and the cert state was flipped locally even though
-        // the connector never cancelled the upstream operation. With the refined exception
-        // mapping, 4xx errors other than 404 (e.g. 400 / 401 / 403) must now hard-fail and
-        // preserve the cert state.
+        // 4xx errors other than 404 (e.g. 400 / 401 / 403) must hard-fail and preserve
+        // the cert state — silently transitioning the cert to FAILED when the connector
+        // never cancelled the upstream operation would be incorrect. Only 404 / 5xx /
+        // network are soft failures.
         certificate.setState(CertificateState.PENDING_ISSUE);
         certificateRepository.save(certificate);
 
@@ -1721,10 +1720,10 @@ class ClientOperationServiceV2Test extends BaseSpringBootTest {
 
     @Test
     void cancelPendingCertificateOperation_clearsPredecessorRelations_whenCancellingPendingIssue() {
-        // Regression for Copilot review on PR #1439: cancel-issue sends the cert to FAILED.
-        // Other failure paths in this class delete getPredecessorRelations() so that a
-        // renew/rekey predecessor doesn't keep a dangling PENDING relation pointing at a
-        // now-FAILED successor; cancel must do the same.
+        // Cancel-issue terminates the certificate as FAILED. The predecessor relations
+        // must be cleaned up so a renew/rekey predecessor does not keep a dangling
+        // PENDING relation pointing at a now-FAILED successor (mirrors the existing
+        // handleFailedOrRejectedEvent cleanup pattern).
         // Set up: predecessor (an existing ISSUED cert) -- PENDING --> successor (the
         // cert being cancelled, in PENDING_ISSUE).
         Certificate predecessor = new Certificate();
