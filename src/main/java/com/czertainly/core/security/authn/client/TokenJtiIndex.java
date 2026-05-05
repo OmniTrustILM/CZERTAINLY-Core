@@ -28,6 +28,9 @@ public class TokenJtiIndex implements RemovalListener<Object, Object> {
     }
 
     public void add(String userUuid, String jti) {
+        if (userUuid == null || userUuid.isBlank()) {
+            throw new IllegalStateException("Authenticated result must contain a non-blank userUuid");
+        }
         index.computeIfAbsent(userUuid, k -> ConcurrentHashMap.newKeySet()).add(jti);
     }
 
