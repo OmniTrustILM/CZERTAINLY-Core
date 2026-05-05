@@ -134,6 +134,19 @@ class CzertainlyAuthenticationFilterTest {
     }
 
     @Test
+    void malformedCertHeader_clearsContextAndContinuesChain() throws Exception {
+        // given - cert header present but Base64 content is garbage (not valid DER)
+        request.addHeader(CERT_HEADER_NAME, "-----BEGIN CERTIFICATE-----\n!!!not-base64!!!\n-----END CERTIFICATE-----\n");
+
+        // when - must not propagate a 500; the filter should swallow the malformed-header error
+        assertDoesNotThrow(() -> filter.doFilter(request, response, filterChain));
+
+        // then - no auth was stored and the auth client was never called
+        assertNull(SecurityContextHolder.getContext().getAuthentication());
+        verify(authClient, never()).authenticateByCertificate(any(), any());
+    }
+
+    @Test
     void nonCzertainlyAuthException_isRethrown() {
         // given
         when(authClient.authenticate(any(), any(), anyBoolean()))

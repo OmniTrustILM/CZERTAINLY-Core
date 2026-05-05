@@ -60,6 +60,8 @@ public class CzertainlyAuthenticationFilter extends OncePerRequestFilter {
                         authInfo = authClient.authenticateByCertificate(rawCertHeader, thumbprint);
                     } catch (NoSuchAlgorithmException e) {
                         throw new IllegalStateException("SHA-256 algorithm not available", e);
+                    } catch (IllegalArgumentException e) {
+                        throw new CzertainlyAuthenticationException("Invalid certificate header: " + e.getMessage(), e);
                     }
                 } else {
                     authInfo = authClient.authenticate(AuthMethod.NONE, null, isLocalhostAddress(request));
