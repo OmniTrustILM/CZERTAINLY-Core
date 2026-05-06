@@ -62,7 +62,12 @@ FROM (
 -- One event_history row per session; derive resource from trigger_association or trigger
 CREATE TEMP TABLE temp_event_history AS
 SELECT DISTINCT ON (event, object_uuid, session_num)
-    gen_random_uuid() AS uuid,
+    OVERLAY(OVERLAY(OVERLAY(OVERLAY(
+                                    md5(tsm.event || '_' || tsm.object_uuid::text || '_' || tsm.session_num::text)
+                                    PLACING '-' FROM 9 FOR 0)
+                            PLACING '-' FROM 14 FOR 0)
+                    PLACING '-' FROM 19 FOR 0)
+            PLACING '-' FROM 24 FOR 0)::uuid  AS uuid,
     tsm.event,
     ta.resource AS resource,
     ta.object_uuid as event_object_uuid,

@@ -57,7 +57,7 @@ public class EventServiceImpl implements EventService {
     @Override
     public PaginationResponseDto<ObjectEventHistoryDto> getEventHistory(Resource resource, UUID uuid, PaginationRequestDto pagination) throws NotFoundException {
         resourceService.evaluateDetailsPermission(resource, uuid);
-        Page<TriggerHistory> triggerHistoryPage = triggerHistoryRepository.findByObjectUuidAndTriggerResourceOrderByTriggeredAtDesc(uuid, resource, PageRequest.of(pagination.getPageNumber() - 1, pagination.getItemsPerPage()));
+        Page<TriggerHistory> triggerHistoryPage = triggerHistoryRepository.findByObjectUuidAndObjectResourceOrderByTriggeredAtDesc(uuid, resource, PageRequest.of(pagination.getPageNumber() - 1, pagination.getItemsPerPage()));
         PaginationResponseDto<ObjectEventHistoryDto> response = new PaginationResponseDto<>();
         response.setItemsPerPage(pagination.getItemsPerPage());
         response.setPageNumber(pagination.getPageNumber());

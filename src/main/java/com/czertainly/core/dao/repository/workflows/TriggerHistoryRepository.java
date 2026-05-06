@@ -27,12 +27,13 @@ public interface TriggerHistoryRepository extends SecurityFilterRepository<Trigg
     Long deleteByTriggerAssociationObjectUuid(UUID triggerAssociationObjectUuid);
 
     @EntityGraph(attributePaths = {"records", "triggerAssociation", "records.execution", "records.execution.items", "records.execution.items.notificationProfile"})
-    Page<TriggerHistory> findByObjectUuidAndTriggerResourceOrderByTriggeredAtDesc(UUID objectUuid, Resource resource, Pageable pageable);
+    Page<TriggerHistory> findByObjectUuidAndObjectResourceOrderByTriggeredAtDesc(UUID objectUuid, Resource objectResource, Pageable pageable);
 
     @Query(value = "SELECT DISTINCT t.objectUuid FROM TriggerHistory t WHERE t.eventHistoryUuid = :uuid",
            countQuery = "SELECT COUNT(DISTINCT t.objectUuid) FROM TriggerHistory t WHERE t.eventHistoryUuid = :uuid")
     Page<UUID> findDistinctObjectUuidsByEventHistoryUuid(@Param("uuid") UUID uuid, Pageable pageable);
 
+    @EntityGraph(attributePaths = {"records", "triggerAssociation", "records.execution", "records.execution.items", "records.execution.items.notificationProfile"})
     List<TriggerHistory> findByEventHistoryUuidAndObjectUuidInOrderByObjectUuidAscTriggeredAtDesc(UUID eventHistoryUuid, List<UUID> objectUuids);
 
     @Query("SELECT COUNT(DISTINCT t.objectUuid) FROM TriggerHistory t WHERE t.eventHistoryUuid = :uuid")

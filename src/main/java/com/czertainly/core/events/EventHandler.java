@@ -213,6 +213,7 @@ public abstract class EventHandler<T extends UniquelyIdentifiedObject> implement
         } catch (Exception e) {
             logger.error("Unable to process triggers for {} object {}. Message: {}", context.getResource().getLabel(), resourceObject.getUuid(), e.getMessage());
             eventHistory.setStatus(EventStatus.FAILED);
+            eventHistory.setFinishedAt(OffsetDateTime.now());
             eventHistoryRepository.save(eventHistory);
             return;
         }

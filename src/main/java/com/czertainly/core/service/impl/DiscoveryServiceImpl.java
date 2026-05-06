@@ -729,7 +729,7 @@ public class DiscoveryServiceImpl implements DiscoveryService {
     }
 
     @Override
-    @ExternalAuthorization(resource = Resource.DISCOVERY, action = ResourceAction.DELETE)
+    @ExternalAuthorization(resource = Resource.DISCOVERY, action = ResourceAction.DETAIL)
     public void evaluatePermissionChainOnDetails(SecuredUUID securedUUID) throws NotFoundException {
         getDiscoveryEntity(securedUUID);
     }
