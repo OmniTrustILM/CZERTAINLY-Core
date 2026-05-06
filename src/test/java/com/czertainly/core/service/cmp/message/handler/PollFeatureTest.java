@@ -144,6 +144,23 @@ class PollFeatureTest {
     }
 
     @Test
+    void fillsInSerialNumber_whenCallerPassesNull() throws Exception {
+        // The caller may not have the serial number at hand when polling kicks off (e.g.
+        // during an issue request where the cert hasn't been issued yet); the loop fills it
+        // in from the polled entity on the first iteration so subsequent log lines and
+        // outcome messages carry the right SN.
+        UUID certUuid = UUID.randomUUID();
+        Certificate cert = certificateInState(certUuid, CertificateState.ISSUED);
+        Mockito.when(certificateService.getCertificateEntity(Mockito.any(SecuredUUID.class)))
+                .thenReturn(cert);
+
+        PollResult result = pollFeature.pollCertificate(
+                new DEROctetString(new byte[]{1}), null /* serialNumber */, certUuid.toString(), CertificateState.ISSUED);
+
+        assertThat(result).isInstanceOf(PollResult.Reached.class);
+    }
+
+    @Test
     void wrapsInterruptedException_withCmpProcessingException() throws Exception {
         // The poll loop sleeps between iterations. A test thread that interrupts itself
         // before calling pollCertificate causes the very first sleep to throw

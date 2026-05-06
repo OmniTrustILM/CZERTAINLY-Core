@@ -427,6 +427,51 @@ class RevocationMessageHandlerITest extends BaseSpringBootTest {
                 "expected PKIFreeText to mention the diverted state, got: " + freeText);
     }
 
+    /**
+     * The PKIFreeText fallback path: when the per-cert catch fires for a non-CmpProcessingException
+     * (e.g. an unchecked exception leaking from a downstream service), the safe generic
+     * "problem with revocation" placeholder is used so internal stack-class names / SQL
+     * fragments / upstream error messages don't leak to a CMP client.
+     */
+    @Test
+    @Transactional
+    void test_handle_revocation_usesGenericFreeText_forNonCmpProcessingException() throws Exception {
+        revokedCertificate.setState(CertificateState.ISSUED);
+        revokedCertificate.setRaProfile(raProfile);
+        revokedCertificate.setRaProfileUuid(raProfile.getUuid());
+        certificateRepository.save(revokedCertificate);
+
+        String trxId = "782";
+        PKIMessage request = CmpTestUtil.createSignatureBasedMessage(
+                        trxId,
+                        CmpTestUtil.generateKeyPairEC().getPrivate(),
+                        CmpTestUtil.createRevocationBody(
+                                x509Certificate.getSerialNumber()))
+                .toASN1Structure();
+
+        // Force a leaked unchecked exception (e.g. a future upstream component bug) to fire
+        // the per-cert catch with a non-CmpProcessingException. The PKIFreeText must NOT
+        // contain the raw exception message.
+        given(pollFeature.pollCertificate(any(), any(), any(), any()))
+                .willThrow(new RuntimeException("internal SQL: relation \"core.x\" does not exist"));
+
+        PKIMessage response = testedHandler.handle(request,
+                new Mobile3gppProfileContext(cmpProfileSigPrt,
+                        raProfile,
+                        request,
+                        certificateKeyService,
+                        null,
+                        null));
+
+        assertNotNull(response);
+        RevRepContent body = (RevRepContent) response.getBody().getContent();
+        assertEquals(2, body.getStatus()[0].getStatus().intValueExact(),
+                "expected pkiStatus=rejection on internal failure");
+        String freeText = body.getStatus()[0].getStatusString().getStringAtUTF8(0).getString();
+        assertEquals("problem with revocation", freeText,
+                "expected the safe placeholder when the cause is not a CmpProcessingException — internal SQL detail must not leak to the wire");
+    }
+
     // ----------------------------------------------------------------------------------------------------------
     // HELPER METHODS
     // ----------------------------------------------------------------------------------------------------------
