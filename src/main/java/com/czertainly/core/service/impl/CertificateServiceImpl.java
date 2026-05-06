@@ -2120,6 +2120,9 @@ public class CertificateServiceImpl implements CertificateService, AttributeReso
         if (certificate.isArchived()) {
             throw new ValidationException("Certificate with UUID %s is archived and its RA Profile cannot be updated.".formatted(uuid));
         }
+        if (certificate.getState() == CertificateState.PENDING_ISSUE || certificate.getState() == CertificateState.PENDING_REVOKE) {
+            throw new ValidationException("Cannot switch RA profile for certificate with a pending operation. Finalize or cancel the pending operation first. Certificate: %s".formatted(certificate.toStringShort()));
+        }
 
         // check if there is change in RA profile compared to current state
         if ((raProfileUuid == null && certificate.getRaProfileUuid() == null) || (raProfileUuid != null && certificate.getRaProfileUuid() != null) && certificate.getRaProfileUuid().toString().equals(raProfileUuid.toString())) {
