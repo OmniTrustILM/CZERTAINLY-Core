@@ -19,6 +19,7 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -34,6 +35,16 @@ import java.util.concurrent.TimeoutException;
 @Component
 @ConditionalOnProperty(name = "proxy.enabled", havingValue = "true")
 public class ProxyClientImpl implements ProxyClient {
+
+    /**
+     * Slack added on top of {@link ProxyProperties#requestTimeout()} when waiting for the
+     * MQ-correlated response future. Covers the round-trip overhead (publish → broker dispatch
+     * → proxy worker → response correlation) so the {@code future.get} on the caller side does
+     * not give up on a request that the upstream connector is still completing within its own
+     * configured budget. Tunable per-environment; the 5 s default reflects observed broker +
+     * deserialization overhead.
+     */
+    private static final long MESSAGE_ROUND_TRIP_BUFFER_MS = 5_000L;
 
     private final CoreMessageProducer producer;
     private final ProxyMessageCorrelator correlator;
@@ -98,13 +109,13 @@ public class ProxyClientImpl implements ProxyClient {
         try {
             CompletableFuture<ResponseEntity<T>> future =
                     sendRequestForEntityAsync(connector, path, method, body, responseType, timeout);
-            return future.get(timeout.toMillis() + 5000, TimeUnit.MILLISECONDS);
+            return future.get(timeout.toMillis() + MESSAGE_ROUND_TRIP_BUFFER_MS, TimeUnit.MILLISECONDS);
         } catch (TimeoutException e) {
             throw new ConnectorCommunicationException(
                     "Proxy request timed out after " + timeout, e, connector);
         } catch (ExecutionException e) {
             Throwable cause = e.getCause();
-            if (cause instanceof java.util.concurrent.CompletionException ce && ce.getCause() != null) {
+            if (cause instanceof CompletionException ce && ce.getCause() != null) {
                 cause = ce.getCause();
             }
             if (cause instanceof ConnectorException ce) {
@@ -174,7 +185,7 @@ public class ProxyClientImpl implements ProxyClient {
             CompletableFuture<T> future = sendRequestAsync(
                     connector, path, method, pathVariables, body, responseType, timeout);
 
-            return future.get(timeout.toMillis() + 5000, TimeUnit.MILLISECONDS);
+            return future.get(timeout.toMillis() + MESSAGE_ROUND_TRIP_BUFFER_MS, TimeUnit.MILLISECONDS);
 
         } catch (TimeoutException e) {
             throw new ConnectorCommunicationException(
@@ -182,7 +193,7 @@ public class ProxyClientImpl implements ProxyClient {
         } catch (ExecutionException e) {
             Throwable cause = e.getCause();
             // CompletableFuture.thenApply wraps thrown exceptions in CompletionException
-            if (cause instanceof java.util.concurrent.CompletionException ce && ce.getCause() != null) {
+            if (cause instanceof CompletionException ce && ce.getCause() != null) {
                 cause = ce.getCause();
             }
             if (cause instanceof ConnectorException ce) {

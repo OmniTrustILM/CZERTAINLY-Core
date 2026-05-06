@@ -84,9 +84,17 @@ import java.util.*;
 public class ClientOperationServiceImpl implements ClientOperationService {
     private static final Logger logger = LoggerFactory.getLogger(ClientOperationServiceImpl.class);
 
-    // Structured event-log surface (per CZERTAINLY contributors logging guide).
-    // Used for system-level state-transition events that are not directly user-triggered
-    // (audit log via @AuditLogged on the controller already covers user invocation).
+    /**
+     * Structured event-log surface for system-level state-transition events that are not
+     * directly user-triggered, per the contributor logging guide
+     * (https://docs.otilm.com/docs/contributors/logging). Distinct from the
+     * {@code @AuditLogged} aspect on the controller, which captures the user invocation
+     * itself — {@code eventLogger} captures the <em>outcome</em> the system observed and
+     * decided to act on (e.g. "connector returned 202 → transitioned to PENDING_ISSUE",
+     * "connector hard-refused cancel → state preserved"). Per-call-site comments are
+     * intentionally avoided; the {@code Operation} + {@code OperationResult} +
+     * description arguments at each {@code eventLogger.logEvent} site speak for themselves.
+     */
     private static final LoggerWrapper eventLogger = new LoggerWrapper(
             ClientOperationServiceImpl.class, Module.CERTIFICATES, Resource.CERTIFICATE);
 
@@ -408,9 +416,6 @@ public class ClientOperationServiceImpl implements ClientOperationService {
                 CertificateActionPerformedEventHandler.constructEventMessage(
                         certificate.getUuid(), originatingAction));
 
-        // Structured event log: the system observed the connector's HTTP 202 and decided to
-        // transition to PENDING_ISSUE. Distinct from the @AuditLogged record on the controller,
-        // which captures the user invocation itself.
         eventLogger.logEvent(
                 operationForAction(originatingAction),
                 OperationResult.SUCCESS,
@@ -422,21 +427,6 @@ public class ClientOperationServiceImpl implements ClientOperationService {
                 certificate.getUuid(), originatingAction.getCode());
     }
 
-    /**
-     * Reject the operation when the URL's authority / RA profile do not match the
-     * certificate's authority / RA profile. The class-level
-     * {@code @ExternalAuthorization(RA_PROFILE/DETAIL)} on the three operator-driven
-     * endpoints (manuallyIssueCertificate, manuallyConfirmRevoke,
-     * cancelPendingCertificateOperation) authorizes use of the RA profile by UUID from
-     * the URL — it does not verify the supplied certificate UUID actually belongs to that
-     * RA profile or to the URL's authority. Without this check, a caller authorized for
-     * some RA profile A plus generic ISSUE/REVOKE permission could finalize / confirm /
-     * cancel a pending certificate from RA profile B by passing any authorized
-     * {@code raProfileUuid}. The authority check is belt-and-suspenders: an RA profile is
-     * uniquely linked to one authority, so a matching raProfileUuid implies a matching
-     * authority — but the explicit check guards against mis-configurations where the URL's
-     * authority doesn't match the certificate's actual authority.
-     */
     private static void assertCertificateBelongsToRaProfile(Certificate certificate,
                                                             SecuredParentUUID authorityUuid,
                                                             SecuredUUID raProfileUuid,
@@ -929,6 +919,11 @@ public class ClientOperationServiceImpl implements ClientOperationService {
         if (certificate.getState() != CertificateState.ISSUED && certificate.getState() != CertificateState.PENDING_APPROVAL) {
             throw new ValidationException(ValidationError.create(String.format("Cannot issue requested certificate in state %s. Certificate: %s", certificate.getState().getLabel(), certificate)));
         }
+        // Capture the entry state so the catch below can restore it. The entry guard above
+        // accepts both ISSUED and PENDING_APPROVAL; previously the catch unconditionally
+        // reset to ISSUED, silently flipping a PENDING_APPROVAL cert to ISSUED on a connector
+        // failure even though that cert had never reached ISSUED.
+        final CertificateState entryState = certificate.getState();
 
         RaProfile raProfile = certificate.getRaProfile();
 
@@ -965,7 +960,7 @@ public class ClientOperationServiceImpl implements ClientOperationService {
             attributeEngine.updateObjectDataAttributesContent(ObjectAttributeContentInfo.builder(Resource.CERTIFICATE, certificate.getUuid()).connector(raProfile.getAuthorityInstanceReference().getConnectorUuid()).operation(AttributeOperation.CERTIFICATE_REVOKE).build(), request.getAttributes());
             certificateEventHistoryService.addEventHistory(certificate.getUuid(), CertificateEvent.REVOKE, CertificateEventStatus.SUCCESS, "Certificate revoked. Reason: " + caRequest.getReason().getLabel(), "");
         } catch (Exception e) {
-            certificate.setState(CertificateState.ISSUED);
+            certificate.setState(entryState);
             certificateRepository.save(certificate);
 
             certificateEventHistoryService.addEventHistory(certificate.getUuid(), CertificateEvent.REVOKE, CertificateEventStatus.FAILED, e.getMessage(), "");
@@ -1012,7 +1007,6 @@ public class ClientOperationServiceImpl implements ClientOperationService {
                 CertificateActionPerformedEventHandler.constructEventMessage(
                         certificate.getUuid(), ResourceAction.REVOKE));
 
-        // Structured event log: connector accepted the revoke asynchronously.
         eventLogger.logEvent(
                 Operation.REVOKE,
                 OperationResult.SUCCESS,
@@ -1393,7 +1387,7 @@ public class ClientOperationServiceImpl implements ClientOperationService {
     @ExternalAuthorization(resource = Resource.RA_PROFILE, action = ResourceAction.DETAIL, parentResource = Resource.AUTHORITY, parentAction = ResourceAction.DETAIL)
     public CertificateDetailDto manuallyIssueCertificate(
             SecuredParentUUID authorityUuid, SecuredUUID raProfileUuid, String certificateUuid,
-            UploadCertificateRequestDto request) throws NotFoundException, java.security.cert.CertificateException, AlreadyExistException, ConnectorException, AttributeException {
+            UploadCertificateRequestDto request) throws NotFoundException, CertificateException, AlreadyExistException, ConnectorException, AttributeException {
         certificateService.checkIssuePermissions();
 
         Certificate certificate = certificateRepository.findWithAssociationsByUuid(UUID.fromString(certificateUuid))
@@ -1464,7 +1458,7 @@ public class ClientOperationServiceImpl implements ClientOperationService {
         try {
             certificateService.issueRequestedCertificate(certificate.getUuid(), request.getCertificate(), identifyMeta);
         } catch (NoSuchAlgorithmException e) {
-            throw new java.security.cert.CertificateException(e);
+            throw new CertificateException(e);
         }
 
         if (request.getCustomAttributes() != null && !request.getCustomAttributes().isEmpty()) {
@@ -1495,7 +1489,6 @@ public class ClientOperationServiceImpl implements ClientOperationService {
      * annotation gates RA profile use; checkRevokePermissions gates the actual
      * revocation authority on CERTIFICATE.
      */
-    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     @ExternalAuthorization(resource = Resource.RA_PROFILE, action = ResourceAction.DETAIL, parentResource = Resource.AUTHORITY, parentAction = ResourceAction.DETAIL)
     public void manuallyConfirmRevoke(
             SecuredParentUUID authorityUuid, SecuredUUID raProfileUuid, String certificateUuid) throws NotFoundException {
@@ -1557,6 +1550,7 @@ public class ClientOperationServiceImpl implements ClientOperationService {
     }
 
     @Override
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     @ExternalAuthorization(resource = Resource.RA_PROFILE, action = ResourceAction.DETAIL, parentResource = Resource.AUTHORITY, parentAction = ResourceAction.DETAIL)
     public CertificateDetailDto cancelPendingCertificateOperation(
             SecuredParentUUID authorityUuid, SecuredUUID raProfileUuid, String certificateUuid,
@@ -1640,9 +1634,6 @@ public class ClientOperationServiceImpl implements ClientOperationService {
                     "Cancel rejected by authority: " + upstreamRefused.getMessage(), "");
             logger.warn("Authority refused to cancel pending {} for cert {}: {}",
                     pendingOpLabel, cert.getUuid(), upstreamRefused.getMessage(), upstreamRefused);
-            // Structured event log: the system observed an upstream hard-refusal and decided
-            // NOT to transition local state. The user-facing audit record (CANCEL/FAILURE) is
-            // emitted by the @AuditLogged aspect on the controller.
             eventLogger.logEvent(
                     Operation.CANCEL,
                     OperationResult.FAILURE,
@@ -1725,24 +1716,33 @@ public class ClientOperationServiceImpl implements ClientOperationService {
                             + "); proceeded with local cancel");
         }
 
-        // Local transition (only reached on 204 / 404 / 5xx / network).
-        // Cancel-issue terminates the certificate as FAILED. Other failure paths in this
-        // class (handleFailedOrRejectedEvent) delete the predecessor relations to prevent
-        // dangling PENDING relations on the predecessor (a renew/rekey predecessor would
-        // otherwise still link to a now-FAILED successor). Mirror that here.
-        if (isCancelIssue) {
-            certificateRelationRepository.deleteAll(cert.getPredecessorRelations());
-            // Detach the deleted relations from the in-memory collection so the merge below
-            // doesn't see stale references. Without this, JPA tries to lazy-load proxies
-            // for relations that no longer exist and fails with EntityNotFoundException.
-            cert.getPredecessorRelations().clear();
+        // Local transition (only reached on 204 / 404 / 5xx / network). The connector call
+        // above ran with no transaction held (method is @Transactional(NOT_SUPPORTED));
+        // wrap the cleanup writes in an explicit transaction so deleteAll(predecessorRelations)
+        // and the state save commit (or roll back) atomically. Mirrors renewCertificate.
+        TransactionStatus cleanupTx = transactionManager.getTransaction(new DefaultTransactionDefinition());
+        try {
+            if (isCancelIssue) {
+                // Cancel-issue terminates the certificate as FAILED. Other failure paths in
+                // this class (handleFailedOrRejectedEvent) delete the predecessor relations
+                // to prevent dangling PENDING relations on the predecessor — a renew/rekey
+                // predecessor would otherwise still link to a now-FAILED successor.
+                certificateRelationRepository.deleteAll(cert.getPredecessorRelations());
+                // Detach the deleted relations from the in-memory collection so the merge
+                // below doesn't lazy-load proxies for relations that no longer exist.
+                cert.getPredecessorRelations().clear();
+            }
+            cert.setState(targetState);
+            if (!isCancelIssue) {
+                cert.setPendingRevokeDestroyKey(null);
+                cert.setPendingRevokeAttributes(null);
+            }
+            certificateRepository.save(cert);
+            transactionManager.commit(cleanupTx);
+        } catch (RuntimeException e) {
+            transactionManager.rollback(cleanupTx);
+            throw e;
         }
-        cert.setState(targetState);
-        if (!isCancelIssue) {
-            cert.setPendingRevokeDestroyKey(null);
-            cert.setPendingRevokeAttributes(null);
-        }
-        certificateRepository.save(cert);
 
         String label = isCancelIssue ? "Pending issue cancelled" : "Pending revocation cancelled";
         String msg = reason.isEmpty() ? label : (label + ". Reason: " + reason);

@@ -551,17 +551,19 @@ public class ScepServiceImpl implements ScepService {
 
     /**
      * Maps a {@link CertificateState} to the {@link PkiStatus} that SCEP should report per
-     * RFC 8894 §3.3.2. Pure function — has no side effects and does not depend on instance
-     * state — so the mapping itself is unit-testable independent of message-flow setup.
+     * RFC 8894 §3.3.2.
      *
-     * @return {@code SUCCESS} for ISSUED; {@code FAILURE} for REJECTED/FAILED;
-     *         {@code PENDING} for everything else (REQUESTED, PENDING_APPROVAL, PENDING_ISSUE,
-     *         PENDING_REVOKE, REVOKED).
+     * @return {@code SUCCESS} for the only positive terminal state (ISSUED);
+     *         {@code FAILURE} for negative terminal states (REJECTED, FAILED, REVOKED);
+     *         {@code PENDING} for in-progress states (REQUESTED, PENDING_APPROVAL,
+     *         PENDING_ISSUE, PENDING_REVOKE).
      */
     static PkiStatus pkiStatusForCertState(CertificateState state) {
-        if (state == CertificateState.ISSUED) return PkiStatus.SUCCESS;
-        if (state == CertificateState.REJECTED || state == CertificateState.FAILED) return PkiStatus.FAILURE;
-        return PkiStatus.PENDING;
+        return switch (state) {
+            case ISSUED -> PkiStatus.SUCCESS;
+            case REJECTED, FAILED, REVOKED -> PkiStatus.FAILURE;
+            default -> PkiStatus.PENDING;
+        };
     }
 
     private ScepResponse getExistingTransaction(String transactionId) throws ScepException, NotFoundException {

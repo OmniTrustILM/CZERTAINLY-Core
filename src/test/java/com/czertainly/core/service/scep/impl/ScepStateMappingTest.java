@@ -61,11 +61,11 @@ class ScepStateMappingTest {
     }
 
     @Test
-    void revoked_maps_to_pending() {
-        // Defensive: a revoked cert in a SCEP poll context isn't expected, but the mapping
-        // returns PENDING (matches the pre-refactor `else` behaviour in getExistingTransaction)
-        // rather than tripping an NPE.
-        assertEquals(PkiStatus.PENDING, ScepServiceImpl.pkiStatusForCertState(CertificateState.REVOKED));
+    void revoked_maps_to_failure() {
+        // REVOKED is a terminal negative state — once revoked, a SCEP-polled cert no longer
+        // represents a successful issuance, so the response is FAILURE rather than PENDING
+        // (which would invite the client to keep polling indefinitely).
+        assertEquals(PkiStatus.FAILURE, ScepServiceImpl.pkiStatusForCertState(CertificateState.REVOKED));
     }
 
     @Test

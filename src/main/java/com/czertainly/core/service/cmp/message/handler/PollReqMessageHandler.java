@@ -22,8 +22,7 @@ import org.bouncycastle.asn1.cmp.PKIMessage;
 import org.bouncycastle.asn1.cmp.PKIStatus;
 import org.bouncycastle.asn1.cmp.PKIStatusInfo;
 import org.bouncycastle.asn1.cmp.PollReqContent;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -49,10 +48,9 @@ import java.util.List;
  *       transaction exists for this {@code transactionID}.</li>
  * </ul>
  */
+@Slf4j
 @Component
 public class PollReqMessageHandler implements MessageHandler<PKIMessage> {
-
-    private static final Logger LOG = LoggerFactory.getLogger(PollReqMessageHandler.class);
 
     private static final long DEFAULT_CHECK_AFTER_SECONDS = 60L;
 
@@ -95,7 +93,7 @@ public class PollReqMessageHandler implements MessageHandler<PKIMessage> {
         }
 
         CertificateState state = certificate.getState();
-        LOG.debug("TID={} | pollReq lookup: cert={}, state={}", tid, certificate.getUuid(), state);
+        log.debug("TID={} | pollReq lookup: cert={}, state={}", tid, certificate.getUuid(), state);
 
         // RFC 4210 §5.2.6 limits polling to ip / cp / kup contexts (issue, renew, rekey).
         // Reject polls correlated to revocation transactions cleanly — wrapping a revocation
@@ -142,7 +140,7 @@ public class PollReqMessageHandler implements MessageHandler<PKIMessage> {
                     .build();
         } catch (Exception e) {
             ASN1OctetString tid = request.getHeader().getTransactionID();
-            LOG.error("TID={} | failed to build pollRep response", tid, e);
+            log.error("TID={} | failed to build pollRep response", tid, e);
             throw new CmpProcessingException(tid, PKIFailureInfo.systemFailure,
                     "failed to build pollRep response", e);
         }
@@ -153,12 +151,7 @@ public class PollReqMessageHandler implements MessageHandler<PKIMessage> {
                                               CmpTransaction transaction, Certificate certificate)
             throws CmpBaseException {
         Integer originalBodyType = transaction.getOriginalRequestBodyType();
-        // Default to cp (TYPE_CERT_REP) when the transaction was created before the body-type
-        // column existed (NULL on legacy rows). Most cmp v2 clients accept cp as the response
-        // for either ir or cr.
-        int responseBodyType = (originalBodyType == null
-                ? PKIBody.TYPE_CERT_REP
-                : (originalBodyType + 1));
+        int responseBodyType = mapRequestBodyTypeToResponseBodyType(originalBodyType);
 
         X509Certificate x509;
         try {
@@ -169,7 +162,7 @@ public class PollReqMessageHandler implements MessageHandler<PKIMessage> {
             }
             x509 = CertificateUtil.parseCertificate(certificate.getCertificateContent().getContent());
         } catch (CertificateException e) {
-            LOG.error("TID={} | failed to parse stored certificate {}", tid, certificate.getUuid(), e);
+            log.error("TID={} | failed to parse stored certificate {}", tid, certificate.getUuid(), e);
             throw new CmpProcessingException(tid, PKIFailureInfo.systemFailure,
                     "failed to parse stored certificate: " + e.getMessage(), e);
         }
@@ -191,9 +184,29 @@ public class PollReqMessageHandler implements MessageHandler<PKIMessage> {
         } catch (CmpBaseException e) {
             throw e;
         } catch (Exception e) {
-            LOG.error("TID={} | failed to build cert-ready pollReq response", tid, e);
+            log.error("TID={} | failed to build cert-ready pollReq response", tid, e);
             throw new CmpProcessingException(tid, PKIFailureInfo.systemFailure,
                     "failed to build cert-ready response: " + e.getMessage(), e);
         }
+    }
+
+    /**
+     * Map a CMP request body type (ir / cr / kur) to the matching response body type
+     * (ip / cp / kup). Falls back to {@code TYPE_CERT_REP} for transactions created before
+     * the {@code original_request_body_type} column existed (NULL on legacy rows) — most
+     * CMP v2 clients accept cp as the response for either ir or cr.
+     */
+    private static int mapRequestBodyTypeToResponseBodyType(Integer originalBodyType) {
+        if (originalBodyType == null) {
+            return PKIBody.TYPE_CERT_REP;
+        }
+        return switch (originalBodyType) {
+            case PKIBody.TYPE_INIT_REQ -> PKIBody.TYPE_INIT_REP;
+            case PKIBody.TYPE_CERT_REQ -> PKIBody.TYPE_CERT_REP;
+            case PKIBody.TYPE_KEY_UPDATE_REQ -> PKIBody.TYPE_KEY_UPDATE_REP;
+            // Other types (revocation, certConf, etc.) are filtered out earlier in handle();
+            // fall back to cp for any unexpected value to avoid emitting an invalid body type.
+            default -> PKIBody.TYPE_CERT_REP;
+        };
     }
 }
