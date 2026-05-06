@@ -34,6 +34,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import javax.xml.datatype.DatatypeFactory;
 import javax.xml.datatype.Duration;
@@ -75,7 +77,7 @@ public class TriggerEvaluator<T extends UniquelyIdentifiedObject> implements ITr
 
     @Override
     public TriggerHistory evaluateTrigger(Trigger trigger, TriggerAssociation triggerAssociation, T object, UUID referenceObjectUuid, Object data, UUID eventHistoryUuid) throws RuleException {
-        TriggerHistory triggerHistory = triggerService.createTriggerHistory(trigger.getUuid(), triggerAssociation, object.getUuid(), referenceObjectUuid, eventHistoryUuid);
+        TriggerHistory triggerHistory = triggerService.createTriggerHistory(trigger.getUuid(), triggerAssociation, object.getUuid(), referenceObjectUuid, eventHistoryUuid, trigger.getResource());
         if (evaluateRules(triggerHistory, trigger.getRules(), object)) {
             triggerHistory.setConditionsMatched(true);
             if (trigger.isIgnoreTrigger()) {
@@ -373,7 +375,18 @@ public class TriggerEvaluator<T extends UniquelyIdentifiedObject> implements ITr
         }
 
         NotificationMessage message = new NotificationMessage(event, resource, object.getUuid(), notificationProfileUuids, null, data, triggerHistory.getUuid(), execution.getUuid());
-        notificationProducer.produceMessage(message);
+        // Delay publish until after the current transaction commits so TriggerHistory is
+        // visible to the NotificationListener when it creates TriggerHistoryRecords.
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    notificationProducer.produceMessage(message);
+                }
+            });
+        } else {
+            notificationProducer.produceMessage(message);
+        }
     }
 
     private Object getPropertyValue(Object object, List<Attribute> joinAttributes, Attribute fieldAttribute) throws InvocationTargetException, IllegalAccessException, NoSuchMethodException {
