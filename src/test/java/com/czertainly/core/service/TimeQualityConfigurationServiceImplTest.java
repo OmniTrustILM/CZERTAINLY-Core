@@ -3,7 +3,6 @@ package com.czertainly.core.service;
 import com.czertainly.api.exception.AlreadyExistException;
 import com.czertainly.api.exception.AttributeException;
 import com.czertainly.api.exception.NotFoundException;
-import com.czertainly.api.exception.ValidationException;
 import com.czertainly.api.model.client.attribute.RequestAttributeV3;
 import com.czertainly.api.model.client.attribute.ResponseAttributeV3;
 import com.czertainly.api.model.client.certificate.SearchRequestDto;
@@ -12,29 +11,32 @@ import com.czertainly.api.model.client.signing.timequality.TimeQualityConfigurat
 import com.czertainly.api.model.client.signing.timequality.TimeQualityConfigurationRequestDto;
 import com.czertainly.api.model.common.BulkActionMessageDto;
 import com.czertainly.api.model.common.PaginationResponseDto;
-import com.czertainly.api.model.client.signing.profile.scheme.SigningScheme;
-import com.czertainly.api.model.client.signing.profile.workflow.SigningWorkflowType;
 import com.czertainly.api.model.common.attribute.common.AttributeType;
 import com.czertainly.api.model.common.attribute.common.content.AttributeContentType;
 import com.czertainly.api.model.common.attribute.common.properties.CustomAttributeProperties;
 import com.czertainly.api.model.common.attribute.v3.CustomAttributeV3;
 import com.czertainly.api.model.common.attribute.v3.content.StringAttributeContentV3;
 import com.czertainly.api.model.core.auth.Resource;
+import com.czertainly.core.attribute.engine.AttributeEngine;
 import com.czertainly.core.dao.entity.AttributeDefinition;
 import com.czertainly.core.dao.entity.AttributeRelation;
-import com.czertainly.core.dao.entity.signing.SigningProfile;
 import com.czertainly.core.dao.entity.signing.TimeQualityConfiguration;
 import com.czertainly.core.dao.repository.AttributeDefinitionRepository;
 import com.czertainly.core.dao.repository.AttributeRelationRepository;
-import com.czertainly.core.dao.repository.signing.SigningProfileRepository;
 import com.czertainly.core.dao.repository.signing.TimeQualityConfigurationRepository;
 import com.czertainly.core.security.authz.SecuredUUID;
 import com.czertainly.core.security.authz.SecurityFilter;
 import com.czertainly.core.util.BaseSpringBootTest;
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
+
+import static org.mockito.ArgumentMatchers.any;
 
 import java.time.Duration;
 import java.util.List;
@@ -49,11 +51,11 @@ class TimeQualityConfigurationServiceImplTest extends BaseSpringBootTest {
     @Autowired
     private TimeQualityConfigurationService timeQualityConfigurationService;
 
-    @Autowired
+    @MockitoSpyBean
     private TimeQualityConfigurationRepository timeQualityConfigurationRepository;
 
-    @Autowired
-    private SigningProfileRepository signingProfileRepository;
+    @MockitoSpyBean
+    private AttributeEngine attributeEngine;
 
     @Autowired
     private AttributeDefinitionRepository attributeDefinitionRepository;
@@ -65,6 +67,11 @@ class TimeQualityConfigurationServiceImplTest extends BaseSpringBootTest {
      * A pre-existing TimeQualityConfiguration saved directly via repository.
      */
     private TimeQualityConfiguration savedConfiguration;
+
+    @AfterEach
+    void resetSpies() {
+        Mockito.reset(timeQualityConfigurationRepository, attributeEngine);
+    }
 
     @BeforeEach
     void setUp() {
@@ -331,6 +338,29 @@ class TimeQualityConfigurationServiceImplTest extends BaseSpringBootTest {
                 () -> timeQualityConfigurationService.createTimeQualityConfiguration(buildCreateRequest("duplicate-name")));
     }
 
+    @Test
+    void create_translatesDbUniqueViolationToAlreadyExist() {
+        Mockito.doReturn(Optional.empty()).when(timeQualityConfigurationRepository).findByName("race-name");
+        Mockito.doThrow(new DataIntegrityViolationException("unique constraint violation"))
+               .when(timeQualityConfigurationRepository).saveAndFlush(any(TimeQualityConfiguration.class));
+
+        AlreadyExistException ex = Assertions.assertThrows(AlreadyExistException.class,
+                () -> timeQualityConfigurationService.createTimeQualityConfiguration(buildCreateRequest("race-name")));
+        Assertions.assertTrue(ex.getMessage().contains("race-name"));
+    }
+
+    @Test
+    void update_translatesDbUniqueViolationToAlreadyExist() {
+        Mockito.doReturn(Optional.empty()).when(timeQualityConfigurationRepository).findByName("race-name");
+        Mockito.doThrow(new DataIntegrityViolationException("unique constraint violation"))
+               .when(timeQualityConfigurationRepository).saveAndFlush(any(TimeQualityConfiguration.class));
+
+        AlreadyExistException ex = Assertions.assertThrows(AlreadyExistException.class,
+                () -> timeQualityConfigurationService.updateTimeQualityConfiguration(
+                        savedConfiguration.getSecuredUuid(), buildUpdateRequest("race-name")));
+        Assertions.assertTrue(ex.getMessage().contains("race-name"));
+    }
+
     // ──────────────────────────────────────────────────────────────────────────
     // Update
     // ──────────────────────────────────────────────────────────────────────────
@@ -449,28 +479,6 @@ class TimeQualityConfigurationServiceImplTest extends BaseSpringBootTest {
                         SecuredUUID.fromString("00000000-0000-0000-0000-000000000001")));
     }
 
-    @Test
-    void testDeleteTimeQualityConfiguration_inUseBySigningProfile_throwsValidationException() {
-        // Link savedConfiguration to a signing profile, so deletion is blocked
-        SigningProfile profile = new SigningProfile();
-        profile.setName("profile-using-tq-config");
-        profile.setEnabled(false);
-        profile.setSigningScheme(SigningScheme.DELEGATED);
-        profile.setWorkflowType(SigningWorkflowType.RAW_SIGNING);
-        profile.setTimeQualityConfiguration(savedConfiguration);
-        profile.setLatestVersion(1);
-        signingProfileRepository.save(profile);
-
-        Assertions.assertThrows(ValidationException.class,
-                () -> timeQualityConfigurationService.deleteTimeQualityConfiguration(
-                        savedConfiguration.getSecuredUuid()));
-
-        // Entity must still be present
-        Optional<TimeQualityConfiguration> fromDb =
-                timeQualityConfigurationRepository.findById(savedConfiguration.getUuid());
-        Assertions.assertTrue(fromDb.isPresent(), "Entity should not be deleted when it is in use");
-    }
-
     // ──────────────────────────────────────────────────────────────────────────
     // Bulk Delete
     // ──────────────────────────────────────────────────────────────────────────
@@ -499,33 +507,25 @@ class TimeQualityConfigurationServiceImplTest extends BaseSpringBootTest {
     }
 
     @Test
-    void testBulkDeleteTimeQualityConfigurations_mixedSuccessAndFailure_returnsErrorsForFailures()
-            throws AlreadyExistException, AttributeException, NotFoundException {
-        TimeQualityConfigurationDto free = timeQualityConfigurationService.createTimeQualityConfiguration(buildCreateRequest("bulk-free"));
+    void testBulkDelete_partialFailure_survivingItemsAreCommitted() throws AlreadyExistException, AttributeException, NotFoundException {
+        TimeQualityConfigurationDto second = timeQualityConfigurationService.createTimeQualityConfiguration(buildCreateRequest("bulk-partial-second"));
+        UUID secondUuid = UUID.fromString(second.getUuid());
 
-        // Link savedConfiguration to a signing profile, so its deletion is blocked
-        SigningProfile profile = new SigningProfile();
-        profile.setName("bulk-blocking-profile");
-        profile.setEnabled(false);
-        profile.setSigningScheme(SigningScheme.DELEGATED);
-        profile.setWorkflowType(SigningWorkflowType.RAW_SIGNING);
-        profile.setTimeQualityConfiguration(savedConfiguration);
-        profile.setLatestVersion(1);
-        signingProfileRepository.save(profile);
+        // Throw a RuntimeException for the first item only, keyed by its UUID.
+        // AttributeEngine is a concrete class so doCallRealMethod() works for the second item.
+        Mockito.doThrow(new DataIntegrityViolationException("simulated FK violation"))
+               .when(attributeEngine).deleteObjectAttributeContent(Resource.TIME_QUALITY_CONFIGURATION, savedConfiguration.getUuid());
 
         List<BulkActionMessageDto> messages = timeQualityConfigurationService.bulkDeleteTimeQualityConfigurations(
-                List.of(savedConfiguration.getSecuredUuid(),
-                        SecuredUUID.fromString(free.getUuid())));
+                List.of(savedConfiguration.getSecuredUuid(), SecuredUUID.fromString(second.getUuid())));
 
-        Assertions.assertEquals(1, messages.size(),
-                "Only the blocked configuration should produce an error message");
+        Assertions.assertEquals(1, messages.size(), "Only the failing item should produce an error message");
         Assertions.assertEquals(savedConfiguration.getUuid().toString(), messages.getFirst().getUuid());
 
-        // The free configuration must be gone; the blocked one must remain
-        Assertions.assertTrue(timeQualityConfigurationRepository.findById(UUID.fromString(free.getUuid())).isEmpty(),
-                "Free configuration should have been deleted");
         Assertions.assertTrue(timeQualityConfigurationRepository.findById(savedConfiguration.getUuid()).isPresent(),
-                "Blocked configuration should still exist");
+                "Failed item's REQUIRES_NEW transaction should have been rolled back, leaving the entity in the DB");
+        Assertions.assertTrue(timeQualityConfigurationRepository.findById(secondUuid).isEmpty(),
+                "Successful item's REQUIRES_NEW transaction should have committed independently");
     }
 
     // ──────────────────────────────────────────────────────────────────────────

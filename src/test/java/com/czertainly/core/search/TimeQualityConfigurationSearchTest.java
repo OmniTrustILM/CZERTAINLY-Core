@@ -236,33 +236,33 @@ class TimeQualityConfigurationSearchTest extends BaseSpringBootTest {
     // ──────────────────────────────────────────────────────────────────────────
 
     @Test
-    void filterByNtpServers_contains_returnsSingleMatch() {
+    void filterByNtpServers_equals_returnsSingleMatch() {
         // strict has pool.ntp.org only
         List<TimeQualityConfigurationListDto> results = listWithFilters(
                 new SearchFilterRequestDtoDummy(FilterFieldSource.PROPERTY, FilterField.TIME_QUALITY_CONFIGURATION_NTP_SERVERS.name(),
-                        FilterConditionOperator.CONTAINS, "pool.ntp.org"));
+                        FilterConditionOperator.EQUALS, "pool.ntp.org"));
 
         Assertions.assertEquals(1, results.size());
         Assertions.assertEquals("strict-tqc", results.getFirst().getName());
     }
 
     @Test
-    void filterByNtpServers_contains_matchesOneOfMultipleServers() {
+    void filterByNtpServers_equals_matchesOneOfMultipleServers() {
         // guarded has ntp1.example.com and ntp2.example.com
         List<TimeQualityConfigurationListDto> results = listWithFilters(
                 new SearchFilterRequestDtoDummy(FilterFieldSource.PROPERTY, FilterField.TIME_QUALITY_CONFIGURATION_NTP_SERVERS.name(),
-                        FilterConditionOperator.CONTAINS, "ntp1.example.com"));
+                        FilterConditionOperator.EQUALS, "ntp1.example.com"));
 
         Assertions.assertEquals(1, results.size());
         Assertions.assertEquals("guarded-tqc", results.getFirst().getName());
     }
 
     @Test
-    void filterByNtpServers_notContains_excludesMatchingConfig() {
-        // NOT_CONTAINS pool.ntp.org → loose and guarded
+    void filterByNtpServers_notEquals_excludesMatchingConfig() {
+        // NOT_EQUALS pool.ntp.org → loose (time.google.com) and guarded (ntp1/ntp2.example.com)
         List<TimeQualityConfigurationListDto> results = listWithFilters(
                 new SearchFilterRequestDtoDummy(FilterFieldSource.PROPERTY, FilterField.TIME_QUALITY_CONFIGURATION_NTP_SERVERS.name(),
-                        FilterConditionOperator.NOT_CONTAINS, "pool.ntp.org"));
+                        FilterConditionOperator.NOT_EQUALS, "pool.ntp.org"));
 
         Assertions.assertEquals(2, results.size());
         Assertions.assertTrue(results.stream().noneMatch(c -> c.getName().equals("strict-tqc")));

@@ -42,13 +42,13 @@ public class TimeQualityConfigurationControllerImpl implements TimeQualityConfig
     }
 
     @Override
-    @AuthEndpoint(resourceName = Resource.TIME_QUALITY_CONFIGURATION)
-    @AuditLogged(module = Module.SIGNING, resource = Resource.TIME_QUALITY_CONFIGURATION, operation = Operation.LIST)
+    @AuditLogged(module = Module.SIGNING, resource = Resource.SEARCH_FILTER, affiliatedResource = Resource.TIME_QUALITY_CONFIGURATION, operation = Operation.LIST)
     public List<SearchFieldDataByGroupDto> getSearchableFieldInformation() {
         return timeQualityConfigurationService.getSearchableFieldInformation();
     }
 
     @Override
+    @AuthEndpoint(resourceName = Resource.TIME_QUALITY_CONFIGURATION)
     @AuditLogged(module = Module.SIGNING, resource = Resource.TIME_QUALITY_CONFIGURATION, operation = Operation.LIST)
     public PaginationResponseDto<TimeQualityConfigurationListDto> listTimeQualityConfigurations(SearchRequestDto request) {
         return timeQualityConfigurationService.listTimeQualityConfigurations(request, SecurityFilter.create());
