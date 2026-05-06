@@ -1504,41 +1504,56 @@ public class ClientOperationServiceImpl implements ClientOperationService {
      * annotation gates RA profile use; checkRevokePermissions gates the actual
      * revocation authority on CERTIFICATE.
      */
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     @ExternalAuthorization(resource = Resource.RA_PROFILE, action = ResourceAction.DETAIL, parentResource = Resource.AUTHORITY, parentAction = ResourceAction.DETAIL)
     public void manuallyConfirmRevoke(
             SecuredParentUUID authorityUuid, SecuredUUID raProfileUuid, String certificateUuid) throws NotFoundException {
         certificateService.checkRevokePermissions();
 
-        // Pessimistic-write lock for the duration of this transaction (class-level
-        // @Transactional applies). A concurrent cancelPendingCertificateOperation that locks
-        // the same row in commitLocalCancel will block here until this transaction commits,
-        // and vice versa — preventing the cancel from overwriting a confirmed REVOKED state.
-        Certificate cert = certificateRepository.findAndLockWithAssociationsByUuid(UUID.fromString(certificateUuid))
-                .orElseThrow(() -> new NotFoundException(Certificate.class, certificateUuid));
+        // The state-transition writes run in an explicit transaction with a pessimistic
+        // row lock; destroyKey is a connector-side HTTP call and runs OUTSIDE the locked
+        // transaction so a slow or unresponsive key connector does not hold a SELECT … FOR
+        // UPDATE on the cert row for the duration of its call (which would block every
+        // other operator action on the same cert). The lock is released as soon as the
+        // REVOKED state and cleared pending-revoke fields are committed.
+        UUID certUuid = UUID.fromString(certificateUuid);
+        boolean destroyKey;
+        UUID keyUuid;
+        TransactionStatus tx = transactionManager.getTransaction(new DefaultTransactionDefinition());
+        try {
+            Certificate cert = certificateRepository.findAndLockWithAssociationsByUuid(certUuid)
+                    .orElseThrow(() -> new NotFoundException(Certificate.class, certificateUuid));
+            assertCertificateBelongsToRaProfile(cert, authorityUuid, raProfileUuid, "confirm revocation");
+            if (cert.getState() != CertificateState.PENDING_REVOKE) {
+                throw new ValidationException("Cannot confirm revocation: certificate is not in PENDING_REVOKE. Current state: %s. Certificate: %s"
+                        .formatted(cert.getState().getLabel(), cert.toStringShort()));
+            }
 
-        assertCertificateBelongsToRaProfile(cert, authorityUuid, raProfileUuid, "confirm revocation");
-        if (cert.getState() != CertificateState.PENDING_REVOKE) {
-            throw new ValidationException("Cannot confirm revocation: certificate is not in PENDING_REVOKE. Current state: %s. Certificate: %s"
-                    .formatted(cert.getState().getLabel(), cert.toStringShort()));
+            applyPreservedRevokeAttributes(cert);
+
+            destroyKey = Boolean.TRUE.equals(cert.getPendingRevokeDestroyKey());
+            keyUuid = cert.getKey() != null ? cert.getKeyUuid() : null;
+            cert.setPendingRevokeDestroyKey(null);
+            cert.setPendingRevokeAttributes(null);
+            cert.setState(CertificateState.REVOKED);
+            certificateRepository.save(cert);
+
+            certificateEventHistoryService.addEventHistory(cert.getUuid(), CertificateEvent.REVOKE,
+                    CertificateEventStatus.SUCCESS, "Revocation confirmed manually", "");
+            transactionManager.commit(tx);
+        } catch (NotFoundException | RuntimeException e) {
+            transactionManager.rollback(tx);
+            throw e;
         }
 
-        applyPreservedRevokeAttributes(cert);
-
-        boolean destroyKey = Boolean.TRUE.equals(cert.getPendingRevokeDestroyKey());
-        cert.setPendingRevokeDestroyKey(null);
-        cert.setPendingRevokeAttributes(null);
-        cert.setState(CertificateState.REVOKED);
-        certificateRepository.save(cert);
-
-        if (destroyKey && cert.getKey() != null) {
-            destroyKeyBestEffort(cert);
+        // Slow connector calls outside the lock — failures here are logged but do not
+        // affect the already-committed state transition.
+        if (destroyKey && keyUuid != null) {
+            destroyKeyBestEffort(certUuid, keyUuid);
         }
-
-        certificateEventHistoryService.addEventHistory(cert.getUuid(), CertificateEvent.REVOKE,
-                CertificateEventStatus.SUCCESS, "Revocation confirmed manually", "");
         eventProducer.produceMessage(
-                CertificateActionPerformedEventHandler.constructEventMessage(cert.getUuid(), ResourceAction.REVOKE));
-        logger.info("Certificate {} revocation confirmed manually", cert.getUuid());
+                CertificateActionPerformedEventHandler.constructEventMessage(certUuid, ResourceAction.REVOKE));
+        logger.info("Certificate {} revocation confirmed manually", certUuid);
     }
 
     /**
@@ -1563,13 +1578,13 @@ public class ClientOperationServiceImpl implements ClientOperationService {
         }
     }
 
-    private void destroyKeyBestEffort(Certificate cert) {
+    private void destroyKeyBestEffort(UUID certUuid, UUID keyUuid) {
         try {
-            logger.debug("Manual revoke confirm: destroying key for cert {}", cert.getUuid());
-            keyService.destroyKey(List.of(cert.getKeyUuid().toString()));
+            logger.debug("Manual revoke confirm: destroying key for cert {}", certUuid);
+            keyService.destroyKey(List.of(keyUuid.toString()));
         } catch (Exception e) {
             logger.warn("Failed to destroy certificate key on manual revoke confirm for cert {}: {}",
-                    cert.getUuid(), e.getMessage(), e);
+                    certUuid, e.getMessage(), e);
         }
     }
 
