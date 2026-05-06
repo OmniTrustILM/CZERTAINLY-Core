@@ -68,7 +68,7 @@ public class CzertainlyAuthenticationCache implements AuthenticationCache {
         Objects.requireNonNull(cacheManager.getCache(CacheConfig.USER_UUID_AUTH_CACHE)).evict(userUuid);
         evictTokensByUserUuid(userUuid);
         if (certFingerprint != null) {
-            evictCertificateByFingerprint(certFingerprint);
+            evictByCertificateFingerprint(certFingerprint);
         }
     }
 
@@ -93,9 +93,4 @@ public class CzertainlyAuthenticationCache implements AuthenticationCache {
     public void evictByCertificateFingerprint(String certFingerprint) {
         Objects.requireNonNull(cacheManager.getCache(CacheConfig.CERTIFICATE_AUTH_CACHE)).evict(certFingerprint);
     }
-
-    private void evictCertificateByFingerprint(String fingerprint) {
-        evictByCertificateFingerprint(fingerprint);
-    }
-
 }

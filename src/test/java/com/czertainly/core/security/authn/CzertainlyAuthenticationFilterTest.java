@@ -121,7 +121,7 @@ class CzertainlyAuthenticationFilterTest {
     // --- exception handling ---
 
     @Test
-    void czertainlyAuthException_clearsContextAndContinuesChain() throws Exception {
+    void czertainlyAuthException_clearsContextAndContinuesChain() {
         // given
         when(authClient.authenticate(any(), any(), anyBoolean()))
                 .thenThrow(new CzertainlyAuthenticationException("auth service unreachable"));
@@ -134,7 +134,7 @@ class CzertainlyAuthenticationFilterTest {
     }
 
     @Test
-    void malformedCertHeader_clearsContextAndContinuesChain() throws Exception {
+    void malformedCertHeader_clearsContextAndContinuesChain() {
         // given - cert header present but Base64 content is garbage (not valid DER)
         request.addHeader(CERT_HEADER_NAME, "-----BEGIN CERTIFICATE-----\n!!!not-base64!!!\n-----END CERTIFICATE-----\n");
 

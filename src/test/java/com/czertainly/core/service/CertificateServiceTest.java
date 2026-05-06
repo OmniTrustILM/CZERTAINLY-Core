@@ -34,7 +34,9 @@ import com.czertainly.core.dao.repository.*;
 import com.czertainly.core.messaging.jms.producers.NotificationProducer;
 import com.czertainly.core.model.auth.CertificateProtocolInfo;
 import com.czertainly.core.model.auth.ResourceAction;
+import com.czertainly.api.model.core.logging.enums.AuthMethod;
 import com.czertainly.core.security.authn.client.AuthenticationCache;
+import com.czertainly.core.security.authn.client.AuthenticationInfo;
 import com.czertainly.core.security.authz.SecuredUUID;
 import com.czertainly.core.security.authz.SecurityFilter;
 import com.czertainly.core.security.authz.opa.dto.OpaObjectAccessResult;
@@ -69,7 +71,10 @@ import java.security.cert.X509Certificate;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
+
+import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 
 class CertificateServiceTest extends BaseSpringBootTest {
 
@@ -122,10 +127,10 @@ class CertificateServiceTest extends BaseSpringBootTest {
     private ProtocolCertificateAssociationsRepository protocolCertificateAssociationsRepository;
     @Autowired
     private CertificateRelationRepository certificateRelationRepository;
+    @Autowired
+    private AuthenticationCache authenticationCache;
     @MockitoBean
     private NotificationProducer notificationProducer;
-    @MockitoBean
-    private AuthenticationCache authenticationCache;
 
     private AttributeEngine attributeEngine;
 
@@ -250,6 +255,7 @@ class CertificateServiceTest extends BaseSpringBootTest {
     @AfterEach
     void tearDown() {
         mockServer.stop();
+        authenticationCache.evictAll();
     }
 
     @Test
@@ -459,24 +465,30 @@ class CertificateServiceTest extends BaseSpringBootTest {
         certificate.setUserUuid(userUuid);
         certificate.setFingerprint(fingerprint);
         certificateRepository.save(certificate);
+        var uuidCache = primeUserUuidCache(userUuid);
+        var certCache = primeCertCache(fingerprint);
 
         // when
         certificateService.revokeCertificate(certificate.getSerialNumber());
 
-        // then
-        Mockito.verify(authenticationCache).evictByUserUuid(userUuid.toString(), fingerprint);
+        // then - both the user UUID entry and the certificate entry must be evicted
+        uuidCache.assertEvicted();
+        certCache.assertEvicted();
     }
 
     @Test
     void revokeCertificate_doesNotEvictCacheWhenNoUserAssociated() {
         // given - certificate has no userUuid (default in setUp)
         Assertions.assertNull(certificate.getUserUuid());
+        var uuidCache = primeUserUuidCache(UUID.randomUUID());
+        var certCache = primeCertCache("unrelated-fingerprint");
 
         // when
         certificateService.revokeCertificate(certificate.getSerialNumber());
 
-        // then
-        Mockito.verify(authenticationCache, Mockito.never()).evictByUserUuid(Mockito.any(), Mockito.any());
+        // then - no user associated, nothing to evict
+        uuidCache.assertNotEvicted();
+        certCache.assertNotEvicted();
     }
 
     @Test
@@ -723,13 +735,15 @@ class CertificateServiceTest extends BaseSpringBootTest {
         certificate.setUserUuid(userUuid);
         certificate.setFingerprint(fingerprint);
         certificateRepository.save(certificate);
+        var certCache = primeCertCache(fingerprint);
+        var uuidCache = primeUserUuidCache(UUID.randomUUID());
 
         // when - disassociate user by passing null
         certificateService.updateCertificateUser(certificate.getUuid(), null);
 
         // then - only the certificate cache entry needs eviction; user's UUID/token caches are still valid
-        Mockito.verify(authenticationCache).evictByCertificateFingerprint(fingerprint);
-        Mockito.verify(authenticationCache, Mockito.never()).evictByUserUuid(Mockito.any(), Mockito.any());
+        certCache.assertEvicted();
+        uuidCache.assertNotEvicted();
     }
 
     @Test
@@ -741,26 +755,30 @@ class CertificateServiceTest extends BaseSpringBootTest {
         certificate.setUserUuid(oldUserUuid);
         certificate.setFingerprint(fingerprint);
         certificateRepository.save(certificate);
+        var certCache = primeCertCache(fingerprint);
+        var uuidCache = primeUserUuidCache(UUID.randomUUID());
 
         // when - replace with a different user
         certificateService.updateCertificateUser(certificate.getUuid(), newUserUuid.toString());
 
         // then - only the cert entry is stale; old user's UUID/token caches remain valid
-        Mockito.verify(authenticationCache).evictByCertificateFingerprint(fingerprint);
-        Mockito.verify(authenticationCache, Mockito.never()).evictByUserUuid(Mockito.any(), Mockito.any());
+        certCache.assertEvicted();
+        uuidCache.assertNotEvicted();
     }
 
     @Test
     void updateCertificateUser_doesNotEvictCacheWhenCertificateHadNoUser() throws NotFoundException {
         // given - certificate has no userUuid (default in setUp)
         Assertions.assertNull(certificate.getUserUuid());
+        var certCache = primeCertCache("unrelated-fingerprint");
+        var uuidCache = primeUserUuidCache(UUID.randomUUID());
 
         // when - associate a user for the first time
         certificateService.updateCertificateUser(certificate.getUuid(), UUID.randomUUID().toString());
 
         // then - nothing to evict for a previously unassociated certificate
-        Mockito.verify(authenticationCache, Mockito.never()).evictByCertificateFingerprint(Mockito.any());
-        Mockito.verify(authenticationCache, Mockito.never()).evictByUserUuid(Mockito.any(), Mockito.any());
+        certCache.assertNotEvicted();
+        uuidCache.assertNotEvicted();
     }
 
     @Test
@@ -771,25 +789,30 @@ class CertificateServiceTest extends BaseSpringBootTest {
         certificate.setUserUuid(userUuid);
         certificate.setFingerprint(fingerprint);
         certificateRepository.save(certificate);
+        var certCache = primeCertCache(fingerprint);
+        var uuidCache = primeUserUuidCache(UUID.randomUUID());
 
         // when
         certificateService.removeCertificateUser(userUuid);
 
         // then - user still exists, only the cert link is dropped; UUID/token caches remain valid
-        Mockito.verify(authenticationCache).evictByCertificateFingerprint(fingerprint);
-        Mockito.verify(authenticationCache, Mockito.never()).evictByUserUuid(Mockito.any(), Mockito.any());
+        certCache.assertEvicted();
+        uuidCache.assertNotEvicted();
     }
 
     @Test
     void removeCertificateUser_doesNotEvictCacheWhenNoCertificateForUser() {
         // given - no certificate is associated with this user UUID
-        UUID unknownUserUuid = UUID.randomUUID();
+        UUID userWithoutCertUuid = UUID.randomUUID();
+        var uuidCache = primeUserUuidCache(userWithoutCertUuid);
+        var certCache = primeCertCache("unrelated-fingerprint");
 
         // when - no certificate found, method logs a warning and returns
-        certificateService.removeCertificateUser(unknownUserUuid);
+        certificateService.removeCertificateUser(userWithoutCertUuid);
 
         // then
-        Mockito.verify(authenticationCache, Mockito.never()).evictByUserUuid(Mockito.any(), Mockito.any());
+        uuidCache.assertNotEvicted();
+        certCache.assertNotEvicted();
     }
 
     @Test
@@ -1364,5 +1387,55 @@ class CertificateServiceTest extends BaseSpringBootTest {
         return resource != null && resource.getProperties() != null &&
                 (resource.getProperties().containsKey("name") && resource.getProperties().get("name").equals(name)) &&
                 (resource.getProperties().containsKey("action") && resource.getProperties().get("action").equals(action));
+    }
+
+    // --- Cache verification helpers ---
+    //
+    // Pattern: prime the cache with a loader that counts invocations, then re-access after the
+    // operation under test. If the entry was evicted the loader runs again (count becomes 2);
+    // if it survived the loader is skipped (count stays at 1).
+    // The same AtomicInteger is shared by both the priming and re-access loaders, so all
+    // increments land on the same counter regardless of which call triggers the load.
+
+    private record CacheVerifier(AtomicInteger calls, Runnable reAccess) {
+        void assertEvicted() {
+            reAccess.run();
+            assertThat(calls.get()).isEqualTo(2);
+        }
+
+        void assertNotEvicted() {
+            reAccess.run();
+           assertThat(calls.get()).isEqualTo(1);
+        }
+    }
+
+    private CacheVerifier primeUserUuidCache(UUID userUuid) {
+        var calls = new AtomicInteger();
+        authenticationCache.getOrAuthenticateByUserUuid(userUuid, () -> {
+            calls.incrementAndGet();
+            return fakeAuth();
+        });
+        return new CacheVerifier(calls,
+                () -> authenticationCache.getOrAuthenticateByUserUuid(userUuid, () -> {
+                    calls.incrementAndGet();
+                    return fakeAuth();
+                }));
+    }
+
+    private CacheVerifier primeCertCache(String fingerprint) {
+        var calls = new AtomicInteger();
+        authenticationCache.getOrAuthenticateByCertificate(fingerprint, () -> {
+            calls.incrementAndGet();
+            return fakeAuth();
+        });
+        return new CacheVerifier(calls,
+                () -> authenticationCache.getOrAuthenticateByCertificate(fingerprint, () -> {
+                    calls.incrementAndGet();
+                    return fakeAuth();
+                }));
+    }
+
+    private AuthenticationInfo fakeAuth() {
+        return new AuthenticationInfo(AuthMethod.CERTIFICATE, UUID.randomUUID().toString(), "test-user", List.of());
     }
 }

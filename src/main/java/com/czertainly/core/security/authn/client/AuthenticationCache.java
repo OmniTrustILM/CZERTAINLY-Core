@@ -71,7 +71,8 @@ public interface AuthenticationCache {
     void evictByCertificateFingerprint(String certFingerprint);
 
     /**
-     * Clears all four auth caches and the jti index. Use this for role-level mutations
+     * Clears all four auth caches and the jti index (the per-user map of {@code jti} claims used to
+     * find and evict token cache entries when a user is modified). Use this for role-level mutations
      * (permission changes, role deletion) that may affect any user, including system accounts.
      */
     void evictAll();

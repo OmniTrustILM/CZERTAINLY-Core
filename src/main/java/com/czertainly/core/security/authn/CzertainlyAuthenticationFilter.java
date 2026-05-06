@@ -49,20 +49,10 @@ public class CzertainlyAuthenticationFilter extends OncePerRequestFilter {
             log.trace("Going to authenticate the '{}' request on '{}'.", request.getMethod(), request.getRequestURI());
 
             try {
-
                 AuthenticationInfo authInfo;
                 String rawCertHeader = request.getHeader(certificateHeaderName);
                 if (rawCertHeader != null) {
-                    try {
-                        String decoded = URLDecoder.decode(rawCertHeader, StandardCharsets.UTF_8);
-                        byte[] derBytes = Base64.getDecoder().decode(CertificateUtil.normalizeCertificateContent(decoded));
-                        String thumbprint = CertificateUtil.getThumbprint(derBytes);
-                        authInfo = authClient.authenticateByCertificate(rawCertHeader, thumbprint);
-                    } catch (NoSuchAlgorithmException e) {
-                        throw new IllegalStateException("SHA-256 algorithm not available", e);
-                    } catch (IllegalArgumentException e) {
-                        throw new CzertainlyAuthenticationException("Invalid certificate header: " + e.getMessage(), e);
-                    }
+                    authInfo = authenticateByCertificate(rawCertHeader);
                 } else {
                     authInfo = authClient.authenticate(AuthMethod.NONE, null, isLocalhostAddress(request));
                 }
@@ -74,15 +64,7 @@ public class CzertainlyAuthenticationFilter extends OncePerRequestFilter {
                     authentication = new CzertainlyAuthenticationToken(new CzertainlyUserDetails(authInfo));
                 }
 
-                SecurityContext securityContext = SecurityContextHolder.createEmptyContext();
-                securityContext.setAuthentication(authentication);
-                SecurityContextHolder.setContext(securityContext);
-                CzertainlyUserDetails userDetails = (CzertainlyUserDetails) authentication.getPrincipal();
-                if (userDetails.getAuthMethod() == AuthMethod.CERTIFICATE) {
-                    log.debug("User with username '{}' has been successfully authenticated with certificate.", userDetails.getUsername());
-                } else {
-                    log.debug("User has not been identified, using anonymous user.");
-                }
+                updateSecurityContext(authentication);
 
             } catch (AuthenticationException e) {
                 SecurityContextHolder.clearContext();
@@ -94,6 +76,33 @@ public class CzertainlyAuthenticationFilter extends OncePerRequestFilter {
             }
         }
         filterChain.doFilter(request, response);
+    }
+
+    private static void updateSecurityContext(Authentication authentication) {
+        SecurityContext securityContext = SecurityContextHolder.createEmptyContext();
+        securityContext.setAuthentication(authentication);
+        SecurityContextHolder.setContext(securityContext);
+        CzertainlyUserDetails userDetails = (CzertainlyUserDetails) authentication.getPrincipal();
+        if (userDetails.getAuthMethod() == AuthMethod.CERTIFICATE) {
+            log.debug("User with username '{}' has been successfully authenticated with certificate.", userDetails.getUsername());
+        } else {
+            log.debug("User has not been identified, using anonymous user.");
+        }
+    }
+
+    private AuthenticationInfo authenticateByCertificate(String rawCertHeader) {
+        AuthenticationInfo authInfo;
+        try {
+            String decoded = URLDecoder.decode(rawCertHeader, StandardCharsets.UTF_8);
+            byte[] derBytes = Base64.getDecoder().decode(CertificateUtil.normalizeCertificateContent(decoded));
+            String thumbprint = CertificateUtil.getThumbprint(derBytes);
+            authInfo = authClient.authenticateByCertificate(rawCertHeader, thumbprint);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 algorithm not available", e);
+        } catch (IllegalArgumentException e) {
+            throw new CzertainlyAuthenticationException("Invalid certificate header: " + e.getMessage(), e);
+        }
+        return authInfo;
     }
 
     private boolean isAuthenticationNeeded(final HttpServletRequest request) {
