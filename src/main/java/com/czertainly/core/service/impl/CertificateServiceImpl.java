@@ -1302,7 +1302,7 @@ public class CertificateServiceImpl implements CertificateService, AttributeReso
         }
         if (certificate != null) {
             if (certificate.getUserUuid() != null) {
-                authenticationCache.evictByUserUuid(certificate.getUserUuid().toString(), certificate.getFingerprint());
+                authenticationCache.evictByCertificateFingerprint(certificate.getFingerprint());
             }
             eventProducer.produceMessage(CertificateStatusChangedEventHandler.constructEventMessage(certificate.getUuid(), oldStatus, CertificateValidationStatus.REVOKED));
         }

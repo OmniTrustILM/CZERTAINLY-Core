@@ -17,12 +17,16 @@ public class CzertainlyAuthenticationCache implements AuthenticationCache {
 
     private final CacheManager cacheManager;
     private final TokenJtiIndex tokenJtiIndex;
+    private final UserCertificateIndex userCertificateIndex;
+    private final Cache certCache;
     private final Cache tokenCache;
 
     @Autowired
-    public CzertainlyAuthenticationCache(CacheManager cacheManager, TokenJtiIndex tokenJtiIndex) {
+    public CzertainlyAuthenticationCache(CacheManager cacheManager, TokenJtiIndex tokenJtiIndex, UserCertificateIndex userCertificateIndex) {
         this.cacheManager = cacheManager;
         this.tokenJtiIndex = tokenJtiIndex;
+        this.userCertificateIndex = userCertificateIndex;
+        this.certCache = Objects.requireNonNull(cacheManager.getCache(CacheConfig.CERTIFICATE_AUTH_CACHE));
         this.tokenCache = Objects.requireNonNull(cacheManager.getCache(CacheConfig.TOKEN_AUTH_CACHE));
     }
 
@@ -38,10 +42,20 @@ public class CzertainlyAuthenticationCache implements AuthenticationCache {
         return loader.get();
     }
 
+    // Manual caching (instead of @Cacheable) keeps userCertificateIndex in sync, enabling targeted
+    // per-user certificate eviction via evictByUserUuid().
     @Override
-    @Cacheable(value = CacheConfig.CERTIFICATE_AUTH_CACHE, key = "#thumbprint", unless = "#result.anonymous")
     public AuthenticationInfo getOrAuthenticateByCertificate(String thumbprint, Supplier<AuthenticationInfo> loader) {
-        return loader.get();
+        Cache.ValueWrapper cached = certCache.get(thumbprint);
+        if (cached != null) {
+            return (AuthenticationInfo) cached.get();
+        }
+        AuthenticationInfo result = loader.get();
+        if (!result.isAnonymous()) {
+            certCache.put(thumbprint, result);
+            userCertificateIndex.add(result.getUserUuid(), thumbprint);
+        }
+        return result;
     }
 
     // Manual caching (instead of @Cacheable) keeps tokenJtiIndex in sync, enabling targeted
@@ -64,20 +78,19 @@ public class CzertainlyAuthenticationCache implements AuthenticationCache {
     }
 
     @Override
-    public void evictByUserUuid(String userUuid, String certFingerprint) {
+    public void evictByUserUuid(String userUuid) {
         Objects.requireNonNull(cacheManager.getCache(CacheConfig.USER_UUID_AUTH_CACHE)).evict(userUuid);
         evictTokensByUserUuid(userUuid);
-        if (certFingerprint != null) {
-            evictByCertificateFingerprint(certFingerprint);
-        }
+        evictCertificateByUserUuid(userUuid);
     }
 
     @Override
     public void evictAll() {
         tokenJtiIndex.clear();
+        userCertificateIndex.clear();
         Objects.requireNonNull(cacheManager.getCache(CacheConfig.SYSTEM_USER_AUTH_CACHE)).clear();
         Objects.requireNonNull(cacheManager.getCache(CacheConfig.USER_UUID_AUTH_CACHE)).clear();
-        Objects.requireNonNull(cacheManager.getCache(CacheConfig.CERTIFICATE_AUTH_CACHE)).clear();
+        certCache.clear();
         tokenCache.clear();
     }
 
@@ -89,8 +102,16 @@ public class CzertainlyAuthenticationCache implements AuthenticationCache {
         jtis.forEach(tokenCache::evict);
     }
 
+    // Looks up the fingerprint for the user in the index and evicts it from the certificate cache.
+    // No-op if the user has no cached certificate.
+    private void evictCertificateByUserUuid(String userUuid) {
+        String fingerprint = userCertificateIndex.removeUser(userUuid);
+        if (fingerprint == null) return;
+        certCache.evict(fingerprint);
+    }
+
     @Override
     public void evictByCertificateFingerprint(String certFingerprint) {
-        Objects.requireNonNull(cacheManager.getCache(CacheConfig.CERTIFICATE_AUTH_CACHE)).evict(certFingerprint);
+        certCache.evict(certFingerprint);
     }
 }

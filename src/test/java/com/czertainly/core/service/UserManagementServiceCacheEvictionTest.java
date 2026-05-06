@@ -2,10 +2,6 @@ package com.czertainly.core.service;
 
 import com.czertainly.api.model.client.auth.UpdateUserRequestDto;
 import com.czertainly.api.model.core.auth.UserDetailDto;
-import com.czertainly.core.dao.entity.Certificate;
-import com.czertainly.core.dao.entity.CertificateContent;
-import com.czertainly.core.dao.repository.CertificateContentRepository;
-import com.czertainly.core.dao.repository.CertificateRepository;
 import com.czertainly.core.security.authn.client.AuthenticationCache;
 import com.czertainly.core.security.authn.client.UserManagementApiClient;
 import com.czertainly.core.util.BaseSpringBootTest;
@@ -26,12 +22,6 @@ class UserManagementServiceCacheEvictionTest extends BaseSpringBootTest {
     private UserManagementService userManagementService;
 
     @Autowired
-    private CertificateRepository certificateRepository;
-
-    @Autowired
-    private CertificateContentRepository certificateContentRepository;
-
-    @Autowired
     private JdbcTemplate jdbcTemplate;
 
     @MockitoBean
@@ -46,7 +36,7 @@ class UserManagementServiceCacheEvictionTest extends BaseSpringBootTest {
     }
 
     @Test
-    void updateUser_withoutCertificate_evictsWithNullFingerprint() throws Exception {
+    void updateUser_evictsUserCache() throws Exception {
         // given
         String userUuid = UUID.randomUUID().toString();
         Mockito.when(userManagementApiClient.updateUser(Mockito.eq(userUuid), Mockito.any()))
@@ -59,26 +49,7 @@ class UserManagementServiceCacheEvictionTest extends BaseSpringBootTest {
         userManagementService.updateUser(userUuid, request);
 
         // then
-        Mockito.verify(authenticationCache).evictByUserUuid(userUuid, null);
-    }
-
-    @Test
-    void updateUser_withCertificate_evictsWithCertificateFingerprint() throws Exception {
-        // given
-        String userUuid = UUID.randomUUID().toString();
-        String fingerprint = "test-fingerprint";
-        createCertificateForUser(UUID.fromString(userUuid), fingerprint);
-        Mockito.when(userManagementApiClient.updateUser(Mockito.eq(userUuid), Mockito.any()))
-                .thenReturn(userDetailDto(userUuid));
-
-        UpdateUserRequestDto request = new UpdateUserRequestDto();
-        request.setCustomAttributes(List.of());
-
-        // when
-        userManagementService.updateUser(userUuid, request);
-
-        // then
-        Mockito.verify(authenticationCache).evictByUserUuid(userUuid, fingerprint);
+        Mockito.verify(authenticationCache).evictByUserUuid(userUuid);
     }
 
     @Test
@@ -92,26 +63,11 @@ class UserManagementServiceCacheEvictionTest extends BaseSpringBootTest {
         userManagementService.updateUserInternal(userUuid, new UpdateUserRequestDto(), "", "");
 
         // then
-        Mockito.verify(authenticationCache).evictByUserUuid(userUuid, null);
+        Mockito.verify(authenticationCache).evictByUserUuid(userUuid);
     }
 
     @Test
-    void deleteUser_withCertificate_capturesFingerprintBeforeAssociationIsRemoved() {
-        // given – certificate is associated with the user before deletion
-        String userUuid = UUID.randomUUID().toString();
-        String fingerprint = "test-fingerprint";
-        createCertificateForUser(UUID.fromString(userUuid), fingerprint);
-
-        // when
-        userManagementService.deleteUser(userUuid);
-
-        // then – fingerprint was captured before removeCertificateUser severed the association,
-        // so the cache entry for the old certificate is correctly evicted
-        Mockito.verify(authenticationCache).evictByUserUuid(userUuid, fingerprint);
-    }
-
-    @Test
-    void deleteUser_withoutCertificate_evictsWithNullFingerprint() {
+    void deleteUser_evictsUserCache() {
         // given
         String userUuid = UUID.randomUUID().toString();
 
@@ -119,7 +75,7 @@ class UserManagementServiceCacheEvictionTest extends BaseSpringBootTest {
         userManagementService.deleteUser(userUuid);
 
         // then
-        Mockito.verify(authenticationCache).evictByUserUuid(userUuid, null);
+        Mockito.verify(authenticationCache).evictByUserUuid(userUuid);
     }
 
     @Test
@@ -132,7 +88,7 @@ class UserManagementServiceCacheEvictionTest extends BaseSpringBootTest {
         userManagementService.disableUser(userUuid);
 
         // then
-        Mockito.verify(authenticationCache).evictByUserUuid(userUuid, null);
+        Mockito.verify(authenticationCache).evictByUserUuid(userUuid);
     }
 
     @Test
@@ -146,7 +102,7 @@ class UserManagementServiceCacheEvictionTest extends BaseSpringBootTest {
         userManagementService.updateRoles(userUuid, List.of());
 
         // then
-        Mockito.verify(authenticationCache).evictByUserUuid(userUuid, null);
+        Mockito.verify(authenticationCache).evictByUserUuid(userUuid);
     }
 
     @Test
@@ -160,7 +116,7 @@ class UserManagementServiceCacheEvictionTest extends BaseSpringBootTest {
         userManagementService.updateRole(userUuid, roleUuid);
 
         // then
-        Mockito.verify(authenticationCache).evictByUserUuid(userUuid, null);
+        Mockito.verify(authenticationCache).evictByUserUuid(userUuid);
     }
 
     @Test
@@ -174,19 +130,7 @@ class UserManagementServiceCacheEvictionTest extends BaseSpringBootTest {
         userManagementService.removeRole(userUuid, roleUuid);
 
         // then
-        Mockito.verify(authenticationCache).evictByUserUuid(userUuid, null);
-    }
-
-    private void createCertificateForUser(UUID userUuid, String fingerprint) {
-        CertificateContent content = new CertificateContent();
-        content.setContent("dummy");
-        certificateContentRepository.save(content);
-
-        Certificate cert = new Certificate();
-        cert.setUserUuid(userUuid);
-        cert.setFingerprint(fingerprint);
-        cert.setCertificateContent(content);
-        certificateRepository.save(cert);
+        Mockito.verify(authenticationCache).evictByUserUuid(userUuid);
     }
 
     private static UserDetailDto userDetailDto(String uuid) {

@@ -230,7 +230,7 @@ class CzertainlyAuthenticationCacheTest extends BaseSpringBootTest {
         authenticationCache.getOrAuthenticateByUserUuid(userUuid, loader);
 
         // when - evict the cache entry for this user
-        authenticationCache.evictByUserUuid(userUuid.toString(), null);
+        authenticationCache.evictByUserUuid(userUuid.toString());
 
         // then - verify that the next call reaches the loader again because the entry was evicted
         authenticationCache.getOrAuthenticateByUserUuid(userUuid, loader);
@@ -248,7 +248,7 @@ class CzertainlyAuthenticationCacheTest extends BaseSpringBootTest {
         authenticationCache.getOrAuthenticateByToken("jti-B", loaderB);
 
         // when - evict all cache entries for this user
-        authenticationCache.evictByUserUuid(userUuid, null);
+        authenticationCache.evictByUserUuid(userUuid);
 
         // then - verify that both token entries were evicted via the jti index and the loaders are called again
         authenticationCache.getOrAuthenticateByToken("jti-A", loaderA);
@@ -258,15 +258,15 @@ class CzertainlyAuthenticationCacheTest extends BaseSpringBootTest {
     }
 
     @Test
-    void evictByUserUuid_evictsCertificateWhenFingerprintProvided() {
-        // given - the certificate cache is populated for this user
+    void evictByUserUuid_evictsCertificateEntry() {
+        // given - the certificate cache is populated, so the user-certificate index has recorded the mapping
         String userUuid = UUID.randomUUID().toString();
         String fingerprint = "cert-fingerprint";
         Supplier<AuthenticationInfo> loader = loaderReturning(authenticatedInfo(userUuid, "certUser"));
         authenticationCache.getOrAuthenticateByCertificate(fingerprint, loader);
 
-        // when - evict with a fingerprint provided so the certificate entry is also targeted
-        authenticationCache.evictByUserUuid(userUuid, fingerprint);
+        // when - evict by user UUID; the cache resolves the fingerprint from the index internally
+        authenticationCache.evictByUserUuid(userUuid);
 
         // then - verify that the certificate entry was evicted and the loader is called again
         authenticationCache.getOrAuthenticateByCertificate(fingerprint, loader);
@@ -274,17 +274,18 @@ class CzertainlyAuthenticationCacheTest extends BaseSpringBootTest {
     }
 
     @Test
-    void evictByUserUuid_doesNotEvictCertificateWhenFingerprintNull() {
-        // given - certificate eviction is skipped when the caller does not supply a fingerprint
+    void evictByUserUuid_doesNotEvictCertificateWhenNoneWasCached() {
+        // given - no certificate has been cached for this user, so the index has no entry
         String userUuid = UUID.randomUUID().toString();
         String fingerprint = "cert-fingerprint";
-        Supplier<AuthenticationInfo> loader = loaderReturning(authenticatedInfo(userUuid, "certUser"));
+        // populate with a different user so the fingerprint is in the cache but not mapped to this user
+        Supplier<AuthenticationInfo> loader = loaderReturning(authenticatedInfo("other-user", "certUser"));
         authenticationCache.getOrAuthenticateByCertificate(fingerprint, loader);
 
-        // when - evict without providing a certificate fingerprint
-        authenticationCache.evictByUserUuid(userUuid, null);
+        // when - evict a user who has no certificate cache entry
+        authenticationCache.evictByUserUuid(userUuid);
 
-        // then - verify that the certificate cache entry is still valid and the loader is not called again
+        // then - the certificate entry for the other user is unaffected
         authenticationCache.getOrAuthenticateByCertificate(fingerprint, loader);
         verify(loader, times(1)).get();
     }
@@ -300,7 +301,7 @@ class CzertainlyAuthenticationCacheTest extends BaseSpringBootTest {
         authenticationCache.getOrAuthenticateByToken("jti-userB", loaderB);
 
         // when - evict only userA
-        authenticationCache.evictByUserUuid(userUuidA, null);
+        authenticationCache.evictByUserUuid(userUuidA);
 
         // then - verify that userA token was evicted and userB token is still cached
         authenticationCache.getOrAuthenticateByToken("jti-userA", loaderA);

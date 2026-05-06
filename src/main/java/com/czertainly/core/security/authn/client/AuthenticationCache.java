@@ -52,14 +52,13 @@ public interface AuthenticationCache {
 
     /**
      * Evicts all auth cache entries for a single user: their UUID entry, all token entries tracked
-     * in the jti index, and their certificate entry if {@code certFingerprint} is non-null.
+     * in the jti index, and their certificate entry tracked in the certificate index.
      * Use this for user-scoped changes (role assignment, disable, delete, certificate revocation)
      * where only one user is affected and the system-user cache can be left untouched.
      *
-     * @param userUuid        UUID of the user whose cache entries should be evicted
-     * @param certFingerprint SHA-256 fingerprint of the user's certificate to evict, or {@code null} to skip
+     * @param userUuid UUID of the user whose cache entries should be evicted
      */
-    void evictByUserUuid(String userUuid, String certFingerprint);
+    void evictByUserUuid(String userUuid);
 
     /**
      * Evicts only the certificate-based auth cache entry for the given fingerprint.
