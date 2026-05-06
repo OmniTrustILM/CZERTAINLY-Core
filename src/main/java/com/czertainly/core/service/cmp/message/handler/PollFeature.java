@@ -8,21 +8,22 @@ import com.czertainly.core.security.authz.SecuredUUID;
 import com.czertainly.core.service.CertificateService;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
+import lombok.extern.slf4j.Slf4j;
 import org.bouncycastle.asn1.ASN1OctetString;
 import org.bouncycastle.asn1.cmp.PKIFailureInfo;
 import org.bouncycastle.asn1.cmp.PKIHeader;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.util.concurrent.TimeUnit;
 
+@Slf4j
 @Component
 public class PollFeature {
 
-    private static final Logger LOG = LoggerFactory.getLogger(PollFeature.class.getName());
+    private static final int DEFAULT_POLL_TIMEOUT_SECONDS = 10;
+    private static final long POLL_INTERVAL_MS = 1_000L;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -38,85 +39,100 @@ public class PollFeature {
     }
 
     /**
-     * Convert asynchronous behaviour (manipulation with certificate, e.g. issuing/re-keying/revoking) to synchronous
-     * (cmp client ask for certificate) using polling certificate until certificate.
+     * Convert asynchronous certificate-state transitions (issue / renew / rekey / revoke)
+     * into a synchronous {@link PollResult} the CMP / SCEP layers can act on.
      *
-     * <p>If the certificate is in an asynchronous {@code PENDING_ISSUE} or {@code PENDING_REVOKE}
-     * state (e.g. the authority provider connector returned {@code 202 Accepted} indicating
-     * the operation will complete asynchronously), this method returns {@code null} immediately
-     * instead of waiting for a state change that will not happen within the poll-timeout
-     * window. The caller is expected to translate this into a CMP {@code pollRep} response
-     * so the client knows to retry later.</p>
+     * <p>Loops on the configured budget ({@code cmp.protocol.poll.feature.timeout}, default
+     * {@value #DEFAULT_POLL_TIMEOUT_SECONDS} s) re-reading the certificate from the database
+     * each iteration and returns:
      *
-     * @param tid          processing transaction id, see {@link PKIHeader#getTransactionID()}
-     * @param serialNumber of given certificate subject of polling
-     * @return polled certificate when it reaches {@code expectedState}; {@code null} when the
-     *         certificate is in an asynchronous PENDING state
-     * @throws CmpProcessingException if polling of certificate failed
+     * <ul>
+     *   <li>{@link PollResult.Reached} when the certificate's state equals
+     *       {@code expectedState};</li>
+     *   <li>{@link PollResult.StillPending} when the certificate is in
+     *       {@code PENDING_ISSUE} / {@code PENDING_REVOKE} (the connector accepted
+     *       asynchronously with HTTP 202);</li>
+     *   <li>{@link PollResult.Diverted} when the certificate reaches a terminal state
+     *       (one of {@code ISSUED}, {@code REVOKED}, {@code FAILED}, {@code REJECTED})
+     *       that is not the expected one — typically because another thread (an operator
+     *       cancel, a scheduled task) transitioned the certificate while this poll was
+     *       running.</li>
+     * </ul>
+     *
+     * <p>Transitional states ({@code REQUESTED}, {@code PENDING_APPROVAL}) are not reported
+     * back to the caller — the loop sleeps and re-reads until one of the three outcomes
+     * above is observed or the budget is exhausted.</p>
+     *
+     * @param tid           processing transaction id, see {@link PKIHeader#getTransactionID()}
+     * @param serialNumber  serial number of the polled certificate (for log context;
+     *                      filled in from the entity if {@code null})
+     * @param uuid          internal UUID of the certificate
+     * @param expectedState the terminal state the caller is waiting for ({@code ISSUED}
+     *                      for issue / renew / rekey, {@code REVOKED} for revoke)
+     * @return the {@link PollResult} describing the observed outcome
+     * @throws CmpProcessingException if the cert is not found, the polling thread is
+     *                                interrupted, or the budget is exhausted while the
+     *                                certificate is still in a transitional state
      */
-    public Certificate pollCertificate(ASN1OctetString tid, String serialNumber, String uuid, CertificateState expectedState)
-            throws CmpProcessingException {
-        LOG.trace(">>>>> CERT POLL (begin) >>>>> ");
+    public PollResult pollCertificate(ASN1OctetString tid, String serialNumber, String uuid,
+                                      CertificateState expectedState) throws CmpProcessingException {
+        log.trace(">>>>> CERT POLL (begin) >>>>> ");
         SecuredUUID certUUID = SecuredUUID.fromString(uuid);
+        long timeoutMs = 1_000L * (pollFeatureTimeout == null ? DEFAULT_POLL_TIMEOUT_SECONDS : pollFeatureTimeout);
+        long startRequest = System.currentTimeMillis();
+        int counter = 0;
+        Certificate polledCert = null;
 
-        Certificate polledCert;
         try {
-            LOG.trace("TID={}, SN={} | Polling of certificate with uuid={}", tid, serialNumber, certUUID);
-            long startRequest = System.currentTimeMillis();
-            long endRequest;
-            int cfgValue = pollFeatureTimeout == null ? 10 : pollFeatureTimeout;//in seconds
-            int timeout = 1000 * cfgValue;
-            int counter = 0;//counter for logging purpose only
-            boolean isPendingAsynchronous = false;
-            do {
-                LOG.trace(">>>>> TID={}, POLL=[{}] SN={} | polling request: certificate with uuid={}",
-                        tid, counter, serialNumber, certUUID);
-                // -- (2)certification polling (ask for created certificate entity)
-                polledCert = certificateService.getCertificateEntity(certUUID);
-                LOG.trace("<<<<< TID={}, POLL=[{}] SN={} | polling result: certificate entity in state {}, uuid={}",
-                        tid, counter, polledCert.getSerialNumber(), polledCert.getState(), certUUID);
-                endRequest = System.currentTimeMillis();
+            while (true) {
                 counter++;
-                entityManager.refresh(polledCert);//get entity from db (instead from hibernate 1lvl cache)
-                // Asynchronous-completion signal: if the certificate has reached a PENDING_*
-                // state, the authority provider connector returned 202 Accepted and the
-                // operation will complete asynchronously. Stop polling and signal the caller to
-                // return a CMP pollRep so the client knows to retry later. Captured here (inside
-                // the loop) to also catch the realistic case where the transition happens during
-                // the wait window, not only when the cert is already PENDING_* at the start.
-                if (polledCert.getState() == CertificateState.PENDING_ISSUE
-                        || polledCert.getState() == CertificateState.PENDING_REVOKE) {
-                    isPendingAsynchronous = true;
-                    break;
+                polledCert = certificateService.getCertificateEntity(certUUID);
+                entityManager.refresh(polledCert);
+                CertificateState current = polledCert.getState();
+                if (serialNumber == null) {
+                    serialNumber = polledCert.getSerialNumber();
                 }
-                if (counter > 1) TimeUnit.MILLISECONDS.sleep(1000);
-                if (serialNumber == null) serialNumber = polledCert.getSerialNumber();
-            } while ((endRequest - startRequest < timeout)
-                    && !expectedState.equals(polledCert.getState()));
-            if (isPendingAsynchronous) {
-                LOG.debug("TID={}, SN={} | certificate uuid={} reached asynchronous {} state — caller will return pollRep",
-                        tid, serialNumber, certUUID, polledCert.getState());
-                return null;
+                log.trace("TID={}, POLL=[{}], SN={} | observed state={}, uuid={}",
+                        tid, counter, serialNumber, current, certUUID);
+
+                if (expectedState.equals(current)) {
+                    log.trace("TID={}, SN={} | certificate uuid={} reached expected state {}",
+                            tid, serialNumber, certUUID, expectedState);
+                    return new PollResult.Reached(polledCert);
+                }
+                if (current == CertificateState.PENDING_ISSUE || current == CertificateState.PENDING_REVOKE) {
+                    log.debug("TID={}, SN={} | certificate uuid={} is in asynchronous state {} — caller will signal client to retry",
+                            tid, serialNumber, certUUID, current);
+                    return new PollResult.StillPending(current);
+                }
+                if (isTerminal(current)) {
+                    log.warn("TID={}, SN={} | certificate uuid={} diverted to {} while waiting for {}",
+                            tid, serialNumber, certUUID, current, expectedState);
+                    return new PollResult.Diverted(current);
+                }
+                if (System.currentTimeMillis() - startRequest >= timeoutMs) {
+                    throw new CmpProcessingException(tid, PKIFailureInfo.systemFailure,
+                            String.format("SN=%s | polling timed out after %d ms — cert is in transitional state %s, expected %s",
+                                    serialNumber, timeoutMs, current, expectedState));
+                }
+                TimeUnit.MILLISECONDS.sleep(POLL_INTERVAL_MS);
             }
-            LOG.trace("TID={}, SN={} | Polling of certificate with uuid={} is done", tid, serialNumber, certUUID);
         } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
             throw new CmpProcessingException(tid, PKIFailureInfo.systemFailure,
                     "SN=" + serialNumber + " | cannot poll certificate - processing thread has been interrupted", e);
         } catch (NotFoundException e) {
             throw new CmpProcessingException(tid, PKIFailureInfo.badDataFormat,
                     "SN=" + serialNumber + " | issued certificate from CA cannot be found, uuid=" + certUUID, e);
         } finally {
-            LOG.trace("<<<<< CERT polling (  end) <<<<< ");
+            log.trace("<<<<< CERT polling (  end) <<<<< ");
         }
-
-        if (!expectedState.equals(polledCert.getState())) {
-            throw new CmpProcessingException(tid, PKIFailureInfo.systemFailure,
-                    String.format("SN=%s | polled certificate is not at valid state (expected=%s), retrieved=%s",
-                            serialNumber,
-                            expectedState,
-                            polledCert.getState()));
-        }
-        return polledCert;
     }
 
+    private static boolean isTerminal(CertificateState state) {
+        return state == CertificateState.ISSUED
+                || state == CertificateState.REVOKED
+                || state == CertificateState.FAILED
+                || state == CertificateState.REJECTED;
+    }
 }

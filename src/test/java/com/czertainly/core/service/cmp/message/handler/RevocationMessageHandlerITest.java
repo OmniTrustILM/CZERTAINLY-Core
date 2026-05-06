@@ -202,7 +202,7 @@ class RevocationMessageHandlerITest extends BaseSpringBootTest {
 
         // -- issue of certificate is mocked
         given(pollFeature.pollCertificate(any(), any(), any(), any()))
-                .willReturn(revokedCertificate);
+                .willReturn(new PollResult.Reached(revokedCertificate));
 
         PKIMessage response = testedHandler.handle(request,
                 new Mobile3gppProfileContext(cmpProfileSigPrt,
@@ -250,7 +250,7 @@ class RevocationMessageHandlerITest extends BaseSpringBootTest {
 
         // -- issue of certificate is mocked
         given(pollFeature.pollCertificate(any(), any(), any(), any()))
-                .willReturn(revokedCertificate);
+                .willReturn(new PollResult.Reached(revokedCertificate));
 
         // -- test handling of message
         PKIMessage response = testedHandler.handle(request,
@@ -320,7 +320,7 @@ class RevocationMessageHandlerITest extends BaseSpringBootTest {
         // ClientOperationService is mocked at the bean level; the revoke call returns
         // normally without hitting the connector. No WireMock stub needed.
         given(pollFeature.pollCertificate(any(), any(), any(), any()))
-                .willReturn(null);
+                .willReturn(new PollResult.StillPending(CertificateState.PENDING_REVOKE));
 
         PKIMessage response = testedHandler.handle(request,
                 new Mobile3gppProfileContext(cmpProfileSigPrt,
@@ -367,7 +367,7 @@ class RevocationMessageHandlerITest extends BaseSpringBootTest {
         revoked.setSerialNumber(revokedCertificate.getSerialNumber());
         revoked.setState(CertificateState.REVOKED);
         given(pollFeature.pollCertificate(any(), any(), any(), any()))
-                .willReturn(revoked);
+                .willReturn(new PollResult.Reached(revoked));
 
         PKIMessage response = testedHandler.handle(request,
                 new Mobile3gppProfileContext(cmpProfileSigPrt,

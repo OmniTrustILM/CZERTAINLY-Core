@@ -21,14 +21,17 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /**
  * Unit tests for {@link PollFeature}.
  *
- * <p>Pinned regressions:</p>
+ * <p>Pinned outcomes of the {@link PollResult} contract:</p>
  * <ul>
- *   <li>An asynchronous-completion ({@code PENDING_ISSUE} / {@code PENDING_REVOKE}) state is
- *       returned as {@code null} so the caller emits a CMP {@code pollRep} response — without
- *       this, the poll loop would spin until timeout because no synchronous state change is
- *       expected.</li>
- *   <li>{@link NotFoundException} from the certificate service is wrapped in a
- *       {@link CmpProcessingException} carrying the cause (was previously dropped).</li>
+ *   <li>Cert in expected state → {@link PollResult.Reached};</li>
+ *   <li>Cert in {@code PENDING_ISSUE} / {@code PENDING_REVOKE} → {@link PollResult.StillPending};</li>
+ *   <li>Cert in a terminal state that is <em>not</em> the expected one (e.g. {@code FAILED}
+ *       observed while waiting for {@code ISSUED}, the asynchronous-cancel race) →
+ *       {@link PollResult.Diverted};</li>
+ *   <li>{@link NotFoundException} from the certificate service → {@link CmpProcessingException}
+ *       carrying the cause;</li>
+ *   <li>Cert never leaves a transitional state within the configured budget → timeout
+ *       {@link CmpProcessingException}.</li>
  * </ul>
  */
 class PollFeatureTest {
@@ -43,8 +46,8 @@ class PollFeatureTest {
         entityManager = Mockito.mock(EntityManager.class);
         pollFeature = new PollFeature();
         pollFeature.setCertificateService(certificateService);
-        // pollFeatureTimeout is a Spring @Value-injected field; set it via reflection
-        // so the test runs without a Spring context.
+        // pollFeatureTimeout is a Spring @Value-injected field; set it via reflection so
+        // the test runs without a Spring context.
         Field timeoutField = PollFeature.class.getDeclaredField("pollFeatureTimeout");
         timeoutField.setAccessible(true);
         timeoutField.set(pollFeature, 1);
@@ -54,52 +57,78 @@ class PollFeatureTest {
     }
 
     @Test
-    void returnsNull_whenCertReachesPendingIssue() throws Exception {
-        // Pin: PENDING_ISSUE breaks the poll loop and signals the caller to emit pollRep.
+    void returnsStillPending_whenCertReachesPendingIssue() throws Exception {
         UUID certUuid = UUID.randomUUID();
         Certificate cert = certificateInState(certUuid, CertificateState.PENDING_ISSUE);
         Mockito.when(certificateService.getCertificateEntity(Mockito.any(SecuredUUID.class)))
                 .thenReturn(cert);
 
-        Certificate result = pollFeature.pollCertificate(
-                new DEROctetString(new byte[]{1}),
-                "01",
-                certUuid.toString(),
-                CertificateState.ISSUED);
+        PollResult result = pollFeature.pollCertificate(
+                new DEROctetString(new byte[]{1}), "01", certUuid.toString(), CertificateState.ISSUED);
 
-        assertThat(result).isNull();
+        assertThat(result).isInstanceOfSatisfying(PollResult.StillPending.class,
+                sp -> assertThat(sp.currentState()).isEqualTo(CertificateState.PENDING_ISSUE));
     }
 
     @Test
-    void returnsNull_whenCertReachesPendingRevoke() throws Exception {
+    void returnsStillPending_whenCertReachesPendingRevoke() throws Exception {
         UUID certUuid = UUID.randomUUID();
         Certificate cert = certificateInState(certUuid, CertificateState.PENDING_REVOKE);
         Mockito.when(certificateService.getCertificateEntity(Mockito.any(SecuredUUID.class)))
                 .thenReturn(cert);
 
-        Certificate result = pollFeature.pollCertificate(
-                new DEROctetString(new byte[]{1}),
-                "01",
-                certUuid.toString(),
-                CertificateState.REVOKED);
+        PollResult result = pollFeature.pollCertificate(
+                new DEROctetString(new byte[]{1}), "01", certUuid.toString(), CertificateState.REVOKED);
 
-        assertThat(result).isNull();
+        assertThat(result).isInstanceOfSatisfying(PollResult.StillPending.class,
+                sp -> assertThat(sp.currentState()).isEqualTo(CertificateState.PENDING_REVOKE));
     }
 
     @Test
-    void returnsCert_whenCertAlreadyInExpectedState() throws Exception {
+    void returnsReached_whenCertAlreadyInExpectedState() throws Exception {
         UUID certUuid = UUID.randomUUID();
         Certificate cert = certificateInState(certUuid, CertificateState.ISSUED);
         Mockito.when(certificateService.getCertificateEntity(Mockito.any(SecuredUUID.class)))
                 .thenReturn(cert);
 
-        Certificate result = pollFeature.pollCertificate(
-                new DEROctetString(new byte[]{1}),
-                "01",
-                certUuid.toString(),
-                CertificateState.ISSUED);
+        PollResult result = pollFeature.pollCertificate(
+                new DEROctetString(new byte[]{1}), "01", certUuid.toString(), CertificateState.ISSUED);
 
-        assertThat(result).isSameAs(cert);
+        assertThat(result).isInstanceOfSatisfying(PollResult.Reached.class,
+                r -> assertThat(r.certificate()).isSameAs(cert));
+    }
+
+    @Test
+    void returnsDiverted_whenCertEndsInTerminalStateNotEqualToExpected() throws Exception {
+        // Race: cert was diverted to FAILED while waiting for ISSUED — typically because an
+        // operator-driven cancelPendingCertificateOperation transitioned the cert mid-poll.
+        // Caller must reject the operation cleanly rather than time out with systemFailure.
+        UUID certUuid = UUID.randomUUID();
+        Certificate cert = certificateInState(certUuid, CertificateState.FAILED);
+        Mockito.when(certificateService.getCertificateEntity(Mockito.any(SecuredUUID.class)))
+                .thenReturn(cert);
+
+        PollResult result = pollFeature.pollCertificate(
+                new DEROctetString(new byte[]{1}), "01", certUuid.toString(), CertificateState.ISSUED);
+
+        assertThat(result).isInstanceOfSatisfying(PollResult.Diverted.class,
+                d -> assertThat(d.currentState()).isEqualTo(CertificateState.FAILED));
+    }
+
+    @Test
+    void returnsDiverted_whenCertEndsInIssuedButExpectedRevoked() throws Exception {
+        // Equivalent race in the revoke direction: a concurrent cancelPendingCertificateOperation
+        // (cancel-revoke) sets the cert back to ISSUED while this poll waits for REVOKED.
+        UUID certUuid = UUID.randomUUID();
+        Certificate cert = certificateInState(certUuid, CertificateState.ISSUED);
+        Mockito.when(certificateService.getCertificateEntity(Mockito.any(SecuredUUID.class)))
+                .thenReturn(cert);
+
+        PollResult result = pollFeature.pollCertificate(
+                new DEROctetString(new byte[]{1}), "01", certUuid.toString(), CertificateState.REVOKED);
+
+        assertThat(result).isInstanceOfSatisfying(PollResult.Diverted.class,
+                d -> assertThat(d.currentState()).isEqualTo(CertificateState.ISSUED));
     }
 
     @Test
@@ -109,16 +138,13 @@ class PollFeatureTest {
                 .thenThrow(new NotFoundException(Certificate.class, certUuid));
 
         assertThatThrownBy(() -> pollFeature.pollCertificate(
-                new DEROctetString(new byte[]{1}),
-                "01",
-                certUuid.toString(),
-                CertificateState.ISSUED))
+                new DEROctetString(new byte[]{1}), "01", certUuid.toString(), CertificateState.ISSUED))
                 .isInstanceOf(CmpProcessingException.class)
                 .hasCauseInstanceOf(NotFoundException.class);
     }
 
     @Test
-    void throwsCmpProcessingException_whenTimeoutAndNotInExpectedState() throws Exception {
+    void throwsCmpProcessingException_whenTimeoutAndStillTransitional() throws Exception {
         // Cert in REQUESTED state never reaches ISSUED; timeout config is 1s in setUp().
         UUID certUuid = UUID.randomUUID();
         Certificate cert = certificateInState(certUuid, CertificateState.REQUESTED);
@@ -126,12 +152,9 @@ class PollFeatureTest {
                 .thenReturn(cert);
 
         assertThatThrownBy(() -> pollFeature.pollCertificate(
-                new DEROctetString(new byte[]{1}),
-                "01",
-                certUuid.toString(),
-                CertificateState.ISSUED))
+                new DEROctetString(new byte[]{1}), "01", certUuid.toString(), CertificateState.ISSUED))
                 .isInstanceOf(CmpProcessingException.class)
-                .hasMessageContaining("polled certificate is not at valid state");
+                .hasMessageContaining("polling timed out");
     }
 
     private static Certificate certificateInState(UUID uuid, CertificateState state) {

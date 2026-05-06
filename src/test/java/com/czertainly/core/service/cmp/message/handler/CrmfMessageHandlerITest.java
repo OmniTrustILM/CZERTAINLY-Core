@@ -207,7 +207,7 @@ public class CrmfMessageHandlerITest extends BaseSpringBootTest {
 
         // -- issue of certificate is mocked
         given(pollFeature.pollCertificate(any(), any(), any(), any()))
-                .willReturn(issuedCertificate);
+                .willReturn(new PollResult.Reached(issuedCertificate));
 
         PKIMessage response = testedHandler.handle(request,
                 new Mobile3gppProfileContext(cmpProfileSigPrt,
@@ -259,7 +259,7 @@ public class CrmfMessageHandlerITest extends BaseSpringBootTest {
 
         // -- issue of certificate is mocked
         given(pollFeature.pollCertificate(any(), any(), any(), any()))
-                .willReturn(issuedCertificate);
+                .willReturn(new PollResult.Reached(issuedCertificate));
 
         // -- test handling of message
         PKIMessage response = testedHandler.handle(request,
@@ -309,10 +309,10 @@ public class CrmfMessageHandlerITest extends BaseSpringBootTest {
                         trxId, keyPair.getPrivate(), body)
                 .toASN1Structure();
 
-        // Asynchronous-acceptance signal: PollFeature returns null when the cert lands
-        // in PENDING_ISSUE / PENDING_REVOKE.
+        // Asynchronous-acceptance signal: PollFeature returns StillPending when the cert
+        // lands in PENDING_ISSUE / PENDING_REVOKE.
         given(pollFeature.pollCertificate(any(), any(), any(), any()))
-                .willReturn(null);
+                .willReturn(new PollResult.StillPending(CertificateState.PENDING_ISSUE));
 
         PKIMessage response = testedHandler.handle(request,
                 new Mobile3gppProfileContext(cmpProfileSigPrt,

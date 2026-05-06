@@ -207,7 +207,7 @@ public class KurMessageHandlerITest extends BaseSpringBootTest {
 
         // -- issue of certificate is mocked
         given(pollFeature.pollCertificate(any(), any(), any(), any()))
-                .willReturn(issuedCertificate);
+                .willReturn(new PollResult.Reached(issuedCertificate));
 
         // -- test handling of message
         PKIMessage response = testedHandler.handle(request,
@@ -258,7 +258,7 @@ public class KurMessageHandlerITest extends BaseSpringBootTest {
 
         // -- issue of certificate is mocked
         given(pollFeature.pollCertificate(any(), any(), any(), any()))
-                .willReturn(issuedCertificate);
+                .willReturn(new PollResult.Reached(issuedCertificate));
 
         // -- test handling of message
         PKIMessage response = testedHandler.handle(request,
