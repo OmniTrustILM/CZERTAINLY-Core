@@ -116,6 +116,22 @@ class PollFeatureTest {
     }
 
     @Test
+    void returnsDiverted_whenCertEndsInRejectedButExpectedIssued() throws Exception {
+        // Cert was rejected (e.g. by an approver) while the issue request was being polled —
+        // a terminal state that is not ISSUED. Caller must reject cleanly.
+        UUID certUuid = UUID.randomUUID();
+        Certificate cert = certificateInState(certUuid, CertificateState.REJECTED);
+        Mockito.when(certificateService.getCertificateEntity(Mockito.any(SecuredUUID.class)))
+                .thenReturn(cert);
+
+        PollResult result = pollFeature.pollCertificate(
+                new DEROctetString(new byte[]{1}), "01", certUuid.toString(), CertificateState.ISSUED);
+
+        assertThat(result).isInstanceOfSatisfying(PollResult.Diverted.class,
+                d -> assertThat(d.currentState()).isEqualTo(CertificateState.REJECTED));
+    }
+
+    @Test
     void returnsDiverted_whenCertEndsInIssuedButExpectedRevoked() throws Exception {
         // Equivalent race in the revoke direction: a concurrent cancelPendingCertificateOperation
         // (cancel-revoke) sets the cert back to ISSUED while this poll waits for REVOKED.
