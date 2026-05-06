@@ -30,7 +30,6 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
-@Transactional
 public class EventServiceImpl implements EventService {
 
     private ResourceService resourceService;
@@ -55,6 +54,7 @@ public class EventServiceImpl implements EventService {
 
 
     @Override
+    @Transactional
     public PaginationResponseDto<ObjectEventHistoryDto> getEventHistory(Resource resource, UUID uuid, PaginationRequestDto pagination) throws NotFoundException {
         resourceService.evaluateDetailsPermission(resource, uuid);
         Page<TriggerHistory> triggerHistoryPage = triggerHistoryRepository.findByObjectUuidAndObjectResourceOrderByTriggeredAtDesc(uuid, resource, PageRequest.of(pagination.getPageNumber() - 1, pagination.getItemsPerPage()));
@@ -106,6 +106,7 @@ public class EventServiceImpl implements EventService {
     }
 
     @Override
+    @Transactional
     @ExternalAuthorization(resource = Resource.RESOURCE_EVENT, action = ResourceAction.DETAIL)
     public PaginationResponseDto<EventHistoryDto> getEventHistory(ResourceEvent event, Resource resource, UUID uuid, EventHistoryRequestDto request) throws NotFoundException {
         if (uuid == null && resource != null || uuid != null && resource == null) {
