@@ -137,27 +137,7 @@ public class RevocationMessageHandler implements MessageHandler<PKIMessage> {
                 revokeCertificate(tid, revocation, certificate, configuration);
                 PollResult pollResult = pollFeature.pollCertificate(tid,
                         certificate.getSerialNumber(), certificate.getUuid().toString(), CertificateState.REVOKED);
-                if (pollResult instanceof PollResult.StillPending) {
-                    // Authority provider connector accepted the revocation asynchronously (HTTP 202);
-                    // certificate is in PENDING_REVOKE. RFC 4210 §5.2.6 limits the poll-request /
-                    // poll-response loop to ip/cp/kup contexts (issue/renew/rekey), so CMP has no
-                    // in-protocol way to represent a pending revocation. Surface as a per-cert
-                    // rejection rather than a successful revocationNotification on a cert that is
-                    // not yet revoked. Operator confirms or cancels via manuallyConfirmRevoke /
-                    // cancelPendingCertificateOperation on the v2 client API.
-                    throw new CmpProcessingException(tid, PKIFailureInfo.systemFailure,
-                            "SN=" + serialNumber + " | revocation accepted asynchronously by authority "
-                                    + "(certificate is in PENDING_REVOKE); CMP does not support pending "
-                                    + "revocation. Use the platform API to confirm or cancel.");
-                }
-                if (pollResult instanceof PollResult.Diverted diverted) {
-                    // Race: another thread (e.g. operator cancel) transitioned the cert mid-poll
-                    // to a terminal state that is not REVOKED. The revocation is no longer in
-                    // progress; surface that explicitly.
-                    throw new CmpProcessingException(tid, PKIFailureInfo.systemFailure,
-                            "SN=" + serialNumber + " | certificate diverted to " + diverted.currentState()
-                                    + " while waiting for REVOKED — revocation no longer in progress");
-                }
+                rejectIfNotReached(pollResult, tid, serialNumber);
                 cmpTransactionService.save(cmpTransactionService.createTransactionEntity(
                         tid.toString(),
                         configuration.getCmpProfile(),
@@ -171,10 +151,11 @@ public class RevocationMessageHandler implements MessageHandler<PKIMessage> {
                 LOG.trace("TID={}, SN={} | revocations of certificate is done (remaining={})", tid, getSerialNumber(revocation), --revocationCount);
             } catch (Exception e) {
                 LOG.error("TID={}, SN={} | revocation of certificate failed, reason={}", tid, getSerialNumber(revocation), e.getLocalizedMessage(), e);
+                String freeText = e.getMessage() != null ? e.getMessage() : "problem with revocation";
                 revocationResponseBuilder.add(
                         new PKIStatusInfo(
                                 PKIStatus.rejection,
-                                new PKIFreeText("problem with revocation"),
+                                new PKIFreeText(freeText),
                                 new PKIFailureInfo(PKIFailureInfo.systemFailure)),
                         certId
                 );
@@ -193,6 +174,28 @@ public class RevocationMessageHandler implements MessageHandler<PKIMessage> {
         } catch (Exception e) {
             throw new CmpProcessingException(tid, PKIFailureInfo.systemFailure,
                     " problem build revocation response message", e);
+        }
+    }
+
+    /**
+     * If the poll did not reach REVOKED, throw an outcome-specific exception that the
+     * outer per-cert catch turns into a {@code PKIStatus.rejection} entry in the
+     * revocation response. RFC 4210 §5.2.6 limits the poll-request / poll-response loop
+     * to ip/cp/kup, so a pending or diverted revocation cannot be represented in-protocol —
+     * the operator must confirm or cancel via the v2 client API.
+     */
+    private static void rejectIfNotReached(PollResult pollResult, ASN1OctetString tid, String serialNumber)
+            throws CmpProcessingException {
+        if (pollResult instanceof PollResult.StillPending) {
+            throw new CmpProcessingException(tid, PKIFailureInfo.systemFailure,
+                    "SN=" + serialNumber + " | revocation accepted asynchronously by authority "
+                            + "(certificate is in PENDING_REVOKE); CMP does not support pending "
+                            + "revocation. Use the platform API to confirm or cancel.");
+        }
+        if (pollResult instanceof PollResult.Diverted(CertificateState currentState)) {
+            throw new CmpProcessingException(tid, PKIFailureInfo.systemFailure,
+                    "SN=" + serialNumber + " | certificate diverted to " + currentState
+                            + " while waiting for REVOKED — revocation no longer in progress");
         }
     }
 

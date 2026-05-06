@@ -192,9 +192,12 @@ public class PollReqMessageHandler implements MessageHandler<PKIMessage> {
 
     /**
      * Map a CMP request body type (ir / cr / kur) to the matching response body type
-     * (ip / cp / kup). Falls back to {@code TYPE_CERT_REP} for transactions created before
-     * the {@code original_request_body_type} column existed (NULL on legacy rows) — most
-     * CMP v2 clients accept cp as the response for either ir or cr.
+     * (ip / cp / kup). Falls back to {@code TYPE_CERT_REP} in two cases: legacy
+     * transactions whose {@code original_request_body_type} column was NULL (pre-dates
+     * that column), and any unexpected request body type that slipped past the
+     * earlier filter in {@link #handle} — most CMP v2 clients accept cp as the response
+     * for either ir or cr, so this is a safe fallback that avoids emitting an invalid
+     * body type.
      */
     private static int mapRequestBodyTypeToResponseBodyType(Integer originalBodyType) {
         if (originalBodyType == null) {
@@ -204,8 +207,6 @@ public class PollReqMessageHandler implements MessageHandler<PKIMessage> {
             case PKIBody.TYPE_INIT_REQ -> PKIBody.TYPE_INIT_REP;
             case PKIBody.TYPE_CERT_REQ -> PKIBody.TYPE_CERT_REP;
             case PKIBody.TYPE_KEY_UPDATE_REQ -> PKIBody.TYPE_KEY_UPDATE_REP;
-            // Other types (revocation, certConf, etc.) are filtered out earlier in handle();
-            // fall back to cp for any unexpected value to avoid emitting an invalid body type.
             default -> PKIBody.TYPE_CERT_REP;
         };
     }

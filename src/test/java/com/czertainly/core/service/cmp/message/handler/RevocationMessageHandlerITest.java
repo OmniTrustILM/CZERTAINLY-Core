@@ -381,6 +381,52 @@ class RevocationMessageHandlerITest extends BaseSpringBootTest {
         assertEquals(PKIBody.TYPE_REVOCATION_REP, response.getBody().getType());
     }
 
+    /**
+     * The asynchronous-cancel race ivosh raised: PollFeature observes a cert in a terminal
+     * state that is not REVOKED — typically because a concurrent
+     * cancelPendingCertificateOperation transitioned the cert mid-poll. The handler must
+     * surface a per-cert PKIStatus.rejection with the diverted-state context preserved in
+     * the PKIFreeText (not the generic "problem with revocation").
+     */
+    @Test
+    @Transactional
+    void test_handle_revocation_rejectsCleanly_whenPollFeatureReportsDiverted() throws Exception {
+        revokedCertificate.setState(CertificateState.ISSUED);
+        revokedCertificate.setRaProfile(raProfile);
+        revokedCertificate.setRaProfileUuid(raProfile.getUuid());
+        certificateRepository.save(revokedCertificate);
+
+        String trxId = "781";
+        PKIMessage request = CmpTestUtil.createSignatureBasedMessage(
+                        trxId,
+                        CmpTestUtil.generateKeyPairEC().getPrivate(),
+                        CmpTestUtil.createRevocationBody(
+                                x509Certificate.getSerialNumber()))
+                .toASN1Structure();
+
+        given(pollFeature.pollCertificate(any(), any(), any(), any()))
+                .willReturn(new PollResult.Diverted(CertificateState.FAILED));
+
+        PKIMessage response = testedHandler.handle(request,
+                new Mobile3gppProfileContext(cmpProfileSigPrt,
+                        raProfile,
+                        request,
+                        certificateKeyService,
+                        null,
+                        null));
+
+        assertNotNull(response);
+        assertEquals(PKIBody.TYPE_REVOCATION_REP, response.getBody().getType());
+        RevRepContent body = (RevRepContent) response.getBody().getContent();
+        assertEquals(2, body.getStatus()[0].getStatus().intValueExact(),
+                "expected pkiStatus=rejection when PollFeature reports Diverted");
+        // Diverted message survives into the PKIFreeText — no longer collapsed to the
+        // generic "problem with revocation" placeholder.
+        String freeText = body.getStatus()[0].getStatusString().getStringAtUTF8(0).getString();
+        assertTrue(freeText.contains("diverted") || freeText.contains("FAILED"),
+                "expected PKIFreeText to mention the diverted state, got: " + freeText);
+    }
+
     // ----------------------------------------------------------------------------------------------------------
     // HELPER METHODS
     // ----------------------------------------------------------------------------------------------------------

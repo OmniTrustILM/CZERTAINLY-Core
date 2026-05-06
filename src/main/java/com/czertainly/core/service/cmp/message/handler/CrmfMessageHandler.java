@@ -202,9 +202,9 @@ public class CrmfMessageHandler implements MessageHandler<PKIMessage> {
         if (pollResult instanceof PollResult.StillPending) {
             return handleAsynchronousAcceptance(tid, request, configuration, msgBodyType, requestedCert, crmf);
         }
-        if (pollResult instanceof PollResult.Diverted diverted) {
+        if (pollResult instanceof PollResult.Diverted(CertificateState currentState)) {
             throw new CmpCrmfValidationException(tid, bodyType, PKIFailureInfo.systemFailure,
-                    "certificate diverted to " + diverted.currentState()
+                    "certificate diverted to " + currentState
                             + " while waiting for ISSUED — operation no longer in progress");
         }
         Certificate polledCert = ((PollResult.Reached) pollResult).certificate();

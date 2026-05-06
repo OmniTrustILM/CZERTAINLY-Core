@@ -3,6 +3,7 @@ package com.czertainly.core.service.cmp.message.handler;
 import com.czertainly.api.model.client.connector.v2.ConnectorVersion;
 import com.czertainly.api.model.common.enums.cryptography.KeyAlgorithm;
 import com.czertainly.api.model.common.enums.cryptography.KeyType;
+import com.czertainly.api.interfaces.core.cmp.error.CmpCrmfValidationException;
 import com.czertainly.api.model.core.certificate.CertificateState;
 import com.czertainly.api.model.core.cmp.CmpTransactionState;
 import com.czertainly.api.model.core.connector.ConnectorStatus;
@@ -328,6 +329,36 @@ public class CrmfMessageHandlerITest extends BaseSpringBootTest {
         assertEquals(new DEROctetString(trxId.getBytes()).toString(),
                 response.getHeader().getTransactionID().toString());
         assertInstanceOf(PollRepContent.class, response.getBody().getContent());
+    }
+
+    /**
+     * Asynchronous-cancel race: while the handler waits for ISSUED, a concurrent
+     * cancelPendingCertificateOperation transitions the cert to FAILED. PollFeature reports
+     * Diverted; the handler must surface a clean CmpCrmfValidationException naming the
+     * diverted state, not time out with a generic systemFailure.
+     */
+    @Test
+    public void test_handle_ir_throwsValidation_whenPollFeatureReportsDiverted() throws Exception {
+        String trxId = "781";
+        KeyPair keyPair = CmpTestUtil.generateKeyPairEC();
+        PKIBody body = CmpTestUtil.createCrmfBody(keyPair, 11223344L);
+        PKIMessage request = CmpTestUtil.createSignatureBasedMessage(
+                        trxId, keyPair.getPrivate(), body)
+                .toASN1Structure();
+
+        given(pollFeature.pollCertificate(any(), any(), any(), any()))
+                .willReturn(new PollResult.Diverted(CertificateState.FAILED));
+
+        CmpCrmfValidationException ex = assertThrows(CmpCrmfValidationException.class, () ->
+                testedHandler.handle(request,
+                        new Mobile3gppProfileContext(cmpProfileSigPrt,
+                                raProfile,
+                                request,
+                                certificateKeyService,
+                                null,
+                                null)));
+        assertTrue(ex.getMessage().contains("diverted") && ex.getMessage().contains("FAILED"),
+                "expected CmpCrmfValidationException naming the diverted state, got: " + ex.getMessage());
     }
 
     // ----------------------------------------------------------------------------------------------------------

@@ -919,16 +919,18 @@ public class ClientOperationServiceImpl implements ClientOperationService {
         if (certificate.getState() != CertificateState.ISSUED && certificate.getState() != CertificateState.PENDING_APPROVAL) {
             throw new ValidationException(ValidationError.create(String.format("Cannot issue requested certificate in state %s. Certificate: %s", certificate.getState().getLabel(), certificate)));
         }
-        // Capture the entry state so the catch below can restore it. The entry guard above
-        // accepts both ISSUED and PENDING_APPROVAL; previously the catch unconditionally
-        // reset to ISSUED, silently flipping a PENDING_APPROVAL cert to ISSUED on a connector
-        // failure even though that cert had never reached ISSUED.
         final CertificateState entryState = certificate.getState();
 
         RaProfile raProfile = certificate.getRaProfile();
 
         logger.debug("Revoking Certificate: {}", certificate);
 
+        // Once the connector returns a non-error status, the upstream operation is in flight
+        // (200 = revoked, 202 = will revoke asynchronously). A failure in any subsequent local
+        // step (entity save, attribute persistence, event history) MUST NOT roll back the cert
+        // to its entry state — doing so would leave the platform DB out of sync with an authority
+        // that has already accepted (or completed) the revocation.
+        boolean connectorAccepted = false;
         try {
             CertRevocationDto caRequest = new CertRevocationDto();
             caRequest.setReason(request.getReason());
@@ -944,12 +946,9 @@ public class ClientOperationServiceImpl implements ClientOperationService {
                     connectorDto,
                     raProfile.getAuthorityInstanceReference().getAuthorityInstanceUuid(),
                     caRequest);
+            connectorAccepted = true;
 
             if (revokeResponse.getStatusCode().value() == 202) {
-                // The connector accepted the revocation but completion is asynchronous; the
-                // certificate moves to PENDING_REVOKE. Preserve revoke parameters so the operation
-                // can be finalized later (key destruction happens at finalization, not here).
-                // Body is empty for revoke regardless of status — only the status is meaningful.
                 transitionToPendingRevoke(certificate, request);
                 return;
             }
@@ -960,9 +959,22 @@ public class ClientOperationServiceImpl implements ClientOperationService {
             attributeEngine.updateObjectDataAttributesContent(ObjectAttributeContentInfo.builder(Resource.CERTIFICATE, certificate.getUuid()).connector(raProfile.getAuthorityInstanceReference().getConnectorUuid()).operation(AttributeOperation.CERTIFICATE_REVOKE).build(), request.getAttributes());
             certificateEventHistoryService.addEventHistory(certificate.getUuid(), CertificateEvent.REVOKE, CertificateEventStatus.SUCCESS, "Certificate revoked. Reason: " + caRequest.getReason().getLabel(), "");
         } catch (Exception e) {
+            if (connectorAccepted) {
+                // Connector accepted the operation (200/202) but a subsequent local step failed.
+                // Leave the cert state as-is — the upstream is committed and rolling back here
+                // would create state divergence between the platform and the authority. Surface
+                // the local failure but do not mask the upstream success.
+                String msg = "Connector accepted revoke but local state update failed: " + e.getMessage();
+                certificateEventHistoryService.addEventHistory(certificate.getUuid(), CertificateEvent.REVOKE,
+                        CertificateEventStatus.FAILED, msg, "");
+                logger.error("Local state update failed after connector accepted revoke for cert {}: {}",
+                        certificate.getUuid(), e.getMessage(), e);
+                throw new CertificateOperationException(msg);
+            }
+            // Connector itself failed — restore the entry state so a PENDING_APPROVAL cert
+            // doesn't get silently flipped to ISSUED.
             certificate.setState(entryState);
             certificateRepository.save(certificate);
-
             certificateEventHistoryService.addEventHistory(certificate.getUuid(), CertificateEvent.REVOKE, CertificateEventStatus.FAILED, e.getMessage(), "");
             logger.error("Failed to revoke Certificate: {}", e.getMessage());
             throw new CertificateOperationException("Failed to revoke certificate: " + e.getMessage());
