@@ -33,15 +33,18 @@ public class CacheConfig {
         CaffeineCacheManager mgr = new CaffeineCacheManager(SIGNING_PROFILES_CACHE, TSP_PROFILES_CACHE, CERTIFICATE_CHAIN_CACHE, SYSTEM_USER_AUTH_CACHE, USER_UUID_AUTH_CACHE, FORMATTER_CONNECTOR_CACHE, CRYPTOGRAPHIC_KEY_ITEM_CACHE);
         mgr.setCaffeine(Caffeine.newBuilder()
                 .expireAfterWrite(cacheProperties.ttlMinutes(), TimeUnit.MINUTES)
-                .maximumSize(cacheProperties.maxSize()));
+                .maximumSize(cacheProperties.maxSize())
+                .recordStats());
         mgr.registerCustomCache(CERTIFICATE_AUTH_CACHE, Caffeine.newBuilder()
                 .expireAfterWrite(cacheProperties.ttlMinutes(), TimeUnit.MINUTES)
                 .maximumSize(cacheProperties.maxSize())
+                .recordStats()
                 .removalListener(userCertificateIndex)
                 .build());
         mgr.registerCustomCache(TOKEN_AUTH_CACHE, Caffeine.newBuilder()
                 .expireAfterWrite(cacheProperties.ttlMinutes(), TimeUnit.MINUTES)
                 .maximumSize(cacheProperties.maxSize())
+                .recordStats()
                 .removalListener(tokenJtiIndex)
                 .build());
         return mgr;
