@@ -29,15 +29,19 @@ public interface TriggerHistoryRepository extends SecurityFilterRepository<Trigg
     @EntityGraph(attributePaths = {"records", "triggerAssociation", "records.execution", "records.execution.items", "records.execution.items.notificationProfile"})
     Page<TriggerHistory> findByObjectUuidAndTriggerResourceOrderByTriggeredAtDesc(UUID objectUuid, Resource resource, Pageable pageable);
 
-    @Query("SELECT DISTINCT t.objectUuid FROM TriggerHistory t WHERE t.eventHistoryUuid = :uuid")
+    @Query(value = "SELECT DISTINCT t.objectUuid FROM TriggerHistory t WHERE t.eventHistoryUuid = :uuid",
+           countQuery = "SELECT COUNT(DISTINCT t.objectUuid) FROM TriggerHistory t WHERE t.eventHistoryUuid = :uuid")
     Page<UUID> findDistinctObjectUuidsByEventHistoryUuid(@Param("uuid") UUID uuid, Pageable pageable);
 
     List<TriggerHistory> findByEventHistoryUuidAndObjectUuidInOrderByObjectUuidAscTriggeredAtDesc(UUID eventHistoryUuid, List<UUID> objectUuids);
 
-    int countDistinctObjectUuidByEventHistoryUuid(UUID triggerHistoryUuid);
+    @Query("SELECT COUNT(DISTINCT t.objectUuid) FROM TriggerHistory t WHERE t.eventHistoryUuid = :uuid")
+    int countDistinctObjectUuidByEventHistoryUuid(@Param("uuid") UUID uuid);
 
-    int countDistinctObjectUuidByEventHistoryUuidAndConditionsMatchedTrue(UUID triggerHistoryUuid);
+    @Query("SELECT COUNT(DISTINCT t.objectUuid) FROM TriggerHistory t WHERE t.eventHistoryUuid = :uuid AND t.conditionsMatched = true")
+    int countDistinctObjectUuidByEventHistoryUuidAndConditionsMatchedTrue(@Param("uuid") UUID uuid);
 
-    int countDistinctObjectUuidByEventHistoryUuidAndConditionsMatchedTrueAndTriggerIgnoreTriggerTrue(UUID triggerHistoryUuid);
+    @Query("SELECT COUNT(DISTINCT t.objectUuid) FROM TriggerHistory t WHERE t.eventHistoryUuid = :uuid AND t.conditionsMatched = true AND t.trigger.ignoreTrigger = true")
+    int countDistinctObjectUuidByEventHistoryUuidAndConditionsMatchedTrueAndTriggerIgnoreTriggerTrue(@Param("uuid") UUID uuid);
 
 }
