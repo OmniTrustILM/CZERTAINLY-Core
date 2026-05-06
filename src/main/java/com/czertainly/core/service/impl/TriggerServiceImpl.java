@@ -350,7 +350,7 @@ public class TriggerServiceImpl implements TriggerService {
     }
 
     @Override
-    public TriggerHistory createTriggerHistory(UUID triggerUuid, TriggerAssociation triggerAssociation, UUID objectUuid, UUID referenceObjectUuid, UUID eventHistoryUuid, Resource objectResource) {
+    public TriggerHistory createTriggerHistory(UUID triggerUuid, TriggerAssociation triggerAssociation, UUID objectUuid, UUID referenceObjectUuid, EventHistory eventHistory, Resource objectResource) {
         TriggerHistory triggerHistory = new TriggerHistory();
         triggerHistory.setTriggerUuid(triggerUuid);
         if (triggerAssociation != null) {
@@ -361,7 +361,10 @@ public class TriggerServiceImpl implements TriggerService {
         triggerHistory.setObjectUuid(objectUuid);
         triggerHistory.setReferenceObjectUuid(referenceObjectUuid);
         triggerHistory.setTriggeredAt(OffsetDateTime.now());
-        triggerHistory.setEventHistoryUuid(eventHistoryUuid);
+        if (eventHistory != null) {
+            triggerHistory.setEventHistoryUuid(eventHistory.getUuid());
+            triggerHistory.setEventHistory(eventHistory);
+        }
         triggerHistory.setObjectResource(objectResource);
 
         try {

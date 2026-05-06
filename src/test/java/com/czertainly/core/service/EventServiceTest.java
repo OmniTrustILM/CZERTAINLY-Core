@@ -64,7 +64,7 @@ class EventServiceTest extends BaseSpringBootTest {
     // UUID of the certificate created in setUp — used as both EventHistory.resourceUuid
     // and the object UUID in trigger histories for object-level tests
     private UUID certificateUuid;
-    private UUID eventHistoryUuid;
+    private EventHistory savedEventHistory;
 
     @BeforeEach
     void setUp() throws AlreadyExistException, NotFoundException {
@@ -122,7 +122,7 @@ class EventServiceTest extends BaseSpringBootTest {
         eventHistory.setStartedAt(OffsetDateTime.now().minusMinutes(2));
         eventHistory.setFinishedAt(OffsetDateTime.now().minusMinutes(1));
         eventHistory.setStatus(EventStatus.FINISHED);
-        eventHistoryUuid = eventHistoryRepository.save(eventHistory).getUuid();
+        savedEventHistory = eventHistoryRepository.save(eventHistory);
     }
 
     // ── getEventHistory(Resource, UUID, PaginationRequestDto) ─────────────────
@@ -140,7 +140,7 @@ class EventServiceTest extends BaseSpringBootTest {
 
     @Test
     void testGetObjectEventHistoryReturnsTriggerHistory() throws NotFoundException {
-        TriggerHistory th = saveTriggerHistory(triggerWithNotificationUuid, certificateUuid, eventHistoryUuid, true, true);
+        TriggerHistory th = saveTriggerHistory(triggerWithNotificationUuid, certificateUuid, savedEventHistory, true, true);
 
         PaginationResponseDto<ObjectEventHistoryDto> response =
                 eventService.getEventHistory(Resource.CERTIFICATE, certificateUuid, pagination(10, 1));
@@ -155,9 +155,9 @@ class EventServiceTest extends BaseSpringBootTest {
 
     @Test
     void testGetObjectEventHistoryPagination() throws NotFoundException {
-        saveTriggerHistory(triggerWithNotificationUuid, certificateUuid, eventHistoryUuid, true, true);
-        saveTriggerHistory(triggerWithNotificationUuid, certificateUuid, eventHistoryUuid, false, false);
-        saveTriggerHistory(ignoreTriggerUuid, certificateUuid, eventHistoryUuid, true, false);
+        saveTriggerHistory(triggerWithNotificationUuid, certificateUuid, savedEventHistory, true, true);
+        saveTriggerHistory(triggerWithNotificationUuid, certificateUuid, savedEventHistory, false, false);
+        saveTriggerHistory(ignoreTriggerUuid, certificateUuid, savedEventHistory, true, false);
 
         PaginationResponseDto<ObjectEventHistoryDto> page1 =
                 eventService.getEventHistory(Resource.CERTIFICATE, certificateUuid, pagination(2, 1));
@@ -173,7 +173,7 @@ class EventServiceTest extends BaseSpringBootTest {
     @Test
     void testGetObjectEventHistoryNotificationsSentTrue() throws NotFoundException {
         // conditionsMatched=true and no failed SEND_NOTIFICATION records → notificationsSent=true
-        saveTriggerHistory(triggerWithNotificationUuid, certificateUuid, eventHistoryUuid, true, true);
+        saveTriggerHistory(triggerWithNotificationUuid, certificateUuid, savedEventHistory, true, true);
 
         PaginationResponseDto<ObjectEventHistoryDto> response =
                 eventService.getEventHistory(Resource.CERTIFICATE, certificateUuid, pagination(10, 1));
@@ -184,7 +184,7 @@ class EventServiceTest extends BaseSpringBootTest {
     @Test
     void testGetObjectEventHistoryNotificationsSentFalseWhenConditionsNotMatched() throws NotFoundException {
         // conditionsMatched=false → notificationsSent=false
-        saveTriggerHistory(triggerWithNotificationUuid, certificateUuid, eventHistoryUuid, false, false);
+        saveTriggerHistory(triggerWithNotificationUuid, certificateUuid, savedEventHistory, false, false);
 
         PaginationResponseDto<ObjectEventHistoryDto> response =
                 eventService.getEventHistory(Resource.CERTIFICATE, certificateUuid, pagination(10, 1));
@@ -195,7 +195,7 @@ class EventServiceTest extends BaseSpringBootTest {
     @Test
     void testGetObjectEventHistoryNotificationsSentNullWhenNoNotificationExecution() throws NotFoundException {
         // ignore trigger has no SEND_NOTIFICATION execution → notificationsSent=null
-        saveTriggerHistory(ignoreTriggerUuid, certificateUuid, eventHistoryUuid, true, false);
+        saveTriggerHistory(ignoreTriggerUuid, certificateUuid, savedEventHistory, true, false);
 
         PaginationResponseDto<ObjectEventHistoryDto> response =
                 eventService.getEventHistory(Resource.CERTIFICATE, certificateUuid, pagination(10, 1));
@@ -235,7 +235,7 @@ class EventServiceTest extends BaseSpringBootTest {
 
     @Test
     void testGetEventHistoryReturnsCorrectEventData() throws NotFoundException {
-        saveTriggerHistory(triggerWithNotificationUuid, UUID.randomUUID(), eventHistoryUuid, true, true);
+        saveTriggerHistory(triggerWithNotificationUuid, UUID.randomUUID(), savedEventHistory, true, true);
 
         PaginationResponseDto<EventHistoryDto> response = eventService.getEventHistory(
                 ResourceEvent.CERTIFICATE_DISCOVERED, Resource.CERTIFICATE, certificateUuid, eventHistoryRequest());
@@ -250,11 +250,11 @@ class EventServiceTest extends BaseSpringBootTest {
     @Test
     void testGetEventHistoryObjectCounts() throws NotFoundException {
         // cert1: conditions matched by regular trigger
-        saveTriggerHistory(triggerWithNotificationUuid, UUID.randomUUID(), eventHistoryUuid, true, true);
+        saveTriggerHistory(triggerWithNotificationUuid, UUID.randomUUID(), savedEventHistory, true, true);
         // cert2: conditions not matched
-        saveTriggerHistory(triggerWithNotificationUuid, UUID.randomUUID(), eventHistoryUuid, false, false);
+        saveTriggerHistory(triggerWithNotificationUuid, UUID.randomUUID(), savedEventHistory, false, false);
         // cert3: matched by ignore trigger
-        saveTriggerHistory(ignoreTriggerUuid, UUID.randomUUID(), eventHistoryUuid, true, false);
+        saveTriggerHistory(ignoreTriggerUuid, UUID.randomUUID(), savedEventHistory, true, false);
 
         PaginationResponseDto<EventHistoryDto> response = eventService.getEventHistory(
                 ResourceEvent.CERTIFICATE_DISCOVERED, Resource.CERTIFICATE, certificateUuid, eventHistoryRequest());
@@ -267,8 +267,8 @@ class EventServiceTest extends BaseSpringBootTest {
 
     @Test
     void testGetEventHistoryNestedObjectHistories() throws NotFoundException {
-        saveTriggerHistory(triggerWithNotificationUuid, UUID.randomUUID(), eventHistoryUuid, true, true);
-        saveTriggerHistory(triggerWithNotificationUuid, UUID.randomUUID(), eventHistoryUuid, false, false);
+        saveTriggerHistory(triggerWithNotificationUuid, UUID.randomUUID(), savedEventHistory, true, true);
+        saveTriggerHistory(triggerWithNotificationUuid, UUID.randomUUID(), savedEventHistory, false, false);
 
         PaginationResponseDto<EventHistoryDto> response = eventService.getEventHistory(
                 ResourceEvent.CERTIFICATE_DISCOVERED, Resource.CERTIFICATE, certificateUuid, eventHistoryRequest());
@@ -315,9 +315,9 @@ class EventServiceTest extends BaseSpringBootTest {
         return certificateRepository.save(certificate).getUuid();
     }
 
-    private TriggerHistory saveTriggerHistory(UUID triggerUuid, UUID objectUuid, UUID eventHistoryUuid,
+    private TriggerHistory saveTriggerHistory(UUID triggerUuid, UUID objectUuid, EventHistory eventHistory,
                                                boolean conditionsMatched, boolean actionsPerformed) {
-        TriggerHistory th = triggerService.createTriggerHistory(triggerUuid, null, objectUuid, null, eventHistoryUuid, Resource.CERTIFICATE);
+        TriggerHistory th = triggerService.createTriggerHistory(triggerUuid, null, objectUuid, null, eventHistory, Resource.CERTIFICATE);
         th.setEvent(ResourceEvent.CERTIFICATE_DISCOVERED);
         th.setConditionsMatched(conditionsMatched);
         th.setActionsPerformed(actionsPerformed);

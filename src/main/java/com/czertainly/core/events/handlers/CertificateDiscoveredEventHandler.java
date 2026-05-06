@@ -236,6 +236,10 @@ public class CertificateDiscoveredEventHandler extends EventHandler<Certificate>
 
     private void processDiscoveredCertificate(EventContext<Certificate> eventContext, List<TriggerAssociation> mergedIgnoreTriggers, List<TriggerAssociation> mergedTriggers, int certIndex, int totalCount, DiscoveryHistory discovery, DiscoveryCertificate discoveryCertificate, ConcurrentMap<PublicKey, List<UUID>> keysToCertificatesMap,
                                               ConcurrentMap<PublicKey, List<UUID>> altKeysToCertificatesMap, UUID discoveryEventHistoryUuid, UUID platformEventHistoryUuid) {
+        // Resolve EventHistory entities within this transaction so Hibernate tracks them correctly
+        EventHistory discoveryEventHistory = eventHistoryRepository.getReferenceById(discoveryEventHistoryUuid);
+        EventHistory platformEventHistory = eventHistoryRepository.getReferenceById(platformEventHistoryUuid);
+
         // Get X509 from discovered certificate and create certificate entity, do not save in database yet
         Certificate certificate;
         X509Certificate x509Cert;
@@ -256,8 +260,8 @@ public class CertificateDiscoveredEventHandler extends EventHandler<Certificate>
             boolean isIgnored = false;
             for (TriggerAssociation triggerAssociation : mergedIgnoreTriggers) {
                 Trigger trigger = triggerAssociation.getTrigger();
-                UUID eventUuid = triggerAssociation.getResource() == null ? platformEventHistoryUuid : discoveryEventHistoryUuid;
-                TriggerHistory triggerHistory = eventContext.getTriggerEvaluator().evaluateTrigger(trigger, triggerAssociation, certificate, discoveryCertificate.getUuid(), null, eventUuid);
+                EventHistory eventHistory = triggerAssociation.getResource() == null ? platformEventHistory : discoveryEventHistory;
+                TriggerHistory triggerHistory = eventContext.getTriggerEvaluator().evaluateTrigger(trigger, triggerAssociation, certificate, discoveryCertificate.getUuid(), null, eventHistory);
                 triggerHistories.add(triggerHistory);
                 if (triggerHistory.isActionsPerformed()) {
                     isIgnored = true;
@@ -285,8 +289,8 @@ public class CertificateDiscoveredEventHandler extends EventHandler<Certificate>
                 for (TriggerAssociation triggerAssociation : mergedTriggers) {
                     // Create trigger history entry
                     Trigger trigger = triggerAssociation.getTrigger();
-                    UUID eventUuid = triggerAssociation.getResource() == null ? platformEventHistoryUuid : discoveryEventHistoryUuid;
-                    eventContext.getTriggerEvaluator().evaluateTrigger(trigger, triggerAssociation, certificate, discoveryCertificate.getUuid(), eventData, eventUuid);
+                    EventHistory eventHistory = triggerAssociation.getResource() == null ? platformEventHistory : discoveryEventHistory;
+                    eventContext.getTriggerEvaluator().evaluateTrigger(trigger, triggerAssociation, certificate, discoveryCertificate.getUuid(), eventData, eventHistory);
                 }
 
                 certificateHandler.updateDiscoveredCertificate(discovery, certificate, discoveryCertificate.getMeta());

@@ -181,7 +181,7 @@ public abstract class EventHandler<T extends UniquelyIdentifiedObject> implement
                 handleUser(context, triggerAssociation.getTriggeredBy());
                 Trigger trigger = triggerAssociation.getTrigger();
                 try {
-                    TriggerHistory triggerHistory = context.getTriggerEvaluator().evaluateTrigger(trigger, triggerAssociation, resourceObject, null, eventData, eventHistory.getUuid());
+                    TriggerHistory triggerHistory = context.getTriggerEvaluator().evaluateTrigger(trigger, triggerAssociation, resourceObject, null, eventData, eventHistory);
                     if (triggerHistory.isActionsPerformed()) {
                         isIgnored = true;
                     }
@@ -204,7 +204,7 @@ public abstract class EventHandler<T extends UniquelyIdentifiedObject> implement
                 handleUser(context, triggerAssociation.getTriggeredBy());
                 Trigger trigger = triggerAssociation.getTrigger();
                 try {
-                    context.getTriggerEvaluator().evaluateTrigger(trigger, triggerAssociation, resourceObject, null, eventData, eventHistory.getUuid());
+                    context.getTriggerEvaluator().evaluateTrigger(trigger, triggerAssociation, resourceObject, null, eventData, eventHistory);
                     logger.debug("Trigger '{}' on {} object {} processed successfully", trigger.getName(), context.getResource().getLabel(), resourceObject.getUuid());
                 } catch (Exception e) {
                     logger.error("Unable to process trigger '{}' on {} object {}. Message: {}", trigger.getName(), context.getResource().getLabel(), resourceObject.getUuid(), e.getMessage());
