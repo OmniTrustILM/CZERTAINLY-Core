@@ -2088,14 +2088,11 @@ class ClientOperationServiceV2Test extends BaseSpringBootTest {
         req.setCertificate("dGVzdA==");
         req.setCustomAttributes(List.of());
 
-        UUID strangerAuthority = UUID.randomUUID();
-
+        SecuredParentUUID strangerSecured = SecuredParentUUID.fromUUID(UUID.randomUUID());
+        SecuredUUID raProfileSecured = raProfile.getSecuredUuid();
+        String certUuid = certificate.getUuid().toString();
         ValidationException ex = Assertions.assertThrows(ValidationException.class, () ->
-                clientOperationService.manuallyIssueCertificate(
-                        SecuredParentUUID.fromUUID(strangerAuthority),
-                        raProfile.getSecuredUuid(),
-                        certificate.getUuid().toString(),
-                        req));
+                clientOperationService.manuallyIssueCertificate(strangerSecured, raProfileSecured, certUuid, req));
         Assertions.assertTrue(ex.getMessage().contains("authority is different"),
                 "expected authority binding rejection, got: " + ex.getMessage());
     }
@@ -2107,13 +2104,11 @@ class ClientOperationServiceV2Test extends BaseSpringBootTest {
         certificate.setPendingRevokeAttributes(List.of());
         certificateRepository.save(certificate);
 
-        UUID strangerAuthority = UUID.randomUUID();
-
+        SecuredParentUUID strangerSecured = SecuredParentUUID.fromUUID(UUID.randomUUID());
+        SecuredUUID raProfileSecured = raProfile.getSecuredUuid();
+        String certUuid = certificate.getUuid().toString();
         ValidationException ex = Assertions.assertThrows(ValidationException.class, () ->
-                clientOperationService.manuallyConfirmRevoke(
-                        SecuredParentUUID.fromUUID(strangerAuthority),
-                        raProfile.getSecuredUuid(),
-                        certificate.getUuid().toString()));
+                clientOperationService.manuallyConfirmRevoke(strangerSecured, raProfileSecured, certUuid));
         Assertions.assertTrue(ex.getMessage().contains("authority is different"),
                 "expected authority binding rejection, got: " + ex.getMessage());
     }
@@ -2123,52 +2118,47 @@ class ClientOperationServiceV2Test extends BaseSpringBootTest {
         certificate.setState(CertificateState.PENDING_ISSUE);
         certificateRepository.save(certificate);
 
-        UUID strangerAuthority = UUID.randomUUID();
+        SecuredParentUUID strangerSecured = SecuredParentUUID.fromUUID(UUID.randomUUID());
+        SecuredUUID raProfileSecured = raProfile.getSecuredUuid();
+        String certUuid = certificate.getUuid().toString();
         CancelPendingCertificateRequestDto req = new CancelPendingCertificateRequestDto();
 
         ValidationException ex = Assertions.assertThrows(ValidationException.class, () ->
-                clientOperationService.cancelPendingCertificateOperation(
-                        SecuredParentUUID.fromUUID(strangerAuthority),
-                        raProfile.getSecuredUuid(),
-                        certificate.getUuid().toString(), req));
+                clientOperationService.cancelPendingCertificateOperation(strangerSecured, raProfileSecured, certUuid, req));
         Assertions.assertTrue(ex.getMessage().contains("authority is different"),
                 "expected authority binding rejection, got: " + ex.getMessage());
     }
 
     @Test
     void manuallyIssueCertificate_throwsNotFound_whenCertificateMissing() {
-        UUID missing = UUID.randomUUID();
+        SecuredParentUUID authority = SecuredParentUUID.fromUUID(authorityInstanceReference.getUuid());
+        SecuredUUID raProfileSecured = raProfile.getSecuredUuid();
+        String missingId = UUID.randomUUID().toString();
         UploadCertificateRequestDto req = new UploadCertificateRequestDto();
         req.setCertificate("dGVzdA==");
 
         Assertions.assertThrows(NotFoundException.class, () ->
-                clientOperationService.manuallyIssueCertificate(
-                        SecuredParentUUID.fromUUID(authorityInstanceReference.getUuid()),
-                        raProfile.getSecuredUuid(),
-                        missing.toString(),
-                        req));
+                clientOperationService.manuallyIssueCertificate(authority, raProfileSecured, missingId, req));
     }
 
     @Test
     void manuallyConfirmRevoke_throwsNotFound_whenCertificateMissing() {
-        UUID missing = UUID.randomUUID();
+        SecuredParentUUID authority = SecuredParentUUID.fromUUID(authorityInstanceReference.getUuid());
+        SecuredUUID raProfileSecured = raProfile.getSecuredUuid();
+        String missingId = UUID.randomUUID().toString();
 
         Assertions.assertThrows(NotFoundException.class, () ->
-                clientOperationService.manuallyConfirmRevoke(
-                        SecuredParentUUID.fromUUID(authorityInstanceReference.getUuid()),
-                        raProfile.getSecuredUuid(),
-                        missing.toString()));
+                clientOperationService.manuallyConfirmRevoke(authority, raProfileSecured, missingId));
     }
 
     @Test
     void cancelPendingCertificateOperation_throwsNotFound_whenCertificateMissing() {
-        UUID missing = UUID.randomUUID();
+        SecuredParentUUID authority = SecuredParentUUID.fromUUID(authorityInstanceReference.getUuid());
+        SecuredUUID raProfileSecured = raProfile.getSecuredUuid();
+        String missingId = UUID.randomUUID().toString();
         CancelPendingCertificateRequestDto req = new CancelPendingCertificateRequestDto();
 
         Assertions.assertThrows(NotFoundException.class, () ->
-                clientOperationService.cancelPendingCertificateOperation(
-                        SecuredParentUUID.fromUUID(authorityInstanceReference.getUuid()),
-                        raProfile.getSecuredUuid(),
-                        missing.toString(), req));
+                clientOperationService.cancelPendingCertificateOperation(authority, raProfileSecured, missingId, req));
     }
 }

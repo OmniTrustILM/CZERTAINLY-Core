@@ -724,11 +724,11 @@ class LocationServiceTest extends BaseSpringBootTest {
         PushToLocationRequestDto request = new PushToLocationRequestDto();
         request.setAttributes(List.of());
 
+        SecuredParentUUID entityParent = entityInstanceReference.getSecuredParentUuid();
+        SecuredUUID locationSecured = location.getSecuredUuid();
+        String certUuid = certificateWithoutLocation.getUuid().toString();
         ValidationException ex = Assertions.assertThrows(ValidationException.class, () ->
-                locationService.pushCertificateToLocation(
-                        entityInstanceReference.getSecuredParentUuid(),
-                        location.getSecuredUuid(),
-                        certificateWithoutLocation.getUuid().toString(), request));
+                locationService.pushCertificateToLocation(entityParent, locationSecured, certUuid, request));
         Assertions.assertTrue(ex.getMessage().toLowerCase().contains("cannot push"),
                 "expected error mentioning push rejection, got: " + ex.getMessage());
     }
@@ -741,11 +741,11 @@ class LocationServiceTest extends BaseSpringBootTest {
         PushToLocationRequestDto request = new PushToLocationRequestDto();
         request.setAttributes(List.of());
 
+        SecuredParentUUID entityParent = entityInstanceReference.getSecuredParentUuid();
+        SecuredUUID locationSecured = location.getSecuredUuid();
+        String certUuid = certificateWithoutLocation.getUuid().toString();
         ValidationException ex = Assertions.assertThrows(ValidationException.class, () ->
-                locationService.pushCertificateToLocation(
-                        entityInstanceReference.getSecuredParentUuid(),
-                        location.getSecuredUuid(),
-                        certificateWithoutLocation.getUuid().toString(), request));
+                locationService.pushCertificateToLocation(entityParent, locationSecured, certUuid, request));
         Assertions.assertTrue(ex.getMessage().toLowerCase().contains("cannot push"),
                 "expected error mentioning push rejection, got: " + ex.getMessage());
     }

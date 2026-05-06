@@ -174,11 +174,13 @@ class ScepServiceImplPollUnitTest {
         assertThat(failInfoText(response)).contains("failed");
     }
 
+    /**
+     * The catch-Exception block must not propagate — the client keeps polling and the
+     * response object reflects whatever was set before the failure. Forced here by making
+     * the repository throw on lookup.
+     */
     @Test
     void pollCertificate_swallowsAndLogsExceptions_returningPartiallyPopulatedResponse() {
-        // The catch (Exception e) block must not propagate — the client keeps polling and
-        // the response object reflects whatever was set before the failure. Forced here by
-        // making the repository throw on lookup.
         ScepRequest scepRequest = mockScepRequest("tx-9");
         Mockito.when(transactionRepository.findByTransactionId("tx-9"))
                 .thenThrow(new RuntimeException("simulated repository failure"));

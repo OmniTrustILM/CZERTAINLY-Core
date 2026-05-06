@@ -99,7 +99,7 @@ public class CertConfirmMessageHandlerTest {
     }
 
     @Test
-    public void test_handleOk() throws Exception {
+    void test_handleOk() throws Exception {
         // -- WHEN --
         String trxId = "999";
         PKIBody body = CmpTestUtil.createCertConfBody(x509certificate, serialNumber);
@@ -152,7 +152,7 @@ public class CertConfirmMessageHandlerTest {
     }
 
     @Test
-    public void test_handleRelatedCertificateFingerprintMismatch() throws Exception {
+    void test_handleRelatedCertificateFingerprintMismatch() throws Exception {
         // The handler finds a transaction but the cert's fingerprint does not match the
         // one in the certConf body — so confirmation fails with badCertId/CMPHANCERTCONF002.
         String expectedTrxId = "999";
@@ -186,7 +186,7 @@ public class CertConfirmMessageHandlerTest {
     }
 
     @Test
-    public void test_handleFingerprintComputationFails_whenCertificateContentInvalid() throws Exception {
+    void test_handleFingerprintComputationFails_whenCertificateContentInvalid() throws Exception {
         // When the stored certificate content cannot be parsed (malformed/truncated), the
         // fingerprint computation must surface a CmpProcessingException with badMessageCheck
         // rather than propagating an opaque CertificateException upward. Forced here by
@@ -212,8 +212,8 @@ public class CertConfirmMessageHandlerTest {
 
         CmpProcessingException response = assertThrows(
                 CmpProcessingException.class, () -> tested.handle(request, configuration));
-        // Either the fingerprint catch (badMessageCheck) or the per-cert lookup
-        // catch (badCertId) — both lead to a clean CmpProcessingException, not a runtime.
+        // Both the fingerprint catch and the per-cert lookup catch produce clean
+        // CmpProcessingException outcomes, but with different failureInfo codes — accept either.
         assertTrue(
                 response.getFailureInfo() == PKIFailureInfo.badMessageCheck
                         || response.getFailureInfo() == PKIFailureInfo.badCertId,
@@ -221,7 +221,7 @@ public class CertConfirmMessageHandlerTest {
     }
 
     @Test
-    public void test_handleRelatedTransactionNotFound() throws Exception {
+    void test_handleRelatedTransactionNotFound() throws Exception {
         // No transaction matches the incoming transactionID; handler returns the same
         // "no related cert" outcome (current implementation collapses both cases).
         String trxId = "999";

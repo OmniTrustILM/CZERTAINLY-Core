@@ -1384,13 +1384,16 @@ public class ClientOperationServiceImpl implements ClientOperationService {
 
     @Override
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    /**
+     * Two-layer authorization. The annotation gates use of the RA profile (RA_PROFILE
+     * with action DETAIL); the call to checkIssuePermissions below gates the actual
+     * issuance authority on CERTIFICATE. Mirrors what issueCertificateAction does
+     * before persisting in the synchronous flow.
+     */
     @ExternalAuthorization(resource = Resource.RA_PROFILE, action = ResourceAction.DETAIL, parentResource = Resource.AUTHORITY, parentAction = ResourceAction.DETAIL)
     public CertificateDetailDto manuallyIssueCertificate(
             SecuredParentUUID authorityUuid, SecuredUUID raProfileUuid, String certificateUuid,
             UploadCertificateRequestDto request) throws NotFoundException, java.security.cert.CertificateException, AlreadyExistException, ConnectorException, AttributeException {
-        // Two-layer authz: RA_PROFILE/DETAIL gates use of the RA profile (above);
-        // CERTIFICATE/ISSUE gates the actual issuance authority. Mirrors the synchronous
-        // issueCertificateAction flow which calls checkIssuePermissions() before persisting.
         certificateService.checkIssuePermissions();
 
         Certificate certificate = certificateRepository.findWithAssociationsByUuid(UUID.fromString(certificateUuid))
@@ -1487,12 +1490,15 @@ public class ClientOperationServiceImpl implements ClientOperationService {
     }
 
     @Override
+    /**
+     * Two-layer authorization, same shape as manuallyIssueCertificate above: the
+     * annotation gates RA profile use; checkRevokePermissions gates the actual
+     * revocation authority on CERTIFICATE.
+     */
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     @ExternalAuthorization(resource = Resource.RA_PROFILE, action = ResourceAction.DETAIL, parentResource = Resource.AUTHORITY, parentAction = ResourceAction.DETAIL)
     public void manuallyConfirmRevoke(
             SecuredParentUUID authorityUuid, SecuredUUID raProfileUuid, String certificateUuid) throws NotFoundException {
-        // Two-layer authz: RA_PROFILE/DETAIL gates use of the RA profile (above);
-        // CERTIFICATE/REVOKE gates the actual revocation authority.
         certificateService.checkRevokePermissions();
 
         Certificate cert = certificateRepository.findWithAssociationsByUuid(UUID.fromString(certificateUuid))
@@ -1567,14 +1573,19 @@ public class ClientOperationServiceImpl implements ClientOperationService {
         // cancelling a pending revoke = REVOKE authority).
         boolean isCancelIssue;
         CertificateState targetState;
+        // Single source of truth for the human-readable label used in log/event messages
+        // below — keeps the strings consistent across the multiple catch arms.
+        final String pendingOpLabel;
         if (cert.getState() == CertificateState.PENDING_ISSUE) {
             certificateService.checkIssuePermissions();
             isCancelIssue = true;
             targetState = CertificateState.FAILED;
+            pendingOpLabel = "issuance";
         } else if (cert.getState() == CertificateState.PENDING_REVOKE) {
             certificateService.checkRevokePermissions();
             isCancelIssue = false;
             targetState = CertificateState.ISSUED;
+            pendingOpLabel = "revocation";
         } else {
             throw new ValidationException("Cannot cancel: certificate is not in a pending state. Current state: %s. Certificate: %s"
                     .formatted(cert.getState().getLabel(), cert.toStringShort()));
@@ -1628,7 +1639,7 @@ public class ClientOperationServiceImpl implements ClientOperationService {
                     CertificateEventStatus.FAILED,
                     "Cancel rejected by authority: " + upstreamRefused.getMessage(), "");
             logger.warn("Authority refused to cancel pending {} for cert {}: {}",
-                    isCancelIssue ? "issuance" : "revocation", cert.getUuid(), upstreamRefused.getMessage(), upstreamRefused);
+                    pendingOpLabel, cert.getUuid(), upstreamRefused.getMessage(), upstreamRefused);
             // Structured event log: the system observed an upstream hard-refusal and decided
             // NOT to transition local state. The user-facing audit record (CANCEL/FAILURE) is
             // emitted by the @AuditLogged aspect on the controller.
@@ -1638,7 +1649,7 @@ public class ClientOperationServiceImpl implements ClientOperationService {
                     null,
                     List.of(new ResourceObjectIdentity(cert.getSerialNumber(), cert.getUuid())),
                     "Authority refused to cancel pending "
-                            + (isCancelIssue ? "issuance" : "revocation")
+                            + pendingOpLabel
                             + ": " + upstreamRefused.getMessage());
             throw new ValidationException(
                     "Authority refused to cancel the operation: " + upstreamRefused.getMessage());
@@ -1742,7 +1753,7 @@ public class ClientOperationServiceImpl implements ClientOperationService {
                 CertificateActionPerformedEventHandler.constructEventMessage(cert.getUuid(), ResourceAction.UPDATE));
 
         logger.info("Pending {} for certificate {} cancelled (target state: {})",
-                isCancelIssue ? "issuance" : "revocation", cert.getUuid(), targetState);
+                pendingOpLabel, cert.getUuid(), targetState);
 
         return cert.mapToDto();
     }

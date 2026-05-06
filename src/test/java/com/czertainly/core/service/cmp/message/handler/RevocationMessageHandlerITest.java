@@ -285,18 +285,20 @@ class RevocationMessageHandlerITest extends BaseSpringBootTest {
         );
     }
 
+    /**
+     * When the authority provider connector accepts revocation asynchronously (HTTP 202),
+     * PollFeature returns null because the certificate transitions to PENDING_REVOKE.
+     * RFC 4210 section 5.2.6 limits the poll-request/poll-response loop to ip/cp/kup
+     * contexts; CMP has no in-protocol way to represent a pending revocation, so the
+     * handler must surface this as a per-certificate rejection inside the revocation
+     * response — not a successful revocationNotification on a certificate that is not
+     * yet revoked. The handler's outer per-cert catch turns the internal
+     * CmpProcessingException into a PKIStatus rejection status entry; the certificate
+     * remains in PENDING_REVOKE (no further state change at this point).
+     */
     @Test
     @Transactional
     void test_handle_revocation_rejectsCleanly_whenAuthorityAcceptsAsynchronously() throws Exception {
-        // When the authority provider connector accepts revocation asynchronously (HTTP 202),
-        // PollFeature returns null because the certificate transitions to PENDING_REVOKE.
-        // RFC 4210 §5.2.6 limits the poll-request/poll-response loop to ip/cp/kup contexts;
-        // CMP has no in-protocol way to represent a pending revocation, so the handler must
-        // surface this as a per-certificate rejection inside the revocation response — not
-        // a "revocationNotification" on a certificate that is not yet revoked. The handler's
-        // outer per-cert catch turns the internal CmpProcessingException into a
-        // {@code PKIStatus.rejection} status entry; the certificate must remain in
-        // {@code PENDING_REVOKE} (no further state change at this point).
         String trxId = "778";
         PKIMessage request = CmpTestUtil.createSignatureBasedMessage(
                         trxId,

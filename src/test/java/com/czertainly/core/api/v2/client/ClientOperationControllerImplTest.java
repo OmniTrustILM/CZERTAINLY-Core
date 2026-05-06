@@ -57,8 +57,8 @@ class ClientOperationControllerImplTest {
         ArgumentCaptor<SecuredUUID> raProfile = ArgumentCaptor.forClass(SecuredUUID.class);
         Mockito.verify(service).manuallyIssueCertificate(authority.capture(), raProfile.capture(),
                 Mockito.eq(certificateUuid), Mockito.eq(request));
-        assertThat(authority.getValue().toString()).isEqualTo(authorityUuid);
-        assertThat(raProfile.getValue().toString()).isEqualTo(raProfileUuid);
+        assertThat(authority.getValue()).hasToString(authorityUuid);
+        assertThat(raProfile.getValue()).hasToString(raProfileUuid);
     }
 
     @Test
@@ -69,8 +69,8 @@ class ClientOperationControllerImplTest {
         ArgumentCaptor<SecuredUUID> raProfile = ArgumentCaptor.forClass(SecuredUUID.class);
         Mockito.verify(service).manuallyConfirmRevoke(authority.capture(), raProfile.capture(),
                 Mockito.eq(certificateUuid));
-        assertThat(authority.getValue().toString()).isEqualTo(authorityUuid);
-        assertThat(raProfile.getValue().toString()).isEqualTo(raProfileUuid);
+        assertThat(authority.getValue()).hasToString(authorityUuid);
+        assertThat(raProfile.getValue()).hasToString(raProfileUuid);
     }
 
     @Test
@@ -92,7 +92,7 @@ class ClientOperationControllerImplTest {
         ArgumentCaptor<SecuredUUID> raProfile = ArgumentCaptor.forClass(SecuredUUID.class);
         Mockito.verify(service).cancelPendingCertificateOperation(authority.capture(), raProfile.capture(),
                 Mockito.eq(certificateUuid), Mockito.eq(request));
-        assertThat(authority.getValue().toString()).isEqualTo(authorityUuid);
-        assertThat(raProfile.getValue().toString()).isEqualTo(raProfileUuid);
+        assertThat(authority.getValue()).hasToString(authorityUuid);
+        assertThat(raProfile.getValue()).hasToString(raProfileUuid);
     }
 }

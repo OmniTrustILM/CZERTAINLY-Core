@@ -879,8 +879,7 @@ class ProxyClientImplTest {
                 connector, "/v1/test", "POST", null, Map.class);
 
         assertThat(result.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(result.getBody()).isNotNull();
-        assertThat(result.getBody().get("certificateData")).isEqualTo("BASE64=");
+        assertThat(result.getBody()).containsEntry("certificateData", "BASE64=");
     }
 
     @Test
