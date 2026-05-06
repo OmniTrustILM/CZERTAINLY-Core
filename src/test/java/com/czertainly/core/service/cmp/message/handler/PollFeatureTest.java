@@ -144,6 +144,32 @@ class PollFeatureTest {
     }
 
     @Test
+    void wrapsInterruptedException_withCmpProcessingException() throws Exception {
+        // The poll loop sleeps between iterations. A test thread that interrupts itself
+        // before calling pollCertificate causes the very first sleep to throw
+        // InterruptedException; the catch wraps it in a CmpProcessingException carrying the
+        // cause, and the interrupted flag is restored so callers further up the stack can
+        // observe the interrupt.
+        UUID certUuid = UUID.randomUUID();
+        Certificate cert = certificateInState(certUuid, CertificateState.REQUESTED);
+        Mockito.when(certificateService.getCertificateEntity(Mockito.any(SecuredUUID.class)))
+                .thenReturn(cert);
+
+        Thread.currentThread().interrupt();
+        try {
+            assertThatThrownBy(() -> pollFeature.pollCertificate(
+                    new DEROctetString(new byte[]{1}), "01", certUuid.toString(), CertificateState.ISSUED))
+                    .isInstanceOf(CmpProcessingException.class)
+                    .hasCauseInstanceOf(InterruptedException.class);
+            assertThat(Thread.currentThread().isInterrupted())
+                    .as("interrupted flag should be restored").isTrue();
+        } finally {
+            // Clear the flag regardless of outcome so subsequent tests are not affected.
+            Thread.interrupted();
+        }
+    }
+
+    @Test
     void throwsCmpProcessingException_whenTimeoutAndStillTransitional() throws Exception {
         // Cert in REQUESTED state never reaches ISSUED; timeout config is 1s in setUp().
         UUID certUuid = UUID.randomUUID();
