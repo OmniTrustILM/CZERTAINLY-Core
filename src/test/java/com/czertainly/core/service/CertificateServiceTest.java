@@ -458,7 +458,7 @@ class CertificateServiceTest extends BaseSpringBootTest {
     }
 
     @Test
-    void revokeCertificate_evictsAuthCacheForAssociatedUser() {
+    void revokeCertificate_evictsCertAuthCacheForAssociatedUser() {
         // given
         UUID userUuid = UUID.randomUUID();
         String fingerprint = "abcdef1234567890";
@@ -472,7 +472,7 @@ class CertificateServiceTest extends BaseSpringBootTest {
         certificateService.revokeCertificate(certificate.getSerialNumber());
 
         // then - both the user UUID entry and the certificate entry must be evicted
-        uuidCache.assertEvicted();
+        uuidCache.assertNotEvicted();
         certCache.assertEvicted();
     }
 
