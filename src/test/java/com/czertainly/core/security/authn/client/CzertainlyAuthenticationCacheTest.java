@@ -29,7 +29,7 @@ class CzertainlyAuthenticationCacheTest extends BaseSpringBootTest {
     @Test
     void getOrAuthenticateSystemUser_cacheMiss_callsLoader() {
         // given - the cache is empty
-        AuthenticationInfo expected = authenticatedInfo("uuid-1", "superadmin");
+        AuthenticationInfo expected = authenticatedInfo(UUID.randomUUID().toString(), "superadmin");
         Supplier<AuthenticationInfo> loader = loaderReturning(expected);
 
         // when - first call to authenticate the user
@@ -43,7 +43,7 @@ class CzertainlyAuthenticationCacheTest extends BaseSpringBootTest {
     @Test
     void getOrAuthenticateSystemUser_cacheHit_loaderNotCalledAgain() {
         // given
-        AuthenticationInfo expected = authenticatedInfo("uuid-1", "superadmin");
+        AuthenticationInfo expected = authenticatedInfo(UUID.randomUUID().toString(), "superadmin");
         Supplier<AuthenticationInfo> loader = loaderReturning(expected);
         // first call to authenticate the user - this will populate the cache
         authenticationCache.getOrAuthenticateSystemUser("superadmin", loader);
@@ -122,7 +122,7 @@ class CzertainlyAuthenticationCacheTest extends BaseSpringBootTest {
     @Test
     void getOrAuthenticateByCertificate_cacheMiss_callsLoader() {
         // given - the cache is empty
-        AuthenticationInfo expected = authenticatedInfo("uuid-3", "certUser");
+        AuthenticationInfo expected = authenticatedInfo(UUID.randomUUID().toString(), "certUser");
         Supplier<AuthenticationInfo> loader = loaderReturning(expected);
 
         // when - first call to authenticate by certificate fingerprint
@@ -136,7 +136,7 @@ class CzertainlyAuthenticationCacheTest extends BaseSpringBootTest {
     @Test
     void getOrAuthenticateByCertificate_cacheHit_loaderNotCalledAgain() {
         // given
-        AuthenticationInfo expected = authenticatedInfo("uuid-3", "certUser");
+        AuthenticationInfo expected = authenticatedInfo(UUID.randomUUID().toString(), "certUser");
         Supplier<AuthenticationInfo> loader = loaderReturning(expected);
         // first call to authenticate the user - this will populate the cache
         authenticationCache.getOrAuthenticateByCertificate("fingerprint-abc", loader);
@@ -167,7 +167,7 @@ class CzertainlyAuthenticationCacheTest extends BaseSpringBootTest {
     @Test
     void getOrAuthenticateByToken_nullJti_loaderAlwaysCalled() {
         // given - tokens without a jti cannot be uniquely identified, so they are never cached
-        Supplier<AuthenticationInfo> loader = loaderReturning(authenticatedInfo("uuid-4", "tokenUser"));
+        Supplier<AuthenticationInfo> loader = loaderReturning(authenticatedInfo(UUID.randomUUID().toString(), "tokenUser"));
 
         // when - call twice with a null jti to verify that caching is always skipped
         authenticationCache.getOrAuthenticateByToken(null, loader);
@@ -180,7 +180,7 @@ class CzertainlyAuthenticationCacheTest extends BaseSpringBootTest {
     @Test
     void getOrAuthenticateByToken_cacheMiss_callsLoader() {
         // given - the cache is empty
-        AuthenticationInfo expected = authenticatedInfo("uuid-4", "tokenUser");
+        AuthenticationInfo expected = authenticatedInfo(UUID.randomUUID().toString(), "tokenUser");
         Supplier<AuthenticationInfo> loader = loaderReturning(expected);
 
         // when - first call to authenticate by token jti
@@ -194,7 +194,7 @@ class CzertainlyAuthenticationCacheTest extends BaseSpringBootTest {
     @Test
     void getOrAuthenticateByToken_cacheHit_loaderNotCalledAgain() {
         // given
-        AuthenticationInfo expected = authenticatedInfo("uuid-4", "tokenUser");
+        AuthenticationInfo expected = authenticatedInfo(UUID.randomUUID().toString(), "tokenUser");
         Supplier<AuthenticationInfo> loader = loaderReturning(expected);
         // first call to authenticate the user - this will populate the cache
         authenticationCache.getOrAuthenticateByToken("jti-123", loader);
@@ -230,7 +230,7 @@ class CzertainlyAuthenticationCacheTest extends BaseSpringBootTest {
         authenticationCache.getOrAuthenticateByUserUuid(userUuid, loader);
 
         // when - evict the cache entry for this user
-        authenticationCache.evictByUserUuid(userUuid.toString());
+        authenticationCache.evictByUserUuid(userUuid);
 
         // then - verify that the next call reaches the loader again because the entry was evicted
         authenticationCache.getOrAuthenticateByUserUuid(userUuid, loader);
@@ -240,8 +240,8 @@ class CzertainlyAuthenticationCacheTest extends BaseSpringBootTest {
     @Test
     void evictByUserUuid_evictsAllTokensForUser() {
         // given - two separate tokens for the same user are both tracked in the jti index
-        String userUuid = UUID.randomUUID().toString();
-        AuthenticationInfo info = authenticatedInfo(userUuid, "user");
+        UUID userUuid = UUID.randomUUID();
+        AuthenticationInfo info = authenticatedInfo(userUuid.toString(), "user");
         Supplier<AuthenticationInfo> loaderA = loaderReturning(info);
         Supplier<AuthenticationInfo> loaderB = loaderReturning(info);
         authenticationCache.getOrAuthenticateByToken("jti-A", loaderA);
@@ -260,9 +260,9 @@ class CzertainlyAuthenticationCacheTest extends BaseSpringBootTest {
     @Test
     void evictByUserUuid_evictsCertificateEntry() {
         // given - the certificate cache is populated, so the user-certificate index has recorded the mapping
-        String userUuid = UUID.randomUUID().toString();
+        UUID userUuid = UUID.randomUUID();
         String fingerprint = "cert-fingerprint";
-        Supplier<AuthenticationInfo> loader = loaderReturning(authenticatedInfo(userUuid, "certUser"));
+        Supplier<AuthenticationInfo> loader = loaderReturning(authenticatedInfo(userUuid.toString(), "certUser"));
         authenticationCache.getOrAuthenticateByCertificate(fingerprint, loader);
 
         // when - evict by user UUID; the cache resolves the fingerprint from the index internally
@@ -276,10 +276,10 @@ class CzertainlyAuthenticationCacheTest extends BaseSpringBootTest {
     @Test
     void evictByUserUuid_doesNotEvictCertificateWhenNoneWasCached() {
         // given - no certificate has been cached for this user, so the index has no entry
-        String userUuid = UUID.randomUUID().toString();
+        UUID userUuid = UUID.randomUUID();
         String fingerprint = "cert-fingerprint";
         // populate with a different user so the fingerprint is in the cache but not mapped to this user
-        Supplier<AuthenticationInfo> loader = loaderReturning(authenticatedInfo("other-user", "certUser"));
+        Supplier<AuthenticationInfo> loader = loaderReturning(authenticatedInfo(UUID.randomUUID().toString(), "certUser"));
         authenticationCache.getOrAuthenticateByCertificate(fingerprint, loader);
 
         // when - evict a user who has no certificate cache entry
@@ -293,10 +293,10 @@ class CzertainlyAuthenticationCacheTest extends BaseSpringBootTest {
     @Test
     void evictByUserUuid_doesNotEvictOtherUsersTokens() {
         // given - two different users each have a token cached
-        String userUuidA = UUID.randomUUID().toString();
-        String userUuidB = UUID.randomUUID().toString();
-        Supplier<AuthenticationInfo> loaderA = loaderReturning(authenticatedInfo(userUuidA, "userA"));
-        Supplier<AuthenticationInfo> loaderB = loaderReturning(authenticatedInfo(userUuidB, "userB"));
+        UUID userUuidA = UUID.randomUUID();
+        UUID userUuidB = UUID.randomUUID();
+        Supplier<AuthenticationInfo> loaderA = loaderReturning(authenticatedInfo(userUuidA.toString(), "userA"));
+        Supplier<AuthenticationInfo> loaderB = loaderReturning(authenticatedInfo(userUuidB.toString(), "userB"));
         authenticationCache.getOrAuthenticateByToken("jti-userA", loaderA);
         authenticationCache.getOrAuthenticateByToken("jti-userB", loaderB);
 

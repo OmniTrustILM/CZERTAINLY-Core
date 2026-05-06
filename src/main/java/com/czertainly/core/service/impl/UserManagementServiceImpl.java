@@ -174,7 +174,7 @@ public class UserManagementServiceImpl implements UserManagementService {
         attributeEngine.validateCustomAttributesContent(Resource.USER, request.getCustomAttributes());
         UserDetailDto dto = getUserUpdateRequestPayload(userUuid, request, "", "");
         dto.setCustomAttributes(attributeEngine.updateObjectCustomAttributesContent(Resource.USER, UUID.fromString(userUuid), request.getCustomAttributes()));
-        authenticationCache.evictByUserUuid(userUuid);
+        authenticationCache.evictByUserUuid(UUID.fromString(userUuid));
         return dto;
     }
 
@@ -182,7 +182,7 @@ public class UserManagementServiceImpl implements UserManagementService {
     //Internal Use Only -- For Auth Profile Update API
     public UserDetailDto updateUserInternal(String userUuid, UpdateUserRequestDto request, String certificateUuid, String certificateFingerprint) throws NotFoundException, CertificateException {
         UserDetailDto dto = getUserUpdateRequestPayload(userUuid, request, certificateUuid, certificateFingerprint);
-        authenticationCache.evictByUserUuid(userUuid);
+        authenticationCache.evictByUserUuid(UUID.fromString(userUuid));
         return dto;
     }
 
@@ -198,7 +198,7 @@ public class UserManagementServiceImpl implements UserManagementService {
     }
 
     private void clearAuthenticationData(String userUuid, String actionName) {
-        authenticationCache.evictByUserUuid(userUuid);
+        authenticationCache.evictByUserUuid(UUID.fromString(userUuid));
 
         Map<String, ? extends Session> userSessions =
                 sessionRepository.findByPrincipalName(userUuid);
@@ -228,7 +228,7 @@ public class UserManagementServiceImpl implements UserManagementService {
     @ExternalAuthorization(resource = Resource.USER, action = ResourceAction.UPDATE)
     public UserDetailDto updateRoles(String userUuid, List<String> roleUuids) {
         UserDetailDto result = userManagementApiClient.updateRoles(userUuid, roleUuids);
-        authenticationCache.evictByUserUuid(userUuid);
+        authenticationCache.evictByUserUuid(UUID.fromString(userUuid));
         return result;
     }
 
@@ -236,7 +236,7 @@ public class UserManagementServiceImpl implements UserManagementService {
     @ExternalAuthorization(resource = Resource.USER, action = ResourceAction.UPDATE)
     public UserDetailDto updateRole(String userUuid, String roleUuid) {
         UserDetailDto result = userManagementApiClient.updateRole(userUuid, roleUuid);
-        authenticationCache.evictByUserUuid(userUuid);
+        authenticationCache.evictByUserUuid(UUID.fromString(userUuid));
         return result;
     }
 
@@ -270,7 +270,7 @@ public class UserManagementServiceImpl implements UserManagementService {
     @ExternalAuthorization(resource = Resource.USER, action = ResourceAction.UPDATE)
     public UserDetailDto removeRole(String userUuid, String roleUuid) {
         UserDetailDto result = userManagementApiClient.removeRole(userUuid, roleUuid);
-        authenticationCache.evictByUserUuid(userUuid);
+        authenticationCache.evictByUserUuid(UUID.fromString(userUuid));
         return result;
     }
 

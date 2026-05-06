@@ -37,7 +37,7 @@ public class CzertainlyAuthenticationCache implements AuthenticationCache {
     }
 
     @Override
-    @Cacheable(value = CacheConfig.USER_UUID_AUTH_CACHE, key = "#userUuid.toString()", unless = "#result.anonymous")
+    @Cacheable(value = CacheConfig.USER_UUID_AUTH_CACHE, key = "#userUuid", unless = "#result.anonymous")
     public AuthenticationInfo getOrAuthenticateByUserUuid(UUID userUuid, Supplier<AuthenticationInfo> loader) {
         return loader.get();
     }
@@ -53,7 +53,7 @@ public class CzertainlyAuthenticationCache implements AuthenticationCache {
         AuthenticationInfo result = loader.get();
         if (!result.isAnonymous()) {
             certCache.put(thumbprint, result);
-            userCertificateIndex.add(result.getUserUuid(), thumbprint);
+            userCertificateIndex.add(UUID.fromString(result.getUserUuid()), thumbprint);
         }
         return result;
     }
@@ -72,13 +72,13 @@ public class CzertainlyAuthenticationCache implements AuthenticationCache {
         AuthenticationInfo result = loader.get();
         if (!result.isAnonymous()) {
             tokenCache.put(jti, result);
-            tokenJtiIndex.add(result.getUserUuid(), jti);
+            tokenJtiIndex.add(UUID.fromString(result.getUserUuid()), jti);
         }
         return result;
     }
 
     @Override
-    public void evictByUserUuid(String userUuid) {
+    public void evictByUserUuid(UUID userUuid) {
         Objects.requireNonNull(cacheManager.getCache(CacheConfig.USER_UUID_AUTH_CACHE)).evict(userUuid);
         evictTokensByUserUuid(userUuid);
         evictCertificateByUserUuid(userUuid);
@@ -96,7 +96,7 @@ public class CzertainlyAuthenticationCache implements AuthenticationCache {
 
     // Looks up jtis for the user in the index and evicts each one from the token cache.
     // No-op if the user has no cached tokens.
-    private void evictTokensByUserUuid(String userUuid) {
+    private void evictTokensByUserUuid(UUID userUuid) {
         Set<String> jtis = tokenJtiIndex.removeUser(userUuid);
         if (jtis == null) return;
         jtis.forEach(tokenCache::evict);
@@ -104,7 +104,7 @@ public class CzertainlyAuthenticationCache implements AuthenticationCache {
 
     // Looks up the fingerprint for the user in the index and evicts it from the certificate cache.
     // No-op if the user has no cached certificate.
-    private void evictCertificateByUserUuid(String userUuid) {
+    private void evictCertificateByUserUuid(UUID userUuid) {
         String fingerprint = userCertificateIndex.removeUser(userUuid);
         if (fingerprint == null) return;
         certCache.evict(fingerprint);

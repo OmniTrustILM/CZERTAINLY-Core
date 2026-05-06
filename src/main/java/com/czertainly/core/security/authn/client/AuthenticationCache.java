@@ -58,7 +58,7 @@ public interface AuthenticationCache {
      *
      * @param userUuid UUID of the user whose cache entries should be evicted
      */
-    void evictByUserUuid(String userUuid);
+    void evictByUserUuid(UUID userUuid);
 
     /**
      * Evicts only the certificate-based auth cache entry for the given fingerprint.
