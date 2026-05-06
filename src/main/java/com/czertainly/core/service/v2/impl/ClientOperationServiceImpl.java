@@ -1680,7 +1680,14 @@ public class ClientOperationServiceImpl implements ClientOperationService {
                     "Connector cancel call failed (" + infra.getClass().getSimpleName() + "); proceeded with local cancel",
                     "Connector cancel call failed for cert {} ({}: {}) — proceeding with local cancel",
                     infra.getClass().getSimpleName() + ": " + infra.getMessage(), infra);
-        } catch (ConnectorException unexpected) {
+        } catch (Exception unexpected) {
+            // Defensive catch-all. Covers any ConnectorException subtype not handled above
+            // (e.g. ConnectorProblemException or future additions) plus any unchecked
+            // exception leaking from the connector client / API layer. We intentionally widen
+            // to Exception rather than ConnectorException so a NPE / IllegalState from the
+            // client stack does not silently propagate as an HTTP 500 to the caller —
+            // cancel is a local-state operation and a connector hiccup should not strand
+            // the cert in PENDING_*.
             recordCancelSoftFailure(cert, target,
                     "Connector cancel call failed (proceeding with local cancel): " + unexpected.getMessage(),
                     "Connector cancel call failed (" + unexpected.getClass().getSimpleName() + "); proceeded with local cancel",

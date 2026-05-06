@@ -151,7 +151,15 @@ public class RevocationMessageHandler implements MessageHandler<PKIMessage> {
                 LOG.trace("TID={}, SN={} | revocations of certificate is done (remaining={})", tid, getSerialNumber(revocation), --revocationCount);
             } catch (Exception e) {
                 LOG.error("TID={}, SN={} | revocation of certificate failed, reason={}", tid, getSerialNumber(revocation), e.getLocalizedMessage(), e);
-                String freeText = e.getMessage() != null ? e.getMessage() : "problem with revocation";
+                // Only forward CmpProcessingException messages to the wire — those are
+                // shaped by this codebase (e.g. by rejectIfNotReached / revokeCertificate)
+                // and safe to expose. RuntimeException / generic Exception messages can
+                // contain DB SQL fragments, internal class references, or upstream stack
+                // detail that should not leak to a CMP client; fall back to the generic
+                // placeholder for those.
+                String freeText = e instanceof CmpProcessingException && e.getMessage() != null
+                        ? e.getMessage()
+                        : "problem with revocation";
                 revocationResponseBuilder.add(
                         new PKIStatusInfo(
                                 PKIStatus.rejection,
