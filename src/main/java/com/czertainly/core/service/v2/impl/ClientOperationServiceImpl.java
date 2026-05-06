@@ -1509,7 +1509,11 @@ public class ClientOperationServiceImpl implements ClientOperationService {
             SecuredParentUUID authorityUuid, SecuredUUID raProfileUuid, String certificateUuid) throws NotFoundException {
         certificateService.checkRevokePermissions();
 
-        Certificate cert = certificateRepository.findWithAssociationsByUuid(UUID.fromString(certificateUuid))
+        // Pessimistic-write lock for the duration of this transaction (class-level
+        // @Transactional applies). A concurrent cancelPendingCertificateOperation that locks
+        // the same row in commitLocalCancel will block here until this transaction commits,
+        // and vice versa — preventing the cancel from overwriting a confirmed REVOKED state.
+        Certificate cert = certificateRepository.findAndLockWithAssociationsByUuid(UUID.fromString(certificateUuid))
                 .orElseThrow(() -> new NotFoundException(Certificate.class, certificateUuid));
 
         assertCertificateBelongsToRaProfile(cert, authorityUuid, raProfileUuid, "confirm revocation");
@@ -1760,7 +1764,12 @@ public class ClientOperationServiceImpl implements ClientOperationService {
             CertificateState expectedPendingState = target.isCancelIssue()
                     ? CertificateState.PENDING_ISSUE
                     : CertificateState.PENDING_REVOKE;
-            Certificate fresh = certificateRepository.findWithAssociationsByUuid(cert.getUuid())
+            // findAndLockWithAssociationsByUuid issues SELECT ... FOR UPDATE inside this
+            // transaction. A concurrent manuallyConfirmRevoke / manuallyIssueCertificate
+            // attempting to update the same row blocks until this transaction commits or
+            // rolls back, so the state assertion below cannot be defeated by an interleaving
+            // commit between our reload and our save.
+            Certificate fresh = certificateRepository.findAndLockWithAssociationsByUuid(cert.getUuid())
                     .orElseThrow(() -> new ValidationException(
                             "Certificate disappeared during cancel: " + cert.getUuid()));
             if (fresh.getState() != expectedPendingState) {
