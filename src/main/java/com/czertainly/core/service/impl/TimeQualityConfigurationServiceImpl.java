@@ -207,6 +207,14 @@ public class TimeQualityConfigurationServiceImpl implements TimeQualityConfigura
                 .orElseThrow(() -> new NotFoundException(NOT_FOUND_MSG + uuid));
     }
 
+    @Override
+    @ExternalAuthorization(resource = Resource.TIME_QUALITY_CONFIGURATION, action = ResourceAction.DETAIL)
+    @Transactional(readOnly = true)
+    public void evaluatePermissionChainOnDetails(SecuredUUID uuid) throws NotFoundException {
+        timeQualityConfigurationRepository.findByUuid(uuid)
+                .orElseThrow(() -> new NotFoundException(NOT_FOUND_MSG + uuid));
+    }
+
     // ──────────────────────────────────────────────────────────────────────────
     // Private helpers
     // ──────────────────────────────────────────────────────────────────────────

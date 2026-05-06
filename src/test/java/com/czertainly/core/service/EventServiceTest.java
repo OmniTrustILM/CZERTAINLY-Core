@@ -131,7 +131,7 @@ class EventServiceTest extends BaseSpringBootTest {
     void testGetObjectEventHistoryEmpty() throws NotFoundException {
         // certificate exists but has no trigger histories linked to it
         PaginationResponseDto<ObjectEventHistoryDto> response =
-                eventService.getEventHistory(Resource.CERTIFICATE, certificateUuid, pagination(10, 0));
+                eventService.getEventHistory(Resource.CERTIFICATE, certificateUuid, pagination(10, 1));
 
         Assertions.assertEquals(0, response.getTotalItems());
         Assertions.assertEquals(0, response.getTotalPages());
@@ -143,7 +143,7 @@ class EventServiceTest extends BaseSpringBootTest {
         TriggerHistory th = saveTriggerHistory(triggerWithNotificationUuid, certificateUuid, eventHistoryUuid, true, true);
 
         PaginationResponseDto<ObjectEventHistoryDto> response =
-                eventService.getEventHistory(Resource.CERTIFICATE, certificateUuid, pagination(10, 0));
+                eventService.getEventHistory(Resource.CERTIFICATE, certificateUuid, pagination(10, 1));
 
         Assertions.assertEquals(1, response.getTotalItems());
         ObjectEventHistoryDto dto = response.getItems().getFirst();
@@ -160,12 +160,12 @@ class EventServiceTest extends BaseSpringBootTest {
         saveTriggerHistory(ignoreTriggerUuid, certificateUuid, eventHistoryUuid, true, false);
 
         PaginationResponseDto<ObjectEventHistoryDto> page1 =
-                eventService.getEventHistory(Resource.CERTIFICATE, certificateUuid, pagination(2, 0));
+                eventService.getEventHistory(Resource.CERTIFICATE, certificateUuid, pagination(2, 1));
         Assertions.assertEquals(3, page1.getTotalItems());
         Assertions.assertEquals(2, page1.getItems().size());
 
         PaginationResponseDto<ObjectEventHistoryDto> page2 =
-                eventService.getEventHistory(Resource.CERTIFICATE, certificateUuid, pagination(2, 1));
+                eventService.getEventHistory(Resource.CERTIFICATE, certificateUuid, pagination(2, 2));
         Assertions.assertEquals(3, page2.getTotalItems());
         Assertions.assertEquals(1, page2.getItems().size());
     }
@@ -176,7 +176,7 @@ class EventServiceTest extends BaseSpringBootTest {
         saveTriggerHistory(triggerWithNotificationUuid, certificateUuid, eventHistoryUuid, true, true);
 
         PaginationResponseDto<ObjectEventHistoryDto> response =
-                eventService.getEventHistory(Resource.CERTIFICATE, certificateUuid, pagination(10, 0));
+                eventService.getEventHistory(Resource.CERTIFICATE, certificateUuid, pagination(10, 1));
 
         Assertions.assertEquals(Boolean.TRUE, response.getItems().getFirst().getNotificationsSent());
     }
@@ -187,7 +187,7 @@ class EventServiceTest extends BaseSpringBootTest {
         saveTriggerHistory(triggerWithNotificationUuid, certificateUuid, eventHistoryUuid, false, false);
 
         PaginationResponseDto<ObjectEventHistoryDto> response =
-                eventService.getEventHistory(Resource.CERTIFICATE, certificateUuid, pagination(10, 0));
+                eventService.getEventHistory(Resource.CERTIFICATE, certificateUuid, pagination(10, 1));
 
         Assertions.assertEquals(Boolean.FALSE, response.getItems().getFirst().getNotificationsSent());
     }
@@ -198,7 +198,7 @@ class EventServiceTest extends BaseSpringBootTest {
         saveTriggerHistory(ignoreTriggerUuid, certificateUuid, eventHistoryUuid, true, false);
 
         PaginationResponseDto<ObjectEventHistoryDto> response =
-                eventService.getEventHistory(Resource.CERTIFICATE, certificateUuid, pagination(10, 0));
+                eventService.getEventHistory(Resource.CERTIFICATE, certificateUuid, pagination(10, 1));
 
         Assertions.assertNull(response.getItems().getFirst().getNotificationsSent());
     }
@@ -317,7 +317,7 @@ class EventServiceTest extends BaseSpringBootTest {
 
     private TriggerHistory saveTriggerHistory(UUID triggerUuid, UUID objectUuid, UUID eventHistoryUuid,
                                                boolean conditionsMatched, boolean actionsPerformed) {
-        TriggerHistory th = triggerService.createTriggerHistory(triggerUuid, null, objectUuid, null, eventHistoryUuid);
+        TriggerHistory th = triggerService.createTriggerHistory(triggerUuid, null, objectUuid, null, eventHistoryUuid, Resource.CERTIFICATE);
         th.setEvent(ResourceEvent.CERTIFICATE_DISCOVERED);
         th.setConditionsMatched(conditionsMatched);
         th.setActionsPerformed(actionsPerformed);

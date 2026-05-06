@@ -1,5 +1,6 @@
 package com.czertainly.core.dao.entity.workflows;
 
+import com.czertainly.api.model.core.auth.Resource;
 import com.czertainly.api.model.core.other.ResourceEvent;
 import com.czertainly.api.model.core.workflows.TriggerHistoryDto;
 import com.czertainly.core.dao.entity.UniquelyIdentified;
@@ -36,6 +37,10 @@ public class TriggerHistory extends UniquelyIdentified {
     @JoinColumn(name = "trigger_association_uuid", insertable = false, updatable = false)
     @ToString.Exclude
     private TriggerAssociation triggerAssociation;
+
+    @Column(name = "object_resource")
+    @Enumerated(EnumType.STRING)
+    private Resource objectResource;
 
     @Column(name = "event")
     @Enumerated(EnumType.STRING)

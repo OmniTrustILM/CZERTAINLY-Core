@@ -15,6 +15,15 @@ ALTER TABLE trigger_history ADD COLUMN event_history_uuid UUID;
 ALTER TABLE trigger_history ADD CONSTRAINT trigger_history_to_event_history_fk
     FOREIGN KEY (event_history_uuid) REFERENCES event_history(uuid) ON UPDATE CASCADE ON DELETE SET NULL;
 
+-- Since both trigger_uuid and event are nullable, add column of object resource type to
+-- trigger_history for resource derivation.
+ALTER TABLE trigger_history ADD COLUMN object_resource TEXT;
+UPDATE trigger_history th
+SET object_resource = t.resource
+FROM trigger t
+WHERE th.trigger_uuid = t.uuid;
+ALTER TABLE trigger_history ALTER COLUMN object_resource SET NOT NULL;
+
 -- Change trigger FK: keep trigger_history when trigger is deleted (SET NULL instead of CASCADE)
 ALTER TABLE trigger_history DROP CONSTRAINT trigger_history_trigger_uuid_fkey;
 ALTER TABLE trigger_history ALTER COLUMN trigger_uuid DROP NOT NULL;
