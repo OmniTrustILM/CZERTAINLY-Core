@@ -31,6 +31,7 @@ import com.czertainly.core.dao.entity.oid.CustomOidEntry_;
 import com.czertainly.core.dao.entity.oid.RdnAttributeTypeCustomOidEntry_;
 import com.czertainly.core.dao.entity.scep.ScepProfile_;
 import com.czertainly.core.dao.entity.signing.TimeQualityConfiguration_;
+import com.czertainly.core.dao.entity.signing.TspProfile_;
 import com.czertainly.core.model.auth.ResourceAction;
 import jakarta.persistence.metamodel.Attribute;
 import lombok.Getter;
@@ -214,7 +215,11 @@ public enum FilterField {
     TIME_QUALITY_CONFIGURATION_LEAP_SECOND_GUARD(Resource.TIME_QUALITY_CONFIGURATION, null, null, TimeQualityConfiguration_.leapSecondGuard, "Leap Second Guard", SearchFieldTypeEnum.BOOLEAN),
     TIME_QUALITY_CONFIGURATION_NTP_SERVERS_MIN_REACHABLE(Resource.TIME_QUALITY_CONFIGURATION, null, null, TimeQualityConfiguration_.ntpServersMinReachable, "NTP Servers Min Reachable", SearchFieldTypeEnum.NUMBER),
     TIME_QUALITY_CONFIGURATION_NTP_SAMPLES_PER_SERVER(Resource.TIME_QUALITY_CONFIGURATION, null, null, TimeQualityConfiguration_.ntpSamplesPerServer, "NTP Samples Per Server", SearchFieldTypeEnum.NUMBER),
-    TIME_QUALITY_CONFIGURATION_NTP_SERVERS(Resource.TIME_QUALITY_CONFIGURATION, null, null, TimeQualityConfiguration_.ntpServers, "NTP Servers", SearchFieldTypeEnum.NATIVE_ARRAY)
+    TIME_QUALITY_CONFIGURATION_NTP_SERVERS(Resource.TIME_QUALITY_CONFIGURATION, null, null, TimeQualityConfiguration_.ntpServers, "NTP Servers", SearchFieldTypeEnum.NATIVE_ARRAY),
+
+    // TSP Profile
+    TSP_PROFILE_NAME(Resource.TSP_PROFILE, null, null, TspProfile_.name, "Name", SearchFieldTypeEnum.STRING),
+    TSP_PROFILE_ENABLED(Resource.TSP_PROFILE, null, null, TspProfile_.enabled, "Enabled", SearchFieldTypeEnum.BOOLEAN),
     ;
 
     private static final FilterField[] VALUES;
