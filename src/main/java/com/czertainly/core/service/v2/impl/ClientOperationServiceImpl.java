@@ -911,6 +911,7 @@ public class ClientOperationServiceImpl implements ClientOperationService {
     }
 
     @Override
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public void revokeCertificateAction(final UUID certificateUuid, ClientCertificateRevocationDto request, boolean isApproved) throws NotFoundException, CertificateOperationException {
         if (!isApproved) {
             certificateService.checkRevokePermissions();
@@ -1746,16 +1747,39 @@ public class ClientOperationServiceImpl implements ClientOperationService {
     private void commitLocalCancel(Certificate cert, CancelTarget target) {
         TransactionStatus cleanupTx = transactionManager.getTransaction(new DefaultTransactionDefinition());
         try {
+            // Re-read the cert under the new transaction. The method runs as
+            // @Transactional(NOT_SUPPORTED) and the connector cancel call between the initial
+            // read at the top of cancelPendingCertificateOperation and this point holds no
+            // database lock — a concurrent operator action (e.g. manuallyConfirmRevoke
+            // committing REVOKED, manuallyIssueCertificate committing ISSUED) could have
+            // transitioned the cert in the meantime. Without this re-read + state assertion
+            // we would blindly overwrite a valid concurrent transition with the cancel's
+            // target state, producing a state divergence between the platform and the
+            // operator's intent. The expected pre-cancel state is recorded on the
+            // CancelTarget (PENDING_ISSUE for cancel-issue, PENDING_REVOKE for cancel-revoke).
+            CertificateState expectedPendingState = target.isCancelIssue()
+                    ? CertificateState.PENDING_ISSUE
+                    : CertificateState.PENDING_REVOKE;
+            Certificate fresh = certificateRepository.findWithAssociationsByUuid(cert.getUuid())
+                    .orElseThrow(() -> new ValidationException(
+                            "Certificate disappeared during cancel: " + cert.getUuid()));
+            if (fresh.getState() != expectedPendingState) {
+                throw new ValidationException(
+                        "Cancel raced with another operation: certificate " + cert.getUuid()
+                                + " is in state " + fresh.getState() + " (expected " + expectedPendingState
+                                + "); refusing to overwrite. The connector cancel call may have completed"
+                                + " upstream — verify and reconcile manually if needed.");
+            }
             if (target.isCancelIssue()) {
-                certificateRelationRepository.deleteAll(cert.getPredecessorRelations());
-                cert.getPredecessorRelations().clear();
+                certificateRelationRepository.deleteAll(fresh.getPredecessorRelations());
+                fresh.getPredecessorRelations().clear();
             }
-            cert.setState(target.targetState());
+            fresh.setState(target.targetState());
             if (!target.isCancelIssue()) {
-                cert.setPendingRevokeDestroyKey(null);
-                cert.setPendingRevokeAttributes(null);
+                fresh.setPendingRevokeDestroyKey(null);
+                fresh.setPendingRevokeAttributes(null);
             }
-            certificateRepository.save(cert);
+            certificateRepository.save(fresh);
             transactionManager.commit(cleanupTx);
         } catch (RuntimeException e) {
             transactionManager.rollback(cleanupTx);
