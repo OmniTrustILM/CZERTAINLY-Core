@@ -4,22 +4,51 @@ import java.net.*;
 import java.util.ArrayList;
 import java.util.function.Supplier;
 
+/**
+ * Resolves the instance ID used by {@link SnowflakeSerialNumberGenerator} to distinguish replicas.
+ *
+ * <h2>Resolution order</h2>
+ * <ol>
+ *   <li>{@code ILM_INSTANCE_ID} environment variable — explicit override, range {@code 0–65535}.</li>
+ *   <li>Auto-derived from the last two octets (lower 16 bits) of the container's private IPv4 address.</li>
+ * </ol>
+ *
+ * Auto-derivation is safe when all instances have IP addresses whose <b>last two octets are unique</b>
+ * (e.g. pod CIDR ≤ /16, Docker bridge/overlay ≤ /16, or all VMs within a single /16 subnet).
+ * It silently collides — and must not be used — in the following cases:
+ *
+ * <pre>
+ * | Scenario                              | Risk                                                        |
+ * |---------------------------------------|-------------------------------------------------------------|
+ * | Multiple processes on the same host   | All share the same IP → same ID                             |
+ * | Docker with --network host            | All containers share the host IP → same ID                  |
+ * | Network CIDR wider than /16           | Instances in different /16 sub-ranges share the same last   |
+ * |                                       | two octets (e.g. 10.1.1.5 and 10.2.1.5 both yield ID 261)  |
+ * | Multiple clusters sharing a CA        | Pods from separate /16 networks can share the same last two |
+ * |                                       | octets even if each cluster is individually collision-free   |
+ * </pre>
+ *
+ * At startup, the resolved prefix length of the selected interface is checked: a prefix wider than /16
+ * triggers a warning. Cross-cluster collisions cannot be detected at runtime.
+ * Set {@code ILM_INSTANCE_ID} explicitly whenever the above conditions apply.
+ */
 final class InstanceIdResolver {
 
-    static final String ENV_VAR = "ILM_INSTANCE_ID";
-
-    enum Source { ENV_VAR, IP_ADDRESS }
-
-    record Resolution(int id, Source source) {}
+    static final String INSTANCE_ID_ENV_VAR = "ILM_INSTANCE_ID";
 
     private InstanceIdResolver() {
     }
 
     static Resolution resolve() {
-        String envValue = System.getenv(ENV_VAR);
-        int id = resolve(envValue, InstanceIdResolver::findLocalAddress);
-        Source source = (envValue != null && !envValue.isBlank()) ? Source.ENV_VAR : Source.IP_ADDRESS;
-        return new Resolution(id, source);
+        String envValue = System.getenv(INSTANCE_ID_ENV_VAR);
+        if (envValue != null && !envValue.isBlank()) {
+            int id = resolve(envValue, () -> null);
+            return new Resolution(id, Source.ENV_VAR, (short) -1);
+        }
+        InetAddress address = findLocalAddress();
+        int id = extractIdFromAddress(address.getAddress());
+        short prefixLength = findPrefixLength(address);
+        return new Resolution(id, Source.IP_ADDRESS, prefixLength);
     }
 
     private static InetAddress findLocalAddress() {
@@ -47,15 +76,15 @@ final class InstanceIdResolver {
             }
             if (usable.isEmpty()) {
                 throw new IllegalStateException(
-                        "No suitable network address found for instance ID. Set " + ENV_VAR + " explicitly.");
+                        "No suitable network address found for instance ID. Set " + INSTANCE_ID_ENV_VAR + " explicitly.");
             }
             return usable.stream()
-                    .filter(a -> a instanceof Inet4Address)
+                    .filter(Inet4Address.class::isInstance)
                     .findFirst()
                     .orElse(usable.getFirst());
         } catch (SocketException e) {
             throw new IllegalStateException(
-                    "No suitable network address found for instance ID. Set " + ENV_VAR + " explicitly.", e);
+                    "No suitable network address found for instance ID. Set " + INSTANCE_ID_ENV_VAR + " explicitly.", e);
         }
     }
 
@@ -73,11 +102,11 @@ final class InstanceIdResolver {
                 id = Integer.parseInt(envValue.strip());
             } catch (NumberFormatException e) {
                 throw new IllegalArgumentException(
-                        "ILM_INSTANCE_ID must be a valid integer, got: '" + envValue.strip() + "'");
+                        INSTANCE_ID_ENV_VAR + " must be a valid integer, got: '" + envValue.strip() + "'");
             }
             if (id < 0 || id > 65535) {
                 throw new IllegalArgumentException(
-                        "ILM_INSTANCE_ID must be between 0 and 65535, got: " + id);
+                        INSTANCE_ID_ENV_VAR + " must be between 0 and 65535, got: " + id);
             }
             return id;
         }
@@ -99,5 +128,26 @@ final class InstanceIdResolver {
         }
         // IPv4 address
         return ((address[address.length - 2] & 0xFF) << 8) | (address[address.length - 1] & 0xFF);
+    }
+
+    static short findPrefixLength(InetAddress address) {
+        try {
+            NetworkInterface ni = NetworkInterface.getByInetAddress(address);
+            if (ni != null) {
+                for (InterfaceAddress ia : ni.getInterfaceAddresses()) {
+                    if (ia.getAddress().equals(address)) {
+                        return ia.getNetworkPrefixLength();
+                    }
+                }
+            }
+        } catch (SocketException e) {
+            // prefix length is best-effort
+        }
+        return -1;
+    }
+
+    enum Source {ENV_VAR, IP_ADDRESS}
+
+    record Resolution(int id, Source source, short prefixLength) {
     }
 }

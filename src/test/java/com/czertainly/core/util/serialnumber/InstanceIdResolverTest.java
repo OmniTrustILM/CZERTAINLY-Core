@@ -8,6 +8,7 @@ import org.mockito.MockedStatic;
 
 import java.net.InetAddress;
 import java.net.NetworkInterface;
+import java.net.SocketException;
 import java.net.UnknownHostException;
 import java.util.Collections;
 import java.util.List;
@@ -20,13 +21,24 @@ import static org.mockito.Mockito.*;
 
 class InstanceIdResolverTest {
 
+    static Stream<InetAddress> nonUsableLocalHostAddresses() throws UnknownHostException {
+        return Stream.of(
+                InetAddress.getByAddress(new byte[]{127, 0, 0, 1}),                 // loopback
+                InetAddress.getByAddress(new byte[]{(byte) 169, (byte) 254, 1, 1}), // link-local
+                InetAddress.getByAddress(new byte[]{(byte) 224, 0, 0, 1}),          // multicast
+                InetAddress.getByAddress(new byte[]{0, 0, 0, 0})                    // any-local (wildcard)
+        );
+    }
+
     @Test
     void shouldResolveFromEnvVar() {
         // given
         String envValue = "1234";
 
         // when
-        int id = InstanceIdResolver.resolve(envValue, () -> { throw new AssertionError("should not be called"); });
+        int id = InstanceIdResolver.resolve(envValue, () -> {
+            throw new AssertionError("should not be called");
+        });
 
         // then
         assertThat(id).isEqualTo(1234);
@@ -108,15 +120,6 @@ class InstanceIdResolverTest {
         assertThat(id).isEqualTo((1 << 8) | 7);
     }
 
-    static Stream<InetAddress> nonUsableLocalHostAddresses() throws UnknownHostException {
-        return Stream.of(
-                InetAddress.getByAddress(new byte[]{127, 0, 0, 1}),           // loopback
-                InetAddress.getByAddress(new byte[]{(byte) 169, (byte) 254, 1, 1}), // link-local
-                InetAddress.getByAddress(new byte[]{(byte) 224, 0, 0, 1}),    // multicast
-                InetAddress.getByAddress(new byte[]{0, 0, 0, 0})              // any-local (wildcard)
-        );
-    }
-
     @ParameterizedTest
     @MethodSource("nonUsableLocalHostAddresses")
     void shouldFallBackToUsableAddressWhenLocalhostReturnsNonUsableAddress(InetAddress nonUsable) throws Exception {
@@ -138,6 +141,8 @@ class InstanceIdResolverTest {
             // then — ID must be derived from the routable address, not the non-usable one
             assertThat(resolution.source()).isEqualTo(InstanceIdResolver.Source.IP_ADDRESS);
             assertThat(resolution.id()).isEqualTo((1 << 8) | 5); // 10.0.1.5 → lower 16 bits
+            // NetworkInterface.getByInetAddress is not stubbed, so findPrefixLength returns -1
+            assertThat(resolution.prefixLength()).isEqualTo((short) -1);
         }
     }
 
@@ -161,6 +166,54 @@ class InstanceIdResolverTest {
 
         // then
         assertThat(id).isEqualTo((30 << 8) | 40);
+    }
+
+    @Test
+    void shouldXorFoldIpv6WhenUsedViaResolve() throws UnknownHostException {
+        // given — IPv6 address passed through resolve's supplier path
+        InetAddress ipv6 = InetAddress.getByAddress(new byte[]{
+                0x20, 0x01, 0x0d, (byte) 0xb8, 0, 0, 0, 0,
+                0, 0, 0, 0, 0x0A, 0x0B, 0x0C, 0x0D});
+
+        // when
+        int id = InstanceIdResolver.resolve(null, () -> ipv6);
+
+        // then
+        assertThat(id).isEqualTo(0x0A0B ^ 0x0C0D);
+    }
+
+    @Nested
+    class FindPrefixLengthTest {
+
+        @Test
+        void shouldReturnUnknownWhenInterfaceNotFound() throws UnknownHostException {
+            // given
+            InetAddress address = InetAddress.getByAddress(new byte[]{10, 0, 1, 5});
+
+            try (MockedStatic<NetworkInterface> mockedNI = mockStatic(NetworkInterface.class)) {
+                // when
+                mockedNI.when(() -> NetworkInterface.getByInetAddress(any())).thenReturn(null);
+                short prefixLength = InstanceIdResolver.findPrefixLength(address);
+
+                // then
+                assertThat(prefixLength).isEqualTo((short) -1);
+            }
+        }
+
+        @Test
+        void shouldReturnUnknownOnSocketException() throws UnknownHostException {
+            // given
+            InetAddress address = InetAddress.getByAddress(new byte[]{10, 0, 1, 5});
+
+            try (MockedStatic<NetworkInterface> mockedNI = mockStatic(NetworkInterface.class)) {
+                // when
+                mockedNI.when(() -> NetworkInterface.getByInetAddress(any())).thenThrow(new SocketException("simulated"));
+                short prefixLength = InstanceIdResolver.findPrefixLength(address);
+
+                // then
+                assertThat(prefixLength).isEqualTo((short) -1);
+            }
+        }
     }
 
     @Nested
@@ -254,20 +307,6 @@ class InstanceIdResolverTest {
             // then — 0xFFFF ^ 0xFFFF = 0x0000
             assertThat(id).isBetween(0, 65535);
         }
-    }
-
-    @Test
-    void shouldXorFoldIpv6WhenUsedViaResolve() throws UnknownHostException {
-        // given — IPv6 address passed through resolve's supplier path
-        InetAddress ipv6 = InetAddress.getByAddress(new byte[]{
-                0x20, 0x01, 0x0d, (byte) 0xb8, 0, 0, 0, 0,
-                0, 0, 0, 0, 0x0A, 0x0B, 0x0C, 0x0D});
-
-        // when
-        int id = InstanceIdResolver.resolve(null, () -> ipv6);
-
-        // then
-        assertThat(id).isEqualTo(0x0A0B ^ 0x0C0D);
     }
 
 }

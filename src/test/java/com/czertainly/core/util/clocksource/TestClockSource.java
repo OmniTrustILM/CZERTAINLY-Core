@@ -1,13 +1,17 @@
 package com.czertainly.core.util.clocksource;
 
 
-
 import java.time.Instant;
 
 public final class TestClockSource implements ClockSource {
 
     volatile long wallTimeMillis;
     volatile long monotonicNanos;
+
+    private TestClockSource(long wallTimeMillis, long monotonicNanos) {
+        this.wallTimeMillis = wallTimeMillis;
+        this.monotonicNanos = monotonicNanos;
+    }
 
     public static TestClockSource aTestClock() {
         return new TestClockSource(1_709_546_700_000L, 1_000_000_000L);
@@ -23,11 +27,6 @@ public final class TestClockSource implements ClockSource {
 
     public static TestClockSource ofWallTime(Instant instant) {
         return ofWallTimeMillis(instant.toEpochMilli());
-    }
-
-    private TestClockSource(long wallTimeMillis, long monotonicNanos) {
-        this.wallTimeMillis = wallTimeMillis;
-        this.monotonicNanos = monotonicNanos;
     }
 
     public TestClockSource wallTimeMillis(long wallTimeMillis) {

@@ -17,6 +17,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class SnowflakeSerialNumberGeneratorTest {
     private static final long EPOCH = SnowflakeSerialNumberGenerator.EPOCH_MILLIS;
+    private static final int TICK_MS = SnowflakeSerialNumberGenerator.TICK_MS;
+    private static final int TICK_SHIFT = SnowflakeSerialNumberGenerator.TICK_SHIFT;
+    private static final int INSTANCE_ID_SHIFT = SnowflakeSerialNumberGenerator.INSTANCE_ID_SHIFT;
+    private static final int MAX_SEQUENCE = SnowflakeSerialNumberGenerator.MAX_SEQUENCE;
+    private static final int MAX_INSTANCE_ID = SnowflakeSerialNumberGenerator.MAX_INSTANCE_ID;
     private static final int INSTANCE_ID = 42;
 
     @Test
@@ -29,12 +34,13 @@ class SnowflakeSerialNumberGeneratorTest {
         // when
         BigInteger id = generator.generate();
 
-        // then — layout: (tick << 24) | (instanceId << 8) | sequence
-        long tick = id.shiftRight(24).longValue();
-        int extractedInstanceId = id.shiftRight(8).and(BigInteger.valueOf(0xFFFF)).intValue();
-        int sequence = id.and(BigInteger.valueOf(0xFF)).intValue();
+        // then — layout: (tick << TICK_SHIFT) | (instanceId << INSTANCE_ID_SHIFT) | sequence
+        long tick = id.shiftRight(TICK_SHIFT).longValue();
+        int extractedInstanceId = id.shiftRight(INSTANCE_ID_SHIFT).and(BigInteger.valueOf(MAX_INSTANCE_ID)).intValue();
+        int sequence = id.and(BigInteger.valueOf(MAX_SEQUENCE)).intValue();
 
-        assertThat(tick).isEqualTo((startTime - EPOCH) / 10);
+        assertThat(id.bitLength()).isLessThanOrEqualTo(TICK_SHIFT + INSTANCE_ID_SHIFT);
+        assertThat(tick).isEqualTo((startTime - EPOCH) / TICK_MS);
         assertThat(extractedInstanceId).isEqualTo(INSTANCE_ID);
         assertThat(sequence).isZero();
     }
@@ -51,9 +57,9 @@ class SnowflakeSerialNumberGeneratorTest {
         BigInteger third = generator.generate();
 
         // then
-        assertThat(first.and(BigInteger.valueOf(0xFF)).intValue()).isZero();
-        assertThat(second.and(BigInteger.valueOf(0xFF)).intValue()).isEqualTo(1);
-        assertThat(third.and(BigInteger.valueOf(0xFF)).intValue()).isEqualTo(2);
+        assertThat(first.and(BigInteger.valueOf(MAX_SEQUENCE)).intValue()).isZero();
+        assertThat(second.and(BigInteger.valueOf(MAX_SEQUENCE)).intValue()).isEqualTo(1);
+        assertThat(third.and(BigInteger.valueOf(MAX_SEQUENCE)).intValue()).isEqualTo(2);
     }
 
     @Test
@@ -70,8 +76,8 @@ class SnowflakeSerialNumberGeneratorTest {
         BigInteger id = generator.generate();
 
         // then
-        assertThat(id.and(BigInteger.valueOf(0xFF)).intValue()).isZero();
-        assertThat(id.shiftRight(24).longValue()).isEqualTo((startTime + 10 - EPOCH) / 10);
+        assertThat(id.and(BigInteger.valueOf(MAX_SEQUENCE)).intValue()).isZero();
+        assertThat(id.shiftRight(TICK_SHIFT).longValue()).isEqualTo((startTime + TICK_MS - EPOCH) / TICK_MS);
     }
 
     @Test
@@ -88,8 +94,8 @@ class SnowflakeSerialNumberGeneratorTest {
                 // First 256 calls: one per generate(), all at the same tick.
                 // After overflow, the spin-wait loop polls repeatedly.
                 // Simulate several polls still at the old tick before advancing.
-                if (count > 256 + spinIterationsBeforeAdvance) {
-                    return startTime + 10; // next tick
+                if (count > MAX_SEQUENCE + 1 + spinIterationsBeforeAdvance) {
+                    return startTime + TICK_MS; // next tick
                 }
                 return startTime;
             }
@@ -106,21 +112,21 @@ class SnowflakeSerialNumberGeneratorTest {
         };
         var generator = new SnowflakeSerialNumberGenerator(advancingClock, INSTANCE_ID);
 
-        // when — generate 257 IDs (0–255 fill the sequence, 257th triggers spin-wait)
-        BigInteger[] ids = new BigInteger[257];
-        for (int i = 0; i < 257; i++) {
+        // when — generate MAX_SEQUENCE+2 IDs (0–MAX_SEQUENCE fill the sequence, last one triggers spin-wait)
+        BigInteger[] ids = new BigInteger[MAX_SEQUENCE + 2];
+        for (int i = 0; i < MAX_SEQUENCE + 2; i++) {
             ids[i] = generator.generate();
         }
 
         // then — the spin-wait loop polled multiple times before the tick advanced
         long expectedTick = (startTime - EPOCH) / 10;
-        assertThat(pollCount.get()).isGreaterThan(256 + spinIterationsBeforeAdvance);
-        // first 256 at the initial tick
-        assertThat(ids[0].shiftRight(24).longValue()).isEqualTo(expectedTick);
-        assertThat(ids[255].and(BigInteger.valueOf(0xFF)).intValue()).isEqualTo(255);
-        // 257th at next tick with sequence 0
-        assertThat(ids[256].shiftRight(24).longValue()).isEqualTo(expectedTick + 1);
-        assertThat(ids[256].and(BigInteger.valueOf(0xFF)).intValue()).isZero();
+        assertThat(pollCount.get()).isGreaterThan(MAX_SEQUENCE + 1 + spinIterationsBeforeAdvance);
+        // first MAX_SEQUENCE+1 IDs at the initial tick
+        assertThat(ids[0].shiftRight(TICK_SHIFT).longValue()).isEqualTo(expectedTick);
+        assertThat(ids[MAX_SEQUENCE].and(BigInteger.valueOf(MAX_SEQUENCE)).intValue()).isEqualTo(MAX_SEQUENCE);
+        // last ID at next tick with sequence 0
+        assertThat(ids[MAX_SEQUENCE + 1].shiftRight(TICK_SHIFT).longValue()).isEqualTo(expectedTick + 1);
+        assertThat(ids[MAX_SEQUENCE + 1].and(BigInteger.valueOf(MAX_SEQUENCE)).intValue()).isZero();
     }
 
     @Test
@@ -135,13 +141,17 @@ class SnowflakeSerialNumberGeneratorTest {
         // when — clock jumps backward by 50ms (within tolerance of 100ms), then recovers
         clock.wallTimeMillis(startTime - 50);
         Thread.startVirtualThread(() -> {
-            try { Thread.sleep(100); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            try {
+                Thread.sleep(100);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
             clock.wallTimeMillis(startTime);
         });
         BigInteger id = generator.generate();
 
         // then — generated at the recovered tick (200 / 10 = 20)
-        assertThat(id.shiftRight(24).longValue()).isEqualTo((startTime - EPOCH) / 10);
+        assertThat(id.shiftRight(TICK_SHIFT).longValue()).isEqualTo((startTime - EPOCH) / TICK_MS);
     }
 
     @Test
@@ -172,6 +182,19 @@ class SnowflakeSerialNumberGeneratorTest {
         assertThatThrownBy(generator::generate)
                 .isInstanceOf(ClockDriftException.class)
                 .hasMessageContaining("110 ms");
+    }
+
+    @Test
+    void shouldThrowOnTimestampOverflow() {
+        // given — set clock past the 40-bit tick maximum
+        long overflowMillis = EPOCH + (SnowflakeSerialNumberGenerator.MAX_TICK + 1) * SnowflakeSerialNumberGenerator.TICK_MS;
+        var clock = TestClockSource.ofWallTimeMillis(overflowMillis);
+        var generator = new SnowflakeSerialNumberGenerator(clock, INSTANCE_ID);
+
+        // then
+        assertThatThrownBy(generator::generate)
+                .isInstanceOf(SerialNumberGenerationException.class)
+                .hasMessageContaining("overflow");
     }
 
     @Test

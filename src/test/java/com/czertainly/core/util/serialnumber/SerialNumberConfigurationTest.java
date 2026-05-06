@@ -17,7 +17,8 @@ class SerialNumberConfigurationTest {
     void shouldCreateGeneratorWithInstanceIdFromEnvVar() {
         // given
         int expectedInstanceId = 1234;
-        var resolution = new InstanceIdResolver.Resolution(expectedInstanceId, InstanceIdResolver.Source.ENV_VAR);
+        var resolution = new InstanceIdResolver.Resolution(expectedInstanceId, InstanceIdResolver.Source.ENV_VAR,
+                (short) -1);
         var clock = TestClockSource.ofWallTimeMillis(SnowflakeSerialNumberGenerator.EPOCH_MILLIS + 1000);
         var config = new SerialNumberConfiguration();
 
@@ -38,7 +39,7 @@ class SerialNumberConfigurationTest {
     void shouldCreateGeneratorWithInstanceIdFromIpAddress() {
         // given
         int expectedInstanceId = 5678;
-        var resolution = new InstanceIdResolver.Resolution(expectedInstanceId, InstanceIdResolver.Source.IP_ADDRESS);
+        var resolution = new InstanceIdResolver.Resolution(expectedInstanceId, InstanceIdResolver.Source.IP_ADDRESS, (short) 16);
         var clock = TestClockSource.ofWallTimeMillis(SnowflakeSerialNumberGenerator.EPOCH_MILLIS + 1000);
         var config = new SerialNumberConfiguration();
 
