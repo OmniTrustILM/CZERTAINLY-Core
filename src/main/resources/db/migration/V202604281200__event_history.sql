@@ -22,7 +22,6 @@ UPDATE trigger_history th
 SET object_resource = t.resource
 FROM trigger t
 WHERE th.trigger_uuid = t.uuid;
-ALTER TABLE trigger_history ALTER COLUMN object_resource SET NOT NULL;
 
 -- Change trigger FK: keep trigger_history when trigger is deleted (SET NULL instead of CASCADE)
 ALTER TABLE trigger_history DROP CONSTRAINT trigger_history_trigger_uuid_fkey;
