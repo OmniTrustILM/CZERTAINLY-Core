@@ -84,22 +84,59 @@ public class EventServiceImpl implements EventService {
         }
 
         Page<EventHistory> eventHistories = eventHistoryRepository.findByEventAndResourceAndResourceUuidOrderByStartedAtDesc(event, resource, uuid, PageRequest.of(request.getPagination().getPageNumber() - 1, request.getPagination().getItemsPerPage()));
-        List<EventHistoryDto> eventHistoriesResponse = eventHistories.stream().map(
-                eventHistory -> {
-                    Page<UUID> objectUuids = triggerHistoryRepository.findDistinctObjectUuidsByEventHistoryUuid(eventHistory.getUuid(), PageRequest.of(request.getObjectsPagination().getPageNumber() - 1, request.getObjectsPagination().getItemsPerPage()));
-                    Map<UUID, List<TriggerHistory>> allTriggerHistories =
-                            triggerHistoryRepository.findByEventHistoryUuidAndObjectUuidInOrderByObjectUuidAscTriggeredAtDesc(eventHistory.getUuid(), objectUuids.toList())
-                                    .stream().collect(Collectors.groupingBy(TriggerHistory::getObjectUuid, LinkedHashMap::new, Collectors.toList()));
+        if (eventHistories.isEmpty()) {
+            return PaginationResponseMapper.toDto(eventHistories, List.of());
+        }
+
+        List<UUID> eventHistoryUuids = eventHistories.stream().map(EventHistory::getUuid).toList();
+
+        // Batch 1: all three counts in one GROUP BY query (replaces 3 per-row count queries)
+        Map<UUID, int[]> countsPerEvent = triggerHistoryRepository.countStatsByEventHistoryUuids(eventHistoryUuids)
+                .stream().collect(Collectors.toMap(
+                        row -> (UUID) row[0],
+                        row -> new int[]{
+                                ((Number) row[1]).intValue(),
+                                ((Number) row[2]).intValue(),
+                                ((Number) row[3]).intValue()
+                        }
+                ));
+
+        // Batch 2: paginated object UUIDs for all event histories in one window-function query
+        int objectsPageNumber = request.getObjectsPagination().getPageNumber();
+        int objectsItemsPerPage = request.getObjectsPagination().getItemsPerPage();
+        int offset = (objectsPageNumber - 1) * objectsItemsPerPage;
+        Map<UUID, List<UUID>> paginatedObjectUuidsPerEvent = triggerHistoryRepository
+                .findPaginatedObjectUuidsByEventHistoryUuids(eventHistoryUuids, offset, objectsItemsPerPage)
+                .stream().collect(Collectors.groupingBy(
+                        row -> (UUID) row[0],
+                        LinkedHashMap::new,
+                        Collectors.mapping(row -> (UUID) row[1], Collectors.toList())
+                ));
+
+        // Batch 3: all trigger histories for the paginated object UUIDs in one query, then group in Java
+        List<UUID> allPaginatedObjectUuids = paginatedObjectUuidsPerEvent.values().stream()
+                .flatMap(Collection::stream).distinct().toList();
+        Map<UUID, Map<UUID, List<TriggerHistory>>> triggerHistoriesByEventAndObject = allPaginatedObjectUuids.isEmpty()
+                ? Map.of()
+                : triggerHistoryRepository.findByEventHistoryUuidInAndObjectUuidInOrderByEventHistoryUuidAscObjectUuidAscTriggeredAtDesc(eventHistoryUuids, allPaginatedObjectUuids)
+                        .stream().collect(Collectors.groupingBy(
+                                TriggerHistory::getEventHistoryUuid,
+                                LinkedHashMap::new,
+                                Collectors.groupingBy(TriggerHistory::getObjectUuid, LinkedHashMap::new, Collectors.toList())
+                        ));
+
+        List<EventHistoryDto> eventHistoriesResponse = eventHistories.stream()
+                .map(eventHistory -> {
+                    int[] counts = countsPerEvent.getOrDefault(eventHistory.getUuid(), new int[]{0, 0, 0});
+                    List<UUID> paginatedObjectUuids = paginatedObjectUuidsPerEvent.getOrDefault(eventHistory.getUuid(), List.of());
+                    Map<UUID, List<TriggerHistory>> triggerHistoriesPerObject = triggerHistoriesByEventAndObject.getOrDefault(eventHistory.getUuid(), Map.of());
                     return EventHistoryMapper.toEventHistoryDto(
                             eventHistory,
-                            triggerHistoryRepository.countDistinctObjectUuidByEventHistoryUuid(eventHistory.getUuid()),
-                            triggerHistoryRepository.countDistinctObjectUuidByEventHistoryUuidAndConditionsMatchedTrue(eventHistory.getUuid()),
-                            triggerHistoryRepository.countDistinctObjectUuidByEventHistoryUuidAndConditionsMatchedTrueAndTriggerIgnoreTriggerTrue(eventHistory.getUuid()),
-                            objectUuids,
-                            allTriggerHistories
+                            counts[0], counts[1], counts[2],
+                            paginatedObjectUuids, objectsPageNumber, objectsItemsPerPage,
+                            triggerHistoriesPerObject
                     );
-                }
-        ).toList();
+                }).toList();
 
         return PaginationResponseMapper.toDto(eventHistories, eventHistoriesResponse);
     }

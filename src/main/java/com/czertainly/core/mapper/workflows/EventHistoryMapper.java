@@ -7,8 +7,6 @@ import com.czertainly.core.dao.entity.workflows.EventHistory;
 import com.czertainly.core.dao.entity.workflows.TriggerHistory;
 import com.czertainly.core.dao.entity.workflows.TriggerHistoryRecord;
 import org.jspecify.annotations.Nullable;
-import org.springframework.data.domain.Page;
-
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -51,7 +49,9 @@ public class EventHistoryMapper {
         return triggerHistoryObjectSummaryDto;
     }
 
-    public static EventHistoryDto toEventHistoryDto(EventHistory eventHistory, int objectsEvaluated, int objectsMatched, int objectsIgnored, Page<UUID> objectUuids, Map<UUID, List<TriggerHistory>> allTriggerHistories) {
+    public static EventHistoryDto toEventHistoryDto(EventHistory eventHistory, int objectsEvaluated, int objectsMatched, int objectsIgnored,
+                                                     List<UUID> paginatedObjectUuids, int objectsPageNumber, int objectsItemsPerPage,
+                                                     Map<UUID, List<TriggerHistory>> triggerHistoriesPerObject) {
         EventHistoryDto dto = new EventHistoryDto();
         dto.setStartedAt(eventHistory.getStartedAt());
         dto.setFinishedAt(eventHistory.getFinishedAt());
@@ -59,12 +59,12 @@ public class EventHistoryMapper {
         dto.setObjectsEvaluated(objectsEvaluated);
         dto.setObjectsMatched(objectsMatched);
         dto.setObjectsIgnored(objectsIgnored);
-        List<TriggerHistoryObjectSummaryDto> triggerHistoriesInEvent = objectUuids
+        List<TriggerHistoryObjectSummaryDto> triggerHistoriesInEvent = paginatedObjectUuids
                 .stream()
-                .map(objectUuid -> EventHistoryMapper.toTriggerHistoryObjectSummaryDto(allTriggerHistories.get(objectUuid), objectUuid))
+                .map(objectUuid -> EventHistoryMapper.toTriggerHistoryObjectSummaryDto(triggerHistoriesPerObject.getOrDefault(objectUuid, List.of()), objectUuid))
                 .toList();
 
-        dto.setObjectHistories(PaginationResponseMapper.toDto(objectUuids, triggerHistoriesInEvent));
+        dto.setObjectHistories(PaginationResponseMapper.toDto(triggerHistoriesInEvent, objectsPageNumber, objectsItemsPerPage, objectsEvaluated));
         return dto;
     }
 
