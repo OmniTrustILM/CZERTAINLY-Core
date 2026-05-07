@@ -172,6 +172,9 @@ class EventHandlersTest extends BaseSpringBootTest {
         Assertions.assertEquals(1, historyList.size());
         Assertions.assertEquals(CertificateEvent.UPDATE_VALIDATION_STATUS, historyList.getFirst().getEvent());
 
+        List<EventHistory> eventHistories = eventHistoryRepository.findAll();
+        Assertions.assertEquals(0, eventHistories.size()); // no triggers are set, so no event history
+
         ApprovalProfileRequestDto approvalProfileRequestDto = new ApprovalProfileRequestDto();
         approvalProfileRequestDto.setName("TestApprovalProfile");
         approvalProfileRequestDto.setExpiry(24);
