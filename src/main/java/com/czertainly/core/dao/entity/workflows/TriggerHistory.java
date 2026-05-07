@@ -107,4 +107,10 @@ public class TriggerHistory extends UniquelyIdentified {
     public final int hashCode() {
         return this instanceof HibernateProxy ? ((HibernateProxy) this).getHibernateLazyInitializer().getPersistentClass().hashCode() : getClass().hashCode();
     }
+
+    public void setEventHistory(EventHistory eventHistory) {
+        if (eventHistory == null) return;
+        this.eventHistoryUuid = eventHistory.getUuid();
+        this.eventHistory = eventHistory;
+    }
 }

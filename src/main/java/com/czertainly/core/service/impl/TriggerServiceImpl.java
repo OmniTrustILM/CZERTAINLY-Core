@@ -361,10 +361,7 @@ public class TriggerServiceImpl implements TriggerService {
         triggerHistory.setObjectUuid(objectUuid);
         triggerHistory.setReferenceObjectUuid(referenceObjectUuid);
         triggerHistory.setTriggeredAt(OffsetDateTime.now());
-        if (eventHistory != null) {
-            triggerHistory.setEventHistoryUuid(eventHistory.getUuid());
-            triggerHistory.setEventHistory(eventHistory);
-        }
+        triggerHistory.setEventHistory(eventHistory);
         triggerHistory.setObjectResource(objectResource);
 
         try {
