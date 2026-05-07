@@ -1544,6 +1544,14 @@ public class CertificateServiceImpl implements CertificateService, AttributeReso
         getCertificateEntity(uuid);
     }
 
+    @ExternalAuthorization(resource = Resource.CERTIFICATE, action = ResourceAction.UPDATE)
+    public void evaluatePermissionChainUpdate() {
+    }
+
+    @ExternalAuthorization(resource = Resource.CERTIFICATE, action = ResourceAction.DETAIL)
+    public void evaluatePermissionChainDetail() {
+    }
+
     @Override
     public void updateCertificateKeys(UUID keyUuid, String publicKeyFingerprint) {
         for (Certificate certificate : certificateRepository.findByPublicKeyFingerprint(publicKeyFingerprint)) {

@@ -350,7 +350,7 @@ public class TriggerServiceImpl implements TriggerService {
     }
 
     @Override
-    public TriggerHistory createTriggerHistory(UUID triggerUuid, TriggerAssociation triggerAssociation, UUID objectUuid, UUID referenceObjectUuid) {
+    public TriggerHistory createTriggerHistory(UUID triggerUuid, TriggerAssociation triggerAssociation, UUID objectUuid, UUID referenceObjectUuid, EventHistory eventHistory, Resource objectResource) {
         TriggerHistory triggerHistory = new TriggerHistory();
         triggerHistory.setTriggerUuid(triggerUuid);
         if (triggerAssociation != null) {
@@ -361,6 +361,8 @@ public class TriggerServiceImpl implements TriggerService {
         triggerHistory.setObjectUuid(objectUuid);
         triggerHistory.setReferenceObjectUuid(referenceObjectUuid);
         triggerHistory.setTriggeredAt(OffsetDateTime.now());
+        triggerHistory.setEventHistory(eventHistory);
+        triggerHistory.setObjectResource(objectResource);
 
         try {
             triggerHistory.setTriggeredBy(UUID.fromString(AuthHelper.getUserIdentification().getUuid()));
@@ -372,10 +374,10 @@ public class TriggerServiceImpl implements TriggerService {
     }
 
     @Override
-    public TriggerHistoryRecord createTriggerHistoryRecord(TriggerHistory triggerHistory, UUID conditionUuid, UUID executionUuid, String message) {
+    public TriggerHistoryRecord createTriggerHistoryRecord(UUID triggerHistoryUuid, UUID conditionUuid, UUID executionUuid, String message) {
         TriggerHistoryRecord triggerHistoryRecord = new TriggerHistoryRecord();
 
-        triggerHistoryRecord.setTriggerHistory(triggerHistory);
+        triggerHistoryRecord.setTriggerHistoryUuid(triggerHistoryUuid);
         triggerHistoryRecord.setConditionUuid(conditionUuid);
         triggerHistoryRecord.setExecutionUuid(executionUuid);
         triggerHistoryRecord.setMessage(message);

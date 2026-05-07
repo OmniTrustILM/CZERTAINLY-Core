@@ -35,6 +35,8 @@ import com.czertainly.core.dao.entity.notifications.PendingNotification;
 import com.czertainly.core.dao.repository.*;
 import com.czertainly.core.dao.repository.notifications.NotificationInstanceReferenceRepository;
 import com.czertainly.core.dao.repository.notifications.PendingNotificationRepository;
+import com.czertainly.core.dao.entity.workflows.EventHistory;
+import com.czertainly.core.dao.repository.workflows.EventHistoryRepository;
 import com.czertainly.core.dao.repository.workflows.TriggerAssociationRepository;
 import com.czertainly.core.enums.FilterField;
 import com.czertainly.core.events.data.DiscoveryResult;
@@ -112,6 +114,8 @@ class EventHandlersTest extends BaseSpringBootTest {
     private TriggerService triggerService;
     @Autowired
     private TriggerAssociationRepository triggerAssociationRepository;
+    @Autowired
+    private EventHistoryRepository eventHistoryRepository;
 
     @Autowired
     private ScheduledJobsRepository scheduledJobsRepository;
@@ -347,6 +351,16 @@ class EventHandlersTest extends BaseSpringBootTest {
         discoveryFinishedEventHandler.handleEvent(DiscoveryFinishedEventHandler.constructEventMessage(discovery.getUuid(), null, null, new DiscoveryResult(DiscoveryStatus.PROCESSING, "Test finalize")));
         discovery = discoveryRepository.findByUuid(discovery.getUuid()).orElseThrow();
         Assertions.assertEquals(DiscoveryStatus.COMPLETED, discovery.getStatus());
+
+        // each handleEvent call processes one platform-level trigger group → one EventHistory per call
+        List<EventHistory> eventHistories = eventHistoryRepository.findAll();
+        Assertions.assertEquals(2, eventHistories.size(), "Expected one EventHistory record per handleEvent call");
+        eventHistories.forEach(eh -> {
+            Assertions.assertEquals(ResourceEvent.DISCOVERY_FINISHED, eh.getEvent());
+            Assertions.assertEquals(EventStatus.FINISHED, eh.getStatus());
+            Assertions.assertNotNull(eh.getStartedAt());
+            Assertions.assertNotNull(eh.getFinishedAt());
+        });
 
         mockServer.stop();
     }
