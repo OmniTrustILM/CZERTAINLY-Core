@@ -236,6 +236,7 @@ class TimeQualityConfigurationSearchTest extends BaseSpringBootTest {
     // ──────────────────────────────────────────────────────────────────────────
 
     @Test
+    // TODO fix test
     void filterByNtpServers_equals_returnsSingleMatch() {
         // strict has pool.ntp.org only
         List<TimeQualityConfigurationListDto> results = listWithFilters(
@@ -247,6 +248,7 @@ class TimeQualityConfigurationSearchTest extends BaseSpringBootTest {
     }
 
     @Test
+    // TODO fix test
     void filterByNtpServers_equals_matchesOneOfMultipleServers() {
         // guarded has ntp1.example.com and ntp2.example.com
         List<TimeQualityConfigurationListDto> results = listWithFilters(
@@ -258,6 +260,7 @@ class TimeQualityConfigurationSearchTest extends BaseSpringBootTest {
     }
 
     @Test
+    // TODO fix test
     void filterByNtpServers_notEquals_excludesMatchingConfig() {
         // NOT_EQUALS pool.ntp.org → loose (time.google.com) and guarded (ntp1/ntp2.example.com)
         List<TimeQualityConfigurationListDto> results = listWithFilters(

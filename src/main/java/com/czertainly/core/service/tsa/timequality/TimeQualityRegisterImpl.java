@@ -4,7 +4,7 @@ package com.czertainly.core.service.tsa.timequality;
 import com.czertainly.core.model.signing.timequality.ExplicitTimeQualityConfiguration;
 import com.czertainly.core.model.signing.timequality.LocalClockTimeQualityConfiguration;
 import com.czertainly.core.model.signing.timequality.TimeQualityConfigurationModel;
-import com.czertainly.core.service.tsa.clocksource.ClockSource;
+import com.czertainly.core.util.clocksource.ClockSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;

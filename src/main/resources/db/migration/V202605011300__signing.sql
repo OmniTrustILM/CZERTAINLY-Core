@@ -1,24 +1,4 @@
--- ── 1. time_quality_configuration (no FK dependencies) ─────────────────
-CREATE TABLE "time_quality_configuration" (
-    "uuid"                        UUID         NOT NULL,
-    "name"                        VARCHAR      NOT NULL,
-    "description"                 TEXT,
-    "accuracy"                    INTERVAL     NOT NULL DEFAULT INTERVAL '1 second',
-    "ntp_servers"                 TEXT[]       NOT NULL,
-    "ntp_check_interval"          INTERVAL     NOT NULL DEFAULT INTERVAL '30 seconds',
-    "ntp_samples_per_server"      INTEGER      NOT NULL DEFAULT 4,
-    "ntp_check_timeout"           INTERVAL     NOT NULL DEFAULT INTERVAL '5 seconds',
-    "ntp_servers_min_reachable"   INTEGER      NOT NULL DEFAULT 1,
-    "max_clock_drift"             INTERVAL     NOT NULL DEFAULT INTERVAL '1 second',
-    "leap_second_guard"           BOOLEAN      NOT NULL DEFAULT TRUE,
-    "i_author"                    VARCHAR,
-    "i_cre"                       TIMESTAMP    DEFAULT NOW(),
-    "i_upd"                       TIMESTAMP    DEFAULT NOW(),
-    PRIMARY KEY ("uuid"),
-    UNIQUE ("name")
-);
-
--- ── 2. signing_profile header
+-- ── 1. signing_profile header
 -- signing_scheme and workflow_type are denormalized cache columns that mirror the latest signing_profile_version row. Updated on every create/update.
 CREATE TABLE "signing_profile" (
     "uuid"                     UUID         NOT NULL,
@@ -37,7 +17,7 @@ CREATE TABLE "signing_profile" (
     UNIQUE ("name")
 );
 
--- ── 3. tsp_profile
+-- ── 2. tsp_profile
 CREATE TABLE "tsp_profile" (
     "uuid"                          UUID       NOT NULL,
     "name"                          VARCHAR    NOT NULL,
@@ -51,7 +31,7 @@ CREATE TABLE "tsp_profile" (
     UNIQUE ("name")
 );
 
--- ── 4. signing_profile_version
+-- ── 3. signing_profile_version
 CREATE TABLE "signing_profile_version" (
     "uuid"                                  UUID         NOT NULL,
     "signing_profile_uuid"                  UUID         NOT NULL,
@@ -80,7 +60,7 @@ CREATE TABLE "signing_profile_version" (
     FOREIGN KEY ("signing_profile_uuid") REFERENCES "signing_profile" ("uuid") ON DELETE CASCADE
 );
 
--- ── 5. signing_record: records of signing operations
+-- ── 4. signing_record: records of signing operations
 CREATE TABLE "signing_record" (
     "uuid"                    UUID         NOT NULL,
     "name"                    VARCHAR,
@@ -98,7 +78,7 @@ CREATE TABLE "signing_record" (
 
 CREATE INDEX idx_sr_profile_version ON "signing_record" ("signing_profile_uuid", "signing_profile_version");
 
--- ── 6. Circular FK resolution: signing_profile ↔ tsp_profile ──────────────────────
+-- ── 5. Circular FK resolution: signing_profile ↔ tsp_profile ──────────────────────
 ALTER TABLE "signing_profile"
     ADD CONSTRAINT fk_signing_profile_tsp_profile
         FOREIGN KEY ("tsp_profile_uuid")

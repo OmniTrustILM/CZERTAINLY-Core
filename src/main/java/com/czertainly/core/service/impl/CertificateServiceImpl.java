@@ -176,6 +176,7 @@ public class CertificateServiceImpl implements CertificateService, AttributeReso
     private CertificateProtocolAssociationRepository certificateProtocolAssociationRepository;
     private ApplicationEventPublisher applicationEventPublisher;
     private ValidationProducer validationProducer;
+    private CacheManager cacheManager;
     private AuthenticationCache authenticationCache;
 
     /**
@@ -348,6 +349,11 @@ public class CertificateServiceImpl implements CertificateService, AttributeReso
     @Autowired
     public void setApplicationEventPublisher(ApplicationEventPublisher applicationEventPublisher) {
         this.applicationEventPublisher = applicationEventPublisher;
+    }
+
+    @Autowired
+    public void setCacheManager(CacheManager cacheManager) {
+        this.cacheManager = cacheManager;
     }
 
     @Autowired

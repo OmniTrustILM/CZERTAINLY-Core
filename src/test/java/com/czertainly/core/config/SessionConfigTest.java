@@ -105,6 +105,7 @@ class SessionConfigTest extends BaseSpringBootTestNoAuth {
     // ── TSP tests ─────────────────────────────────────────────────────────────
 
     @Test
+    // TODO fix test
     void tspRequest_noSetCookieInResponse() throws Exception {
         var result = mvc.perform(
                 post(TSP_URL)
@@ -120,6 +121,7 @@ class SessionConfigTest extends BaseSpringBootTestNoAuth {
      * Even when a {@code SESSION} cookie is present in the request, the TSP endpoint must ignore it.
      */
     @Test
+    // TODO fix test
     void tspRequest_ignoresIncomingSessionCookie() throws Exception {
         mvc.perform(
                 post(TSP_URL)

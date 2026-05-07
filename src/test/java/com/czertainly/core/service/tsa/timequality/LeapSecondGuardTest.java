@@ -1,6 +1,6 @@
 package com.czertainly.core.service.tsa.timequality;
 
-import com.czertainly.core.service.tsa.serialnumber.TestClockSource;
+import com.czertainly.core.util.clocksource.TestClockSource;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;

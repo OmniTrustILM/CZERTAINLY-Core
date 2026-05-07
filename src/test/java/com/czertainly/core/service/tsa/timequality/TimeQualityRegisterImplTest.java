@@ -3,7 +3,7 @@ package com.czertainly.core.service.tsa.timequality;
 import com.czertainly.core.model.signing.timequality.ExplicitTimeQualityConfigurationBuilder;
 import com.czertainly.core.model.signing.timequality.LocalClockTimeQualityConfiguration;
 import com.czertainly.core.model.signing.timequality.TimeQualityConfigurationModel;
-import com.czertainly.core.service.tsa.serialnumber.TestClockSource;
+import com.czertainly.core.util.clocksource.TestClockSource;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
