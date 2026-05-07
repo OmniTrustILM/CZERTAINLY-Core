@@ -270,12 +270,6 @@ public class VaultProfileServiceImpl implements VaultProfileService {
     }
 
     @Override
-    @ExternalAuthorization(resource = Resource.VAULT_PROFILE, action = ResourceAction.DETAIL)
-    public void evaluatePermissionChainOnDetails(SecuredUUID securedUUID) throws NotFoundException {
-        evaluatePermissionsInternal(securedUUID);
-    }
-
-    @Override
     @ExternalAuthorization(resource = Resource.VAULT_PROFILE, action = ResourceAction.LIST, parentResource = Resource.VAULT, parentAction = ResourceAction.LIST)
     public Long statisticsVaultProfileCount(SecurityFilter filter) {
         filter.setParentRefProperty(VaultProfile_.VAULT_INSTANCE_UUID);

@@ -392,12 +392,6 @@ public class ScepProfileServiceImpl implements ScepProfileService {
     }
 
     @Override
-    @ExternalAuthorization(resource = Resource.SCEP_PROFILE, action = ResourceAction.DETAIL)
-    public void evaluatePermissionChainOnDetails(SecuredUUID securedUUID) throws NotFoundException {
-        getScepProfileEntity(securedUUID);
-    }
-
-    @Override
     public List<CertificateDto> listScepCaCertificates(boolean intuneEnabled) {
         return certificateService.listScepCaCertificates(SecurityFilter.create(), intuneEnabled);
     }

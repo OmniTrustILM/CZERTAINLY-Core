@@ -163,12 +163,6 @@ public class GroupServiceImpl implements GroupService {
         // Since there are is no parent to the Group, exclusive parent permission evaluation need not be done
     }
 
-    @Override
-    @ExternalAuthorization(resource = Resource.GROUP, action = ResourceAction.DETAIL)
-    public void evaluatePermissionChainOnDetails(SecuredUUID securedUUID) throws NotFoundException {
-        getGroupEntity(securedUUID);
-    }
-
     private Group getGroupEntity(SecuredUUID uuid) throws NotFoundException {
         return groupRepository.findByUuid(uuid).orElseThrow(() -> new NotFoundException(Group.class, uuid));
     }

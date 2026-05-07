@@ -268,14 +268,6 @@ public class ResourceServiceImpl implements ResourceService {
         }
     }
 
-    @Override
-    public void evaluateDetailsPermission(Resource resource, UUID uuid) throws NotFoundException {
-            ResourceExtensionService resourceExtensionService = resourceExtensionServices.get(resource.getCode());
-            if (resourceExtensionService != null) {
-                resourceExtensionService.evaluatePermissionChainOnDetails(SecuredUUID.fromUUID(uuid));
-            }
-    }
-
     private ResourceObjectContentData getResourceObjectContentData(AttributeResource resource, UUID uuid, String name) throws NotFoundException, AttributeException, ConnectorException {
         ResourceObjectContentData data;
         if (resource.getContentClass() == ResourceSimpleContentData.class) {

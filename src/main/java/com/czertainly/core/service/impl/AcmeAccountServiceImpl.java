@@ -195,8 +195,4 @@ public class AcmeAccountServiceImpl implements AcmeAccountService {
         // Permission evaluation logic not required
     }
 
-    @Override
-    public void evaluatePermissionChainOnDetails(SecuredUUID securedUUID) {
-        // Permission evaluation logic not required
-    }
 }

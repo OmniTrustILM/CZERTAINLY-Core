@@ -752,12 +752,6 @@ public class LocationServiceImpl implements LocationService {
 
     }
 
-    @Override
-    @ExternalAuthorization(resource = Resource.LOCATION, action = ResourceAction.DETAIL)
-    public void evaluatePermissionChainOnDetails(SecuredUUID securedUUID) throws NotFoundException {
-        evaluatePermissionInternal(securedUUID);
-    }
-
     private void evaluatePermissionInternal(SecuredUUID uuid) throws NotFoundException {
         Location location = locationRepository.findByUuid(uuid)
                 .orElseThrow(() -> new NotFoundException(Location.class, uuid));

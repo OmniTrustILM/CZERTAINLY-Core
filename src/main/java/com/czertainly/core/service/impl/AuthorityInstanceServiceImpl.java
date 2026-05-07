@@ -349,12 +349,6 @@ public class AuthorityInstanceServiceImpl implements AuthorityInstanceService, A
         // Since there is no parent to the Authority, exclusive parent permission evaluation need not be done
     }
 
-    @Override
-    @ExternalAuthorization(resource = Resource.AUTHORITY, action = ResourceAction.DETAIL)
-    public void evaluatePermissionChainOnDetails(SecuredUUID securedUUID) throws NotFoundException {
-        getAuthorityInstanceReferenceEntity(securedUUID);
-    }
-
     private AuthorityInstanceReference getAuthorityInstanceReferenceEntity(SecuredUUID uuid) throws NotFoundException {
         return authorityInstanceReferenceRepository.findByUuid(uuid)
                 .orElseThrow(() -> new NotFoundException(AuthorityInstanceReference.class, uuid));

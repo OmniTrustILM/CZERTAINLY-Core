@@ -440,11 +440,6 @@ public class ComplianceProfileServiceImpl implements ComplianceProfileService {
         complianceProfileServiceV2.evaluatePermissionChain(uuid);
     }
 
-    @Override
-    public void evaluatePermissionChainOnDetails(SecuredUUID securedUUID) throws NotFoundException {
-        complianceProfileServiceV2.evaluatePermissionChainOnDetails(securedUUID);
-    }
-
     public ConnectorDto getValidatedComplianceProvider(UUID connectorUuid, String kind) throws ValidationException, NotFoundException {
         Connector connector = connectorRepository.findByUuid(connectorUuid).orElseThrow(() -> new NotFoundException(Connector.class, connectorUuid));
         ConnectorDto connectorDto = connector.mapToDto();
