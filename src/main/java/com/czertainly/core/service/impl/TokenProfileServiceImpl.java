@@ -293,12 +293,6 @@ public class TokenProfileServiceImpl implements TokenProfileService {
         permissionEvaluator.tokenInstance(profile.getTokenInstanceReference().getSecuredUuid());
     }
 
-    @Override
-    @ExternalAuthorization(resource = Resource.TOKEN_PROFILE, action = ResourceAction.DETAIL)
-    public void evaluatePermissionChainOnDetails(SecuredUUID securedUUID) throws NotFoundException {
-        evaluatePermissionsInternal(securedUUID);
-    }
-
     private void mergeAndValidateAttributes(TokenInstanceReference tokenInstanceRef, List<RequestAttribute> attributes) throws ConnectorException, AttributeException {
         logger.debug("Merging and validating attributes for token instance: {}. Request Attributes: {}", tokenInstanceRef, attributes);
         if (tokenInstanceRef.getConnector() == null) {

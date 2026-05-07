@@ -54,7 +54,8 @@ public class EventServiceImpl implements EventService {
     @Override
     @Transactional
     public PaginationResponseDto<ObjectEventHistoryDto> getEventHistory(Resource resource, UUID uuid, PaginationRequestDto pagination) throws NotFoundException {
-        resourceService.evaluateDetailsPermission(resource, uuid);
+        // Check if object is present for the given resource and uuid and if user has permissions for details of the object
+        resourceService.getResourceObject(resource, uuid);
         Page<TriggerHistory> triggerHistoryPage = triggerHistoryRepository.findByObjectUuidAndObjectResourceOrderByTriggeredAtDesc(uuid, resource, PageRequest.of(pagination.getPageNumber() - 1, pagination.getItemsPerPage()));
         List<ObjectEventHistoryDto> eventHistoryDtos = triggerHistoryPage.get().map(
                 triggerHistory -> {
@@ -80,7 +81,8 @@ public class EventServiceImpl implements EventService {
             throw new ValidationException("Missing UUID or Resource");
         }
         if (uuid != null) {
-            resourceService.evaluateDetailsPermission(resource, uuid);
+            // Check if object is present for the given resource and uuid and if user has permissions for details of the object
+            resourceService.getResourceObject(resource, uuid);
         }
 
         Page<EventHistory> eventHistories = eventHistoryRepository.findByEventAndResourceAndResourceUuidOrderByStartedAtDesc(event, resource, uuid, PageRequest.of(request.getPagination().getPageNumber() - 1, request.getPagination().getItemsPerPage()));

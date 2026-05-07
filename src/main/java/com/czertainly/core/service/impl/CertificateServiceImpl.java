@@ -1544,10 +1544,12 @@ public class CertificateServiceImpl implements CertificateService, AttributeReso
         getCertificateEntity(uuid);
     }
 
-    @Override
+    @ExternalAuthorization(resource = Resource.CERTIFICATE, action = ResourceAction.UPDATE)
+    public void evaluatePermissionChainUpdate() {
+    }
+
     @ExternalAuthorization(resource = Resource.CERTIFICATE, action = ResourceAction.DETAIL)
-    public void evaluatePermissionChainOnDetails(SecuredUUID securedUUID) throws NotFoundException {
-        getCertificateEntityWithAssociations(securedUUID);
+    public void evaluatePermissionChainDetail() {
     }
 
     @Override

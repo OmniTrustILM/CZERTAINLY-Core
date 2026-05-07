@@ -580,12 +580,6 @@ public class RaProfileServiceImpl implements RaProfileService {
     }
 
     @Override
-    @ExternalAuthorization(resource = Resource.RA_PROFILE, action = ResourceAction.DETAIL)
-    public void evaluatePermissionChainOnDetails(SecuredUUID securedUUID) throws NotFoundException {
-        evaluatePermissionInternal(securedUUID);
-    }
-
-    @Override
     @ExternalAuthorization(resource = Resource.APPROVAL_PROFILE, action = ResourceAction.LIST)
     public List<ApprovalProfileDto> getAssociatedApprovalProfiles(final String authorityInstanceUuid, final String raProfileUuid, final SecurityFilter securityFilter) throws NotFoundException {
         //Evaluate RA profile permissions

@@ -498,12 +498,6 @@ public class ComplianceProfileServiceImpl implements ComplianceProfileService {
         complianceProfileRepository.findByUuid(uuid).orElseThrow(() -> new NotFoundException(ComplianceProfile.class, uuid));
     }
 
-    @Override
-    @ExternalAuthorization(resource = Resource.COMPLIANCE_PROFILE, action = ResourceAction.DETAIL)
-    public void evaluatePermissionChainOnDetails(SecuredUUID securedUUID) throws NotFoundException {
-        complianceProfileRepository.findByUuid(securedUUID).orElseThrow(() -> new NotFoundException(ComplianceProfile.class, securedUUID));
-    }
-
     private void deleteComplianceProfile(ComplianceProfile complianceProfile, boolean isForce) throws NotFoundException {
         if (!isForce && !complianceProfile.getAssociations().isEmpty()) {
             var associations = getAssociations(complianceProfile.getSecuredUuid());

@@ -109,5 +109,4 @@ public interface ResourceService {
 
     void loadResourceObjectContentData(List<DataAttribute> attributes) throws NotFoundException, AttributeException, ConnectorException;
 
-    void evaluateDetailsPermission(Resource resource, UUID uuid) throws NotFoundException;
 }

@@ -173,12 +173,6 @@ public class RoleManagementServiceImpl implements RoleManagementService {
         getRole(uuid.toString());
     }
 
-    @Override
-    @ExternalAuthorization(resource = Resource.ROLE, action = ResourceAction.DETAIL)
-    public void evaluatePermissionChainOnDetails(SecuredUUID securedUUID) throws NotFoundException {
-        getRole(securedUUID.toString());
-    }
-
     private void checkSystemRole(String roleUuid) {
         RoleDetailDto roleDetailDto = roleManagementApiClient.getRoleDetail(roleUuid);
         if (Boolean.TRUE.equals(roleDetailDto.getSystemRole())) {

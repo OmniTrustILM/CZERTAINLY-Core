@@ -37,5 +37,4 @@ public interface ResourceExtensionService {
      */
     void evaluatePermissionChain(SecuredUUID uuid) throws NotFoundException;
 
-    void evaluatePermissionChainOnDetails(SecuredUUID securedUUID) throws NotFoundException;
 }
