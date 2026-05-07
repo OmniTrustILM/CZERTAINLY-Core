@@ -172,6 +172,9 @@ public abstract class EventHandler<T extends UniquelyIdentifiedObject> implement
     }
 
     protected void processTriggers(EventContext<T> context, EventContextTriggers eventTriggers, T resourceObject, Object eventData) {
+        if (eventTriggers.getTriggers().isEmpty() && eventTriggers.getIgnoreTriggers().isEmpty()) {
+            return;
+        }
         logger.debug("Going to process {} triggers from {} {} on {} object(s) registered for event '{}'", eventTriggers.getIgnoreTriggers().size() + eventTriggers.getTriggers().size(), eventTriggers.getResource() == null ? Resource.SETTINGS.getLabel() : eventTriggers.getResource().getLabel(), eventTriggers.getObjectUuid(), context.getResourceObjects().size(), context.getEvent().getLabel());
         EventHistory eventHistory = createEventHistory(context.getEvent(), eventTriggers.getResource(), eventTriggers.getObjectUuid());
         // First, check the ignore triggers
