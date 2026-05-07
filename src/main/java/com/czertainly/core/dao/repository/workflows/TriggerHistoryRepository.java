@@ -5,6 +5,7 @@ import com.czertainly.api.model.core.auth.Resource;
 import com.czertainly.core.dao.entity.workflows.TriggerHistory;
 import com.czertainly.core.dao.repository.SecurityFilterRepository;
 import org.springframework.data.jpa.repository.EntityGraph;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -23,31 +24,13 @@ public interface TriggerHistoryRepository extends SecurityFilterRepository<Trigg
 
     @EntityGraph(attributePaths = {"records"})
     List<TriggerHistory> findByTriggerAssociationObjectUuidOrderByTriggerUuidAscTriggeredAtAsc(UUID triggerAssociationObjectUuid);
-
-    Long deleteByTriggerAssociationObjectUuid(UUID triggerAssociationObjectUuid);
+    
+    @Modifying
+    @Query("UPDATE TriggerHistory t SET t.triggerAssociationUuid = NULL WHERE t.triggerAssociationUuid = :uuid")
+    int removeTriggerAssociation(@Param("uuid") UUID uuid);
 
     @EntityGraph(attributePaths = {"records", "triggerAssociation", "records.execution", "records.execution.items", "records.execution.items.notificationProfile"})
     Page<TriggerHistory> findByObjectUuidAndObjectResourceOrderByTriggeredAtDesc(UUID objectUuid, Resource objectResource, Pageable pageable);
-
-    @Query(value = "SELECT DISTINCT t.objectUuid FROM TriggerHistory t WHERE t.eventHistoryUuid = :uuid",
-           countQuery = "SELECT COUNT(DISTINCT t.objectUuid) FROM TriggerHistory t WHERE t.eventHistoryUuid = :uuid")
-    Page<UUID> findDistinctObjectUuidsByEventHistoryUuid(@Param("uuid") UUID uuid, Pageable pageable);
-
-    @Query(value = "SELECT DISTINCT t.objectUuid FROM TriggerHistory t WHERE t.eventHistoryUuid IN :uuids",
-            countQuery = "SELECT COUNT(DISTINCT t.objectUuid) FROM TriggerHistory t WHERE t.eventHistoryUuid IN :uuids")
-    Page<UUID> findDistinctObjectUuidsByEventHistoryUuidIn(@Param("uuids") List<UUID> uuids, Pageable pageable);
-
-    @EntityGraph(attributePaths = {"records", "triggerAssociation", "records.execution", "records.execution.items", "records.execution.items.notificationProfile"})
-    List<TriggerHistory> findByEventHistoryUuidAndObjectUuidInOrderByObjectUuidAscTriggeredAtDesc(UUID eventHistoryUuid, List<UUID> objectUuids);
-
-    @Query("SELECT COUNT(DISTINCT t.objectUuid) FROM TriggerHistory t WHERE t.eventHistoryUuid = :uuid")
-    int countDistinctObjectUuidByEventHistoryUuid(@Param("uuid") UUID uuid);
-
-    @Query("SELECT COUNT(DISTINCT t.objectUuid) FROM TriggerHistory t WHERE t.eventHistoryUuid = :uuid AND t.conditionsMatched = true")
-    int countDistinctObjectUuidByEventHistoryUuidAndConditionsMatchedTrue(@Param("uuid") UUID uuid);
-
-    @Query("SELECT COUNT(DISTINCT t.objectUuid) FROM TriggerHistory t WHERE t.eventHistoryUuid = :uuid AND t.conditionsMatched = true AND t.trigger.ignoreTrigger = true")
-    int countDistinctObjectUuidByEventHistoryUuidAndConditionsMatchedTrueAndTriggerIgnoreTriggerTrue(@Param("uuid") UUID uuid);
 
     /**
      * Returns one row per event history with three counts in a single GROUP BY query,
