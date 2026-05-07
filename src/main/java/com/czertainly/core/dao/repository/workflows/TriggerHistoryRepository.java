@@ -24,7 +24,7 @@ public interface TriggerHistoryRepository extends SecurityFilterRepository<Trigg
 
     @EntityGraph(attributePaths = {"records"})
     List<TriggerHistory> findByTriggerAssociationObjectUuidOrderByTriggerUuidAscTriggeredAtAsc(UUID triggerAssociationObjectUuid);
-    
+
     @Modifying
     @Query("UPDATE TriggerHistory t SET t.triggerAssociationUuid = NULL WHERE t.triggerAssociationUuid = :uuid")
     int removeTriggerAssociation(@Param("uuid") UUID uuid);
