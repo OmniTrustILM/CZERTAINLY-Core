@@ -863,18 +863,32 @@ issue_certificate() {
 
 # --- Step 11: Poll for certificate issuance result ----------------------------
 # Usage: poll_certificate <cert_uuid> <cn>
+#
+# Waits until the certificate state is ISSUED and its validation status is either VALID or EXPIRING.
 poll_certificate() {
   local cert_uuid="$1" cn="$2"
-  local cert_state="" cert_details attempt history err_msg err_text
+  local cert_state="" val_status="" cert_details attempt history err_msg err_text
 
-  log "Waiting for certificate issuance to complete (CN=${cn})..."
+  log "Waiting for certificate issuance and validation to complete (CN=${cn})..."
   for (( attempt=1; attempt<=CERT_POLL_ATTEMPTS; attempt++ )); do
     cert_details=$(ilm_curl GET "/v1/certificates/${cert_uuid}")
     cert_state=$(echo "$cert_details" | jq -r '.state // empty')
     case "$cert_state" in
       issued)
-        ok "certificate state: issued"
-        break
+        val_status=$(echo "$cert_details" | jq -r '.validationStatus // empty')
+        case "$val_status" in
+          valid|expiring)
+            ok "certificate state: issued, validationStatus: ${val_status}"
+            return
+            ;;
+          failed)
+            die "Certificate validation failed (CN=${cn})"
+            ;;
+          *)
+            log "  attempt ${attempt}/${CERT_POLL_ATTEMPTS}: state='${cert_state}', validationStatus='${val_status}' -- waiting ${CERT_POLL_INTERVAL}s..."
+            sleep "$CERT_POLL_INTERVAL"
+            ;;
+        esac
         ;;
       failed)
         history=$(ilm_curl GET "/v1/certificates/${cert_uuid}/history")
@@ -900,31 +914,7 @@ poll_certificate() {
   if [[ "$cert_state" != "issued" ]]; then
     die "Certificate issuance timed out after $(( CERT_POLL_ATTEMPTS * CERT_POLL_INTERVAL ))s (last state: '${cert_state}')"
   fi
-}
-
-
-# --- Trust the certificate chain ----------------------------------------------
-# Usage: trust_certificate_chain <cert_uuid>
-#
-# Walks issuerCertificateUuid upward from <cert_uuid> and marks every CA
-# certificate in the chain as trustedCa=true.  Required before creating a
-# signing profile: CZERTAINLY rejects a certificate whose issuer chain is not
-# fully trusted.
-trust_certificate_chain() {
-  local cert_uuid="$1"
-  local current_uuid cert_details
-
-  current_uuid=$(ilm_curl GET "/v1/certificates/${cert_uuid}" \
-    | jq -r '.issuerCertificateUuid // empty')
-
-  while [[ -n "$current_uuid" ]]; do
-    log "Marking issuer certificate ${current_uuid} as trusted CA..."
-    ilm_curl PATCH "/v1/certificates/${current_uuid}" -d '{"trustedCa": true}' >/dev/null
-    ok "Issuer certificate ${current_uuid} marked trusted"
-
-    current_uuid=$(ilm_curl GET "/v1/certificates/${current_uuid}" \
-      | jq -r '.issuerCertificateUuid // empty')
-  done
+  die "Certificate validation timed out after $(( CERT_POLL_ATTEMPTS * CERT_POLL_INTERVAL ))s (state: '${cert_state}', validationStatus: '${val_status}')"
 }
 
 # --- Step 12: TSP profile -----------------------------------------------------
@@ -1127,7 +1117,6 @@ main() {
     "$KEY_UUID_NQ" "$PRIVATE_KEY_ITEM_UUID_NQ" "$RA_PROFILE_UUID_NQ" \
     ISSUED_CERT_UUID_NQ
   poll_certificate "$ISSUED_CERT_UUID_NQ" "${CERTIFICATE_DN}-non-qualified"
-  trust_certificate_chain "$ISSUED_CERT_UUID_NQ"
   setup_tsp_profile \
     "${TSP_PROFILE_NAME_BASE}-non-qualified" \
     TSP_PROFILE_UUID_NQ
@@ -1155,7 +1144,6 @@ main() {
     "$KEY_UUID_Q" "$PRIVATE_KEY_ITEM_UUID_Q" "$RA_PROFILE_UUID_Q" \
     ISSUED_CERT_UUID_Q
   poll_certificate "$ISSUED_CERT_UUID_Q" "${CERTIFICATE_DN}-qualified"
-  trust_certificate_chain "$ISSUED_CERT_UUID_Q"
   setup_tsp_profile \
     "${TSP_PROFILE_NAME_BASE}-qualified" \
     TSP_PROFILE_UUID_Q
