@@ -184,7 +184,6 @@ public class TspProfileServiceImpl implements TspProfileService {
 
     @Override
     @ExternalAuthorization(resource = Resource.TSP_PROFILE, action = ResourceAction.ENABLE)
-    @Transactional
     public List<BulkActionMessageDto> bulkEnableTspProfiles(List<SecuredUUID> uuids) {
         List<BulkActionMessageDto> messages = new ArrayList<>();
         for (SecuredUUID uuid : uuids) {
@@ -210,7 +209,6 @@ public class TspProfileServiceImpl implements TspProfileService {
 
     @Override
     @ExternalAuthorization(resource = Resource.TSP_PROFILE, action = ResourceAction.ENABLE)
-    @Transactional
     public List<BulkActionMessageDto> bulkDisableTspProfiles(List<SecuredUUID> uuids) {
         List<BulkActionMessageDto> messages = new ArrayList<>();
         for (SecuredUUID uuid : uuids) {
