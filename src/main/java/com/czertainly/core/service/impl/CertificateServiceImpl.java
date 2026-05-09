@@ -2168,8 +2168,17 @@ public class CertificateServiceImpl implements CertificateService, AttributeReso
                 applicationEventPublisher.publishEvent(new UpdateCertificateHistoryEvent(certificate.getUuid(), CertificateEvent.UPDATE_RA_PROFILE, CertificateEventStatus.FAILED, String.format("Certificate not identified by authority of new RA profile %s. Certificate needs to be reissued.", newRaProfile.getName()), null));
                 throw new CertificateOperationException(String.format("Cannot switch RA profile for certificate. Certificate not identified by authority of new RA profile %s. Certificate: %s", newRaProfile.getName(), certificate.toStringShort()));
             } catch (ValidationException e) {
-                applicationEventPublisher.publishEvent(new UpdateCertificateHistoryEvent(certificate.getUuid(), CertificateEvent.UPDATE_RA_PROFILE, CertificateEventStatus.FAILED, String.format("Certificate identified by authority of new RA profile %s but not valid according to RA profile attributes. Certificate needs to be reissued.", newRaProfile.getName()), null));
-                throw new CertificateOperationException(String.format("Cannot switch RA profile for certificate. Certificate identified by authority of new RA profile %s but not valid according to RA profile attributes. Certificate: %s", newRaProfile.getName(), certificate.toStringShort()));
+                // A connector may reject identification for any policy it implements: trust
+                // anchor mismatch, validity, key usage, RA-profile attribute violation, etc.
+                // Forward the connector's own error descriptions so the operator sees the
+                // specific reason. The descriptions are domain-shaped and safe to expose.
+                String reason = e.getErrors() == null
+                        ? e.getMessage()
+                        : e.getErrors().stream()
+                                .map(ValidationError::getErrorDescription)
+                                .collect(Collectors.joining("; "));
+                applicationEventPublisher.publishEvent(new UpdateCertificateHistoryEvent(certificate.getUuid(), CertificateEvent.UPDATE_RA_PROFILE, CertificateEventStatus.FAILED, String.format("Identification by authority of new RA profile %s rejected the certificate: %s", newRaProfile.getName(), reason), null));
+                throw new CertificateOperationException(String.format("Cannot switch RA profile for certificate. Identification by authority of new RA profile %s rejected the certificate: %s. Certificate: %s", newRaProfile.getName(), reason, certificate.toStringShort()));
             }
         }
 

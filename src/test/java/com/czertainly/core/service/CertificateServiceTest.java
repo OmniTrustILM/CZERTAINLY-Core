@@ -581,9 +581,14 @@ class CertificateServiceTest extends BaseSpringBootTest {
 
         mockServer.stubFor(WireMock
                 .post(WireMock.urlPathMatching("/v2/authorityProvider/authorities/[^/]+/certificates/identify"))
-                .willReturn(WireMock.jsonResponse("[\"Object of type 'Certificate' identified but not valid according RA profile attributes.\"]", 422)));
+                .willReturn(WireMock.jsonResponse("[\"Certificate is not issued by any of the configured CA certificates\"]", 422)));
 
-        Assertions.assertThrows(CertificateOperationException.class, () -> certificateService.updateCertificateObjects(certificate.getSecuredUuid(), uuidDto));
+        // The wrapped CertificateOperationException must include the connector's specific
+        // rejection reason so operators can see exactly why identification failed.
+        CertificateOperationException ex = Assertions.assertThrows(CertificateOperationException.class,
+                () -> certificateService.updateCertificateObjects(certificate.getSecuredUuid(), uuidDto));
+        Assertions.assertTrue(ex.getMessage().contains("Certificate is not issued by any of the configured CA certificates"),
+                "Expected connector's rejection reason to be surfaced, got: " + ex.getMessage());
     }
 
     @Test
