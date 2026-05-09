@@ -2172,11 +2172,18 @@ public class CertificateServiceImpl implements CertificateService, AttributeReso
                 // anchor mismatch, validity, key usage, RA-profile attribute violation, etc.
                 // Forward the connector's own error descriptions so the operator sees the
                 // specific reason. The descriptions are domain-shaped and safe to expose.
-                String reason = e.getErrors() == null
-                        ? e.getMessage()
-                        : e.getErrors().stream()
-                                .map(ValidationError::getErrorDescription)
-                                .collect(Collectors.joining("; "));
+                String joinedDescriptions = e.getErrors() == null ? "" : e.getErrors().stream()
+                        .map(ValidationError::getErrorDescription)
+                        .filter(s -> s != null && !s.isBlank())
+                        .collect(Collectors.joining("; "));
+                String reason;
+                if (!joinedDescriptions.isBlank()) {
+                    reason = joinedDescriptions;
+                } else if (e.getMessage() != null && !e.getMessage().isBlank()) {
+                    reason = e.getMessage();
+                } else {
+                    reason = "no reason supplied by connector";
+                }
                 applicationEventPublisher.publishEvent(new UpdateCertificateHistoryEvent(certificate.getUuid(), CertificateEvent.UPDATE_RA_PROFILE, CertificateEventStatus.FAILED, String.format("Identification by authority of new RA profile %s rejected the certificate: %s", newRaProfile.getName(), reason), null));
                 throw new CertificateOperationException(String.format("Cannot switch RA profile for certificate. Identification by authority of new RA profile %s rejected the certificate: %s. Certificate: %s", newRaProfile.getName(), reason, certificate.toStringShort()));
             }
