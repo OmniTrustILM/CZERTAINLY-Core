@@ -65,6 +65,7 @@ class ResourceServiceTest extends BaseSpringBootTest {
 
     private static final int AUTH_SERVICE_MOCK_PORT = 10001;
     private static final String CERTIFICATE_UUID = "c1cfe60f-2556-461f-9a64-9dd8e92158cf";
+    private static final String CERTIFICATE_UUID_2 = "a2bcfe60-1234-461f-9a64-9dd8e92158cf";
     private static final String ATTRIBUTE_UUID = "f1982dfe-2523-45cf-9bfe-034ff1659369";
 
     @DynamicPropertySource
@@ -99,6 +100,7 @@ class ResourceServiceTest extends BaseSpringBootTest {
     private WireMockServer mockServer;
 
     private Certificate certificate;
+    private Certificate certificate2;
 
     @AfterEach
     void tearDown() {
@@ -117,31 +119,31 @@ class ResourceServiceTest extends BaseSpringBootTest {
                                 .withHeader("Content-Type", "application/json")
                                 .withBody( // UserWithPaginationDto
                                         """
-                                        {
-                                            "currentPage": 1,
-                                            "pageSize": 2,
-                                            "totalPages": 1,
-                                            "totalCount": 2,
-                                            "hasPrevious": 0,
-                                            "hasNext": 0,
-                                            "data": [
                                                 {
-                                                    "uuid": "mock-user-uuid",
-                                                    "username": "mockUser",
-                                                    "groups": [],
-                                                    "enabled": true,
-                                                    "systemUser": false
-                                                },
-                                                {
-                                                    "uuid": "mock-user-uuid-2",
-                                                    "username": "mockUser2",
-                                                    "groups": [],
-                                                    "enabled": true,
-                                                    "systemUser": false
+                                                    "currentPage": 1,
+                                                    "pageSize": 2,
+                                                    "totalPages": 1,
+                                                    "totalCount": 2,
+                                                    "hasPrevious": 0,
+                                                    "hasNext": 0,
+                                                    "data": [
+                                                        {
+                                                            "uuid": "mock-user-uuid",
+                                                            "username": "mockUser",
+                                                            "groups": [],
+                                                            "enabled": true,
+                                                            "systemUser": false
+                                                        },
+                                                        {
+                                                            "uuid": "mock-user-uuid-2",
+                                                            "username": "mockUser2",
+                                                            "groups": [],
+                                                            "enabled": true,
+                                                            "systemUser": false
+                                                        }
+                                                    ]
                                                 }
-                                            ]
-                                        }
-                                        """
+                                                """
                                 )
                         )
         );
@@ -160,6 +162,21 @@ class ResourceServiceTest extends BaseSpringBootTest {
         certificate.setCertificateContentId(certificateContent.getId());
         certificate.setUuid(UUID.fromString(CERTIFICATE_UUID));
         certificateRepository.save(certificate);
+
+        CertificateContent certificateContent2 = new CertificateContent();
+        certificateContent2.setContent("abcdef");
+        certificateContent2 = certificateContentRepository.save(certificateContent2);
+
+        certificate2 = new Certificate();
+        certificate2.setSubjectDn("testCertificate2");
+        certificate2.setIssuerDn("testCertificate2");
+        certificate2.setSerialNumber("987654321");
+        certificate2.setState(CertificateState.ISSUED);
+        certificate2.setValidationStatus(CertificateValidationStatus.VALID);
+        certificate2.setCertificateContent(certificateContent2);
+        certificate2.setCertificateContentId(certificateContent2.getId());
+        certificate2.setUuid(UUID.fromString(CERTIFICATE_UUID_2));
+        certificateRepository.save(certificate2);
 
         CustomAttributeV3 attribute = new CustomAttributeV3();
         attribute.setUuid(ATTRIBUTE_UUID);
@@ -198,7 +215,7 @@ class ResourceServiceTest extends BaseSpringBootTest {
         Assertions.assertNotNull(resources);
         Assertions.assertFalse(resources.isEmpty(), "Resource list should not be empty");
         Assertions.assertTrue(resources.stream().anyMatch(
-                resource -> resource.getResource().getCode().equals(Resource.Codes.CERTIFICATE)),
+                        resource -> resource.getResource().getCode().equals(Resource.Codes.CERTIFICATE)),
                 "Resource list should contain CERTIFICATE resource");
     }
 
@@ -296,7 +313,7 @@ class ResourceServiceTest extends BaseSpringBootTest {
         Assertions.assertNotNull(events);
         Assertions.assertFalse(events.isEmpty(), "Resource event list should not be empty");
         Assertions.assertTrue(events.stream().anyMatch(
-                event -> event.getEvent().getCode().equals(ResourceEvent.CERTIFICATE_DISCOVERED.getCode())),
+                        event -> event.getEvent().getCode().equals(ResourceEvent.CERTIFICATE_DISCOVERED.getCode())),
                 "Resource event list should contain CERTIFICATE_DISCOVERED event");
     }
 
@@ -309,7 +326,7 @@ class ResourceServiceTest extends BaseSpringBootTest {
         Assertions.assertNotNull(events);
         Assertions.assertFalse(events.isEmpty(), "Resource event map should not be empty");
         Assertions.assertTrue(events.keySet().stream().anyMatch(
-                event -> event.getCode().equals(ResourceEvent.CERTIFICATE_DISCOVERED.getCode())),
+                        event -> event.getCode().equals(ResourceEvent.CERTIFICATE_DISCOVERED.getCode())),
                 "Resource event map should contain CERTIFICATE_DISCOVERED event");
     }
 
@@ -336,6 +353,42 @@ class ResourceServiceTest extends BaseSpringBootTest {
         Assertions.assertEquals(AttributeResource.CERTIFICATE, dataWithResource.getResource());
         Assertions.assertEquals(certificate.getCommonName(), dataWithResource.getName());
         Assertions.assertEquals(certificate.getUuid().toString(), dataWithResource.getUuid());
+    }
+
+    @Test
+    void testLoadResourceObjectContentDataFromDataAttributesMultiSelect() throws NotFoundException, AttributeException, ConnectorException {
+        // Build a multi-select RESOURCE attribute containing two certificate references.
+        DataAttributeV3 resourceAttribute = new DataAttributeV3();
+        resourceAttribute.setContentType(AttributeContentType.RESOURCE);
+        resourceAttribute.setName("caCertificates");
+        DataAttributeProperties properties = new DataAttributeProperties();
+        properties.setResource(AttributeResource.CERTIFICATE);
+        properties.setList(true);
+        properties.setMultiSelect(true);
+        resourceAttribute.setProperties(properties);
+
+        ResourceCertificateContentData data1 = new ResourceCertificateContentData();
+        data1.setUuid(certificate.getUuid().toString());
+        ResourceCertificateContentData data2 = new ResourceCertificateContentData();
+        data2.setUuid(certificate2.getUuid().toString());
+        resourceAttribute.setContent(List.of(
+                new ResourceObjectContent(certificate.getUuid().toString(), data1),
+                new ResourceObjectContent(certificate2.getUuid().toString(), data2)
+        ));
+
+        resourceService.loadResourceObjectContentData(List.of(resourceAttribute));
+
+        // Both certificates must be present — the bug returns only the first one.
+        Assertions.assertEquals(2, resourceAttribute.getContent().size(),
+                "Multi-select resource attribute must preserve all selected items, not only the first");
+
+        ResourceCertificateContentData loaded1 = (ResourceCertificateContentData) resourceAttribute.getContent().get(0).getData();
+        Assertions.assertEquals(certificate.getUuid().toString(), loaded1.getUuid());
+        Assertions.assertEquals(AttributeResource.CERTIFICATE, loaded1.getResource());
+
+        ResourceCertificateContentData loaded2 = (ResourceCertificateContentData) resourceAttribute.getContent().get(1).getData();
+        Assertions.assertEquals(certificate2.getUuid().toString(), loaded2.getUuid());
+        Assertions.assertEquals(AttributeResource.CERTIFICATE, loaded2.getResource());
     }
 
     @Test
@@ -401,7 +454,7 @@ class ResourceServiceTest extends BaseSpringBootTest {
     }
 
     @Test
-    void  testGetResourceWithAuthorization() throws NotFoundException {
+    void testGetResourceWithAuthorization() throws NotFoundException {
         forbidGetResourceWithAuthorization();
         List<Resource> allowedResources = List.of(
                 Resource.ACME_PROFILE,
@@ -446,7 +499,7 @@ class ResourceServiceTest extends BaseSpringBootTest {
         ).thenReturn(resourceAccessNotAllowed);
 
         Mockito.when(
-                opaClient.checkResourceAccess(Mockito.any(),  Mockito.argThat(req ->
+                opaClient.checkResourceAccess(Mockito.any(), Mockito.argThat(req ->
                         isRequestForResourceAction(req, Resource.SECRET)
                 ), Mockito.any(), Mockito.any())
         ).thenReturn(resourceAccessNotAllowed);

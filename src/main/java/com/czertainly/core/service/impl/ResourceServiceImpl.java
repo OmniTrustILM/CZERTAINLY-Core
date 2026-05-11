@@ -31,7 +31,6 @@ import com.czertainly.core.enums.SearchFieldTypeEnum;
 import com.czertainly.core.security.authz.SecuredUUID;
 import com.czertainly.core.security.authz.SecurityFilter;
 import com.czertainly.core.service.*;
-import com.czertainly.core.util.AttributeDefinitionUtils;
 import com.czertainly.core.util.FilterPredicatesBuilder;
 import com.czertainly.core.util.SearchHelper;
 import jakarta.persistence.EntityManager;
@@ -260,11 +259,22 @@ public class ResourceServiceImpl implements ResourceService {
             if (!AttributeContentType.RESOURCE.equals(attribute.getContentType())) {
                 continue;
             }
-            NameAndUuidDto resourceId = AttributeDefinitionUtils.getNameAndUuidData(attribute.getName(), AttributeDefinitionUtils.getClientAttributes(attributes));
-            if (resourceId == null || resourceId.getUuid() == null)
+            List<?> rawContent = attribute.getContent();
+            if (rawContent == null || rawContent.isEmpty())
                 throw new AttributeException("UUID of Resource Object is missing.", attribute.getUuid(), attribute.getName(), AttributeType.DATA, "");
-            ResourceObjectContentData data = getResourceObjectContentData(attribute.getProperties().getResource(), UUID.fromString(resourceId.getUuid()), resourceId.getName());
-            attribute.setContent(List.of(new ResourceObjectContent(resourceId.getName(), data)));
+            List<ResourceObjectContent> loadedContent = new ArrayList<>();
+            for (Object item : rawContent) {
+                ResourceObjectContent resourceItem = (ResourceObjectContent) item;
+                ResourceObjectContentData itemData = resourceItem.getData();
+                if (itemData == null || itemData.getUuid() == null)
+                    throw new AttributeException("UUID of Resource Object is missing.", attribute.getUuid(), attribute.getName(), AttributeType.DATA, "");
+                ResourceObjectContentData loaded = getResourceObjectContentData(
+                        attribute.getProperties().getResource(),
+                        UUID.fromString(itemData.getUuid()),
+                        itemData.getName());
+                loadedContent.add(new ResourceObjectContent(itemData.getName(), loaded));
+            }
+            attribute.setContent(loadedContent);
         }
     }
 
