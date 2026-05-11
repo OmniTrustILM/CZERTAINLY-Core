@@ -461,9 +461,7 @@ class ComplianceProfileServiceV2Test extends BaseComplianceTest {
         SecuredUUID profileUuid = SecuredUUID.fromUUID(profileDto.getUuid());
 
         UUID externalRaProfileUuid = externalRaProfile.getUuid();
-        Assertions.assertDoesNotThrow(() -> {
-            complianceProfileService.associateComplianceProfile(profileUuid, Resource.RA_PROFILE, externalRaProfileUuid);
-        });
+        Assertions.assertDoesNotThrow(() -> complianceProfileService.associateComplianceProfile(profileUuid, Resource.RA_PROFILE, externalRaProfileUuid));
 
         var associations = complianceProfileService.getAssociations(profileUuid);
         Assertions.assertEquals(1, associations.size());
