@@ -46,7 +46,6 @@ class TimeQualityConfigurationServiceJmsTest extends BaseSpringBootTest {
         applicationEvents.clear();
     }
 
-    // TODO fix test
     @Test
     void createTimeQualityConfiguration_firesConfigChangedEvent() throws AlreadyExistException, AttributeException, NotFoundException {
         service.createTimeQualityConfiguration(buildRequest("jms-create-test"));
@@ -55,7 +54,6 @@ class TimeQualityConfigurationServiceJmsTest extends BaseSpringBootTest {
                 .isGreaterThanOrEqualTo(1);
     }
 
-    // TODO fix test
     @Test
     void updateTimeQualityConfiguration_firesConfigChangedEvent() throws AlreadyExistException, AttributeException, NotFoundException {
         var created = service.createTimeQualityConfiguration(buildRequest("jms-update-test"));
@@ -67,7 +65,6 @@ class TimeQualityConfigurationServiceJmsTest extends BaseSpringBootTest {
                 .isGreaterThanOrEqualTo(1);
     }
 
-    // TODO fix test
     @Test
     void deleteTimeQualityConfiguration_firesConfigChangedEvent() throws AlreadyExistException, AttributeException, NotFoundException {
         var created = service.createTimeQualityConfiguration(buildRequest("jms-delete-test"));

@@ -25,10 +25,13 @@ import com.czertainly.core.dao.entity.signing.TimeQualityConfiguration_;
 import com.czertainly.core.dao.repository.signing.TimeQualityConfigurationRepository;
 import com.czertainly.core.enums.FilterField;
 import com.czertainly.core.mapper.signing.TimeQualityConfigurationMapper;
+import com.czertainly.core.messaging.jms.producers.TimeQualityConfigurationProducer;
+import com.czertainly.core.messaging.model.TimeQualityConfigChangedEvent;
 import com.czertainly.core.model.auth.ResourceAction;
 import com.czertainly.core.security.authz.ExternalAuthorization;
 import com.czertainly.core.security.authz.SecuredUUID;
 import com.czertainly.core.security.authz.SecurityFilter;
+import com.czertainly.core.service.SigningProfileService;
 import com.czertainly.core.service.TimeQualityConfigurationService;
 import com.czertainly.core.util.FilterPredicatesBuilder;
 import com.czertainly.core.util.SearchHelper;
@@ -39,6 +42,7 @@ import jakarta.persistence.criteria.Root;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.function.TriFunction;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageRequest;
@@ -59,8 +63,11 @@ public class TimeQualityConfigurationServiceImpl implements TimeQualityConfigura
     private static final String NOT_FOUND_MSG = "Time Quality Configuration not found: ";
 
     private AttributeEngine attributeEngine;
+    private SigningProfileService signingProfileService;
     private TimeQualityConfigurationRepository timeQualityConfigurationRepository;
     private TimeQualityConfigurationServiceImpl self;
+    private TimeQualityConfigurationProducer timeQualityConfigurationProducer;
+    private ApplicationEventPublisher applicationEventPublisher;
 
     @Override
     @ExternalAuthorization(resource = Resource.TIME_QUALITY_CONFIGURATION, action = ResourceAction.LIST)
@@ -230,12 +237,17 @@ public class TimeQualityConfigurationServiceImpl implements TimeQualityConfigura
 
     private void deleteTimeQualityConfiguration(TimeQualityConfiguration configuration) {
         attributeEngine.deleteObjectAttributeContent(Resource.TIME_QUALITY_CONFIGURATION, configuration.getUuid());
+        applicationEventPublisher.publishEvent(new TimeQualityConfigChangedEvent(this));
+        signingProfileService.notifyTimeQualityConfigurationChange(configuration.getUuid());
         timeQualityConfigurationRepository.delete(configuration);
     }
 
     private TimeQualityConfiguration saveOrTranslateUniqueViolation(TimeQualityConfiguration configuration, String name) throws AlreadyExistException {
         try {
-            return timeQualityConfigurationRepository.saveAndFlush(configuration);
+            TimeQualityConfiguration saved = timeQualityConfigurationRepository.saveAndFlush(configuration);
+            applicationEventPublisher.publishEvent(new TimeQualityConfigChangedEvent(this));
+            signingProfileService.notifyTimeQualityConfigurationChange(saved.getUuid());
+            return saved;
         } catch (DataIntegrityViolationException e) {
             throw new AlreadyExistException("Time Quality Configuration with name '" + name + "' already exists.");
         }
@@ -255,5 +267,20 @@ public class TimeQualityConfigurationServiceImpl implements TimeQualityConfigura
     @Autowired
     public void setSelf(TimeQualityConfigurationServiceImpl self) {
         this.self = self;
+    }
+
+    @Autowired
+    public void setSigningProfileService(SigningProfileService signingProfileService) {
+        this.signingProfileService = signingProfileService;
+    }
+
+    @Autowired
+    public void setTimeQualityConfigurationProducer(TimeQualityConfigurationProducer timeQualityConfigurationProducer) {
+        this.timeQualityConfigurationProducer = timeQualityConfigurationProducer;
+    }
+
+    @Autowired
+    public void setApplicationEventPublisher(ApplicationEventPublisher applicationEventPublisher) {
+        this.applicationEventPublisher = applicationEventPublisher;
     }
 }
