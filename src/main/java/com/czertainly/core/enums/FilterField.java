@@ -143,7 +143,7 @@ public enum FilterField {
     CONNECTOR_STATUS(Resource.CONNECTOR, null, null, Connector_.status, "Status", SearchFieldTypeEnum.LIST, ConnectorStatus.class),
     CONNECTOR_INTERFACE(Resource.CONNECTOR, null, List.of(Connector_.interfaces), ConnectorInterfaceEntity_.interfaceCode, "Interface", SearchFieldTypeEnum.LIST, ConnectorInterface.class),
     CONNECTOR_FEATURES(Resource.CONNECTOR, null, List.of(Connector_.interfaces), ConnectorInterfaceEntity_.features,
-            "Features", SearchFieldTypeEnum.ARRAY, FeatureFlag.class, null, false, null),
+            "Features", SearchFieldTypeEnum.NATIVE_ARRAY, FeatureFlag.class, null, false, null),
     CONNECTOR_FUNCTION_GROUP(Resource.CONNECTOR, null, List.of(Connector_.functionGroups, Connector2FunctionGroup_.functionGroup), FunctionGroup_.code, "Function group", SearchFieldTypeEnum.LIST, FunctionGroupCode.class),
 
     // Audit Logs
@@ -234,7 +234,8 @@ public enum FilterField {
     TIME_QUALITY_CONFIGURATION_LEAP_SECOND_GUARD(Resource.TIME_QUALITY_CONFIGURATION, null, null, TimeQualityConfiguration_.leapSecondGuard, "Leap Second Guard", SearchFieldTypeEnum.BOOLEAN),
     TIME_QUALITY_CONFIGURATION_NTP_SERVERS_MIN_REACHABLE(Resource.TIME_QUALITY_CONFIGURATION, null, null, TimeQualityConfiguration_.ntpServersMinReachable, "NTP Servers Min Reachable", SearchFieldTypeEnum.NUMBER),
     TIME_QUALITY_CONFIGURATION_NTP_SAMPLES_PER_SERVER(Resource.TIME_QUALITY_CONFIGURATION, null, null, TimeQualityConfiguration_.ntpSamplesPerServer, "NTP Samples Per Server", SearchFieldTypeEnum.NUMBER),
-    TIME_QUALITY_CONFIGURATION_NTP_SERVERS(Resource.TIME_QUALITY_CONFIGURATION, null, null, TimeQualityConfiguration_.ntpServers, "NTP Servers", SearchFieldTypeEnum.ARRAY)
+    TIME_QUALITY_CONFIGURATION_NTP_SERVERS(Resource.TIME_QUALITY_CONFIGURATION, null, null,
+            TimeQualityConfiguration_.ntpServers, "NTP Servers", SearchFieldTypeEnum.NATIVE_ARRAY)
     ;
 
     private static final FilterField[] VALUES;
@@ -279,8 +280,8 @@ public enum FilterField {
         this.expectedValue = expectedValue;
     }
 
-    public boolean isArrayField() {
-        return this.type == SearchFieldTypeEnum.ARRAY;
+    public boolean isNatriveArrayField() {
+        return this.type == SearchFieldTypeEnum.NATIVE_ARRAY;
     }
 
     public static List<FilterField> getEnumsForResource(Resource resource) {

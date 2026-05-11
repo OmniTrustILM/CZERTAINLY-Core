@@ -279,8 +279,7 @@ public class FilterPredicatesBuilder {
         }
         final LocalDateTime now = LocalDateTime.now();
         boolean bitEnumProperty = filterField.getEnumClass() != null && BitMaskEnum.class.isAssignableFrom(filterField.getEnumClass());
-        boolean isArrayField = filterField.isArrayField();
-        boolean isNativeArrayField = filterField.getType() == SearchFieldTypeEnum.NATIVE_ARRAY;
+        boolean isNativeArrayField = filterField.isNatriveArrayField();
         if (expression == null && !isCountOperator(conditionOperator))
             throw new ValidationException("Invalid filter configuration: no expression for field " + filterField + " with operator " + conditionOperator);
         final Expression finalExpression = expression;
@@ -338,13 +337,13 @@ public class FilterPredicatesBuilder {
             case STARTS_WITH -> predicate = criteriaBuilder.like(expression, filterValues.getFirst() + "%");
             case ENDS_WITH -> predicate = criteriaBuilder.like(expression, "%" + filterValues.getFirst());
             case CONTAINS -> {
-                if (isArrayField)
+                if (isNativeArrayField)
                     predicate = criteriaBuilder.isTrue(criteriaBuilder.function(ARRAY_CONTAINS_FUNCTION_NAME, Boolean.class, criteriaBuilder.literal(filterValues.getFirst().toString()), expression));
                 else
                     predicate = criteriaBuilder.like(expression, "%" + filterValues.getFirst() + "%");
             }
             case NOT_CONTAINS -> {
-                if (isArrayField)
+                if (isNativeArrayField)
                     predicate = getArrayNotContainsPredicate(criteriaBuilder, query, root, filterField, filterValues.getFirst().toString());
                 else
                     predicate = criteriaBuilder.or(getNotPresentPredicate(criteriaBuilder, from, expression, hasParent, isParentCollection, false, isJsonArray),
