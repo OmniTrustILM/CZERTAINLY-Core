@@ -171,6 +171,15 @@ public class CertificateTestUtil {
     }
 
     public static X509Certificate createTimestampingCertificate(KeyPair keyPair) throws OperatorCreationException, CertificateException, IOException {
+        return createTimestampingCertificate(keyPair, "SHA256withRSA");
+    }
+
+    /**
+     * Creates a self-signed TSA certificate with critical id-kp-timeStamping EKU,
+     * signed using the supplied JCA {@code signatureAlgorithm}
+     * (e.g. {@code "SHA256withRSA"} or {@code "SHA256withECDSA"}).
+     */
+    public static X509Certificate createTimestampingCertificate(KeyPair keyPair, String signatureAlgorithm) throws OperatorCreationException, CertificateException, IOException {
         ensureBouncyCastleProvider();
         Date notBefore = new Date();
         Date notAfter = new Date(System.currentTimeMillis() + 365L * 24 * 60 * 60 * 1000);
@@ -178,7 +187,7 @@ public class CertificateTestUtil {
                 new X500Name("CN=test-tsa"), BigInteger.ONE, notBefore, notAfter, new X500Name("CN=test-tsa"), keyPair.getPublic());
         certBuilder.addExtension(Extension.extendedKeyUsage, true,
                 new ExtendedKeyUsage(KeyPurposeId.id_kp_timeStamping));
-        ContentSigner signer = new JcaContentSignerBuilder("SHA256withRSA")
+        ContentSigner signer = new JcaContentSignerBuilder(signatureAlgorithm)
                 .setProvider(BouncyCastleProvider.PROVIDER_NAME).build(keyPair.getPrivate());
         return new JcaX509CertificateConverter().setProvider(BouncyCastleProvider.PROVIDER_NAME)
                 .getCertificate(certBuilder.build(signer));

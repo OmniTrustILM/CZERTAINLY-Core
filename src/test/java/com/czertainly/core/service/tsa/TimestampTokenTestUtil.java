@@ -59,14 +59,24 @@ public final class TimestampTokenTestUtil {
 
     /**
      * Generates a minimal {@link TimeStampToken} signed with the supplied {@code keyPair}
-     * and identified by the supplied {@code cert}.
+     * and identified by the supplied {@code cert}, using {@code SHA256withRSA}.
      */
     public static TimeStampToken createTimestampTokenSignedWith(KeyPair keyPair, X509Certificate cert) throws Exception {
+        return createTimestampTokenSignedWith(keyPair, cert, "SHA256withRSA");
+    }
+
+    /**
+     * Generates a minimal {@link TimeStampToken} signed with the supplied {@code keyPair},
+     * identified by the supplied {@code cert}, using the given JCA {@code signatureAlgorithm}
+     * (e.g. {@code "SHA256withRSA"} or {@code "SHA256withECDSA"}).
+     */
+    public static TimeStampToken createTimestampTokenSignedWith(KeyPair keyPair, X509Certificate cert,
+                                                                String signatureAlgorithm) throws Exception {
         var dcProvider = new JcaDigestCalculatorProviderBuilder().setProvider("BC").build();
         DigestCalculator sha256Calculator = dcProvider.get(new AlgorithmIdentifier(NISTObjectIdentifiers.id_sha256));
         var signerInfoGenerator = new JcaSimpleSignerInfoGeneratorBuilder()
                 .setProvider("BC")
-                .build("SHA256withRSA", keyPair.getPrivate(), cert);
+                .build(signatureAlgorithm, keyPair.getPrivate(), cert);
         var tokenGenerator = new TimeStampTokenGenerator(
                 signerInfoGenerator, sha256Calculator, new ASN1ObjectIdentifier("1.2.3.4"));
 

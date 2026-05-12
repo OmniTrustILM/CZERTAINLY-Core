@@ -12,6 +12,8 @@ import com.czertainly.api.model.common.enums.cryptography.DigestAlgorithm;
 import com.czertainly.api.model.common.enums.cryptography.KeyAlgorithm;
 import com.czertainly.api.model.common.enums.cryptography.KeyType;
 import com.czertainly.api.model.common.enums.cryptography.RsaSignatureScheme;
+import com.czertainly.core.attribute.EcdsaSignatureAttributes;
+import com.czertainly.api.model.client.attribute.RequestAttribute;
 import com.czertainly.api.model.client.attribute.RequestAttributeV2;
 import com.czertainly.api.model.connector.cryptography.enums.TokenInstanceStatus;
 import com.czertainly.api.model.connector.signatures.formatter.FormatDtbsResponseDto;
@@ -41,11 +43,12 @@ import com.czertainly.core.dao.repository.TokenProfileRepository;
 import com.czertainly.core.api.tsp.TspControllerImpl;
 import com.czertainly.core.service.SigningProfileService;
 import com.czertainly.core.service.TspProfileService;
-import com.czertainly.core.service.tsa.ManagedTimestampEngine;
 import com.czertainly.core.service.tsa.TimestampTokenTestUtil;
 import com.czertainly.core.util.BaseSpringBootTest;
+import com.czertainly.core.util.CertificateTestUtil;
 import com.czertainly.core.util.CertificateUtil;
 import com.czertainly.core.util.MetaDefinitions;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.tomakehurst.wiremock.WireMockServer;
@@ -56,37 +59,48 @@ import com.github.tomakehurst.wiremock.extension.ResponseDefinitionTransformerV2
 import com.github.tomakehurst.wiremock.http.ResponseDefinition;
 import com.github.tomakehurst.wiremock.stubbing.ServeEvent;
 import org.bouncycastle.asn1.cmp.PKIStatus;
-import org.bouncycastle.asn1.x509.ExtendedKeyUsage;
-import org.bouncycastle.asn1.x509.Extension;
-import org.bouncycastle.asn1.x509.KeyPurposeId;
-import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
-import org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder;
+import org.bouncycastle.jcajce.spec.MLDSAParameterSpec;
+import org.bouncycastle.jcajce.spec.SLHDSAParameterSpec;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
-import org.bouncycastle.operator.ContentSigner;
-import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
+import org.bouncycastle.operator.OperatorCreationException;
+import org.bouncycastle.pqc.jcajce.spec.FalconParameterSpec;
 import org.bouncycastle.tsp.TSPAlgorithms;
 import org.bouncycastle.tsp.TimeStampRequestGenerator;
 import org.bouncycastle.tsp.TimeStampResponse;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 
-import javax.security.auth.x500.X500Principal;
+import java.io.IOException;
 import java.math.BigInteger;
+import java.security.InvalidAlgorithmParameterException;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.security.NoSuchProviderException;
 import java.security.PrivateKey;
 import java.security.Security;
 import java.security.Signature;
+import java.security.cert.CertificateEncodingException;
+import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
+import java.security.spec.AlgorithmParameterSpec;
+import java.security.spec.ECGenParameterSpec;
 import java.util.Base64;
-import java.util.Date;
+import java.util.EnumMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Stream;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.post;
@@ -134,31 +148,52 @@ public class TspProtocolFlowITest extends BaseSpringBootTest {
     @Autowired
     private CertificateContentRepository certificateContentRepository;
 
-    // ── Test constants ────────────────────────────────────────────────────────
+    // ── Algorithm configuration ───────────────────────────────────────────────
 
-    private static final String TSP_PROFILE_NAME = "testTspProfile";
-    private static final String SIGNING_PROFILE_NAME = "testSigningProfile";
-    private static final String TSP_PROFILE_VALIDATED_NAME = "testTspProfileValidated";
-    private static final String SIGNING_PROFILE_VALIDATED_NAME = "testSigningProfileValidated";
+    /**
+     * Static description of a single signing algorithm under test.
+     *
+     * <p>{@code paramSpec} is {@code null} for RSA (which uses a plain key-size integer instead);
+     * all other algorithms supply an {@link AlgorithmParameterSpec}.
+     * {@code keyItemLength} is {@code 0} for post-quantum algorithms that have no numeric key size.
+     */
+    private record AlgorithmSpec(
+            String label,
+            KeyAlgorithm keyAlgorithm,
+            String jcaKeyAlgorithm,
+            AlgorithmParameterSpec paramSpec,
+            int keySize,
+            String certAndTokenSigAlg,
+            String formatterUrlPath,
+            int keyItemLength
+    ) {}
+
+    private static final List<AlgorithmSpec> ALGORITHM_SPECS = List.of(
+            new AlgorithmSpec("RSA",               KeyAlgorithm.RSA,    "RSA",     null,                          2048, "SHA256withRSA",     "/formatter-rsa",    2048),
+            new AlgorithmSpec("ECDSA",             KeyAlgorithm.ECDSA,  "EC",      new ECGenParameterSpec("secp256r1"),0, "SHA256withECDSA",   "/formatter-ecdsa",  256),
+            new AlgorithmSpec("FALCON-1024",       KeyAlgorithm.FALCON, "FALCON",  FalconParameterSpec.falcon_1024,             0, "FALCON-1024",       "/formatter-falcon", 0),
+            new AlgorithmSpec("ML-DSA-65",         KeyAlgorithm.MLDSA,  "ML-DSA",  MLDSAParameterSpec.ml_dsa_65,                0, "ML-DSA-65",         "/formatter-mldsa",  0),
+            new AlgorithmSpec("SLH-DSA-SHA2-128F", KeyAlgorithm.SLHDSA, "SLH-DSA", SLHDSAParameterSpec.slh_dsa_sha2_128f,       0, "SLH-DSA-SHA2-128F", "/formatter-slhdsa", 0)
+    );
 
     // ── Per-test state ────────────────────────────────────────────────────────
 
-    private UUID signingProfileUuid;
-    private UUID signingProfileValidatedUuid;
     private WireMockServer wireMockServer;
+    private UniversalSignerTransformer signerTransformer;
     private final ObjectMapper objectMapper = new ObjectMapper();
-    /**
-     * In-memory RSA key pair used to build the TSA certificate.
-     */
-    private KeyPair tsaKeyPair;
-    /**
-     * Self-signed X.509 TSA certificate with critical id-kp-timeStamping EKU.
-     */
-    private X509Certificate tsaCert;
-    /**
-     * Pre-computed RFC 3161 TimeStampToken DER bytes returned by the formatter stub.
-     */
-    private byte[] precomputedTokenBytes;
+    private TokenInstanceReference tokenInstance;
+    private TokenProfile tokenProfile;
+
+    /** Key pairs indexed by algorithm — populated in {@link #setUp()}. */
+    private final Map<KeyAlgorithm, KeyPair> keyPairs = new EnumMap<>(KeyAlgorithm.class);
+    /** Self-signed TSA certificates indexed by algorithm — populated in {@link #setUp()}. */
+    private final Map<KeyAlgorithm, X509Certificate> tsaCerts = new EnumMap<>(KeyAlgorithm.class);
+    /** Pre-computed RFC 3161 TimeStampToken DER bytes indexed by algorithm — populated in {@link #setUp()}. */
+    private final Map<KeyAlgorithm, byte[]> precomputedTokens = new EnumMap<>(KeyAlgorithm.class);
+    /** Persisted Certificate entities indexed by algorithm — populated in {@link #buildSharedInfrastructure()}. */
+    private final Map<KeyAlgorithm, Certificate> dbCertificates = new EnumMap<>(KeyAlgorithm.class);
+    /** Formatter connectors indexed by algorithm — populated in {@link #buildSharedInfrastructure()}. */
+    private final Map<KeyAlgorithm, Connector> formatterConnectors = new EnumMap<>(KeyAlgorithm.class);
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -166,20 +201,31 @@ public class TspProtocolFlowITest extends BaseSpringBootTest {
     public void setUp() throws Exception {
         ensureBouncyCastleProvider();
 
-        tsaKeyPair = generateRsaKeyPair();
-        tsaCert = buildTsaCertificate(tsaKeyPair);
-        precomputedTokenBytes = TimestampTokenTestUtil.createTimestampTokenSignedWith(tsaKeyPair, tsaCert).getEncoded();
+        for (AlgorithmSpec spec : ALGORITHM_SPECS) {
+            KeyPairGenerator gen = KeyPairGenerator.getInstance(spec.jcaKeyAlgorithm(), BouncyCastleProvider.PROVIDER_NAME);
+            if (spec.paramSpec() != null) {
+                gen.initialize(spec.paramSpec());
+            } else {
+                gen.initialize(spec.keySize());
+            }
+            KeyPair kp = gen.generateKeyPair();
+            keyPairs.put(spec.keyAlgorithm(), kp);
+            X509Certificate cert = CertificateTestUtil.createTimestampingCertificate(kp, spec.certAndTokenSigAlg());
+            tsaCerts.put(spec.keyAlgorithm(), cert);
+            precomputedTokens.put(spec.keyAlgorithm(),
+                    TimestampTokenTestUtil.createTimestampTokenSignedWith(kp, cert, spec.certAndTokenSigAlg()).getEncoded());
+        }
 
         wireMockServer = new WireMockServer(
                 WireMockConfiguration.options()
                         .port(0)
-                        .extensions(new RealRsaSignerTransformer(tsaKeyPair.getPrivate())));
+                        .extensions(signerTransformer = new UniversalSignerTransformer()));
         wireMockServer.start();
         WireMock.configureFor("localhost", wireMockServer.port());
 
-        stubSignEndpoint();
+        stubSignEndpoints();
         stubFormatterEndpoints();
-        buildInfrastructure();
+        buildSharedInfrastructure();
     }
 
     @AfterEach
@@ -187,102 +233,119 @@ public class TspProtocolFlowITest extends BaseSpringBootTest {
         wireMockServer.stop();
     }
 
-    // ── Test ──────────────────────────────────────────────────────────────────
+    // ── Tests ─────────────────────────────────────────────────────────────────
 
     /**
-     * Happy-path end-to-end flow: build TSP request → call controller → assert GRANTED.
-     */
-    @Test
-    public void tspFullTimestampFlowWithNoSignatureValidation() throws Exception {
-        assertGrantedSha256Response(tspController.timestamp(TSP_PROFILE_NAME, buildSha256TspRequestBytes()));
-    }
-
-    /**
-     * Happy-path end-to-end flow with token signature validation enabled: build TSP request → call controller → assert GRANTED.
-     */
-    @Test
-    public void tspFullTimestampFlowWithTokenSignatureValidation() throws Exception {
-        assertGrantedSha256Response(tspController.timestamp(TSP_PROFILE_VALIDATED_NAME, buildSha256TspRequestBytes()));
-    }
-
-    private void buildInfrastructure() throws Exception {
-        // tsaKeyPair and tsaCert were already built in setUp() before stub registration.
-
-        Connector connector = persistConnector();
-        Connector formatterConnector = persistFormatterConnector();
-        TokenInstanceReference tokenInstance = persistTokenInstance(connector);
-        TokenProfile tokenProfile = persistTokenProfile(tokenInstance);
-        CryptographicKey key = persistCryptographicKey(tokenInstance, tokenProfile, tsaKeyPair);
-        Certificate certificate = persistTsaCertificate(key, tsaCert);
-
-        signingProfileUuid = createSigningProfile(
-                certificate, formatterConnector,
-                SIGNING_PROFILE_NAME, "TSP integration test signing profile",
-                false);
-        createTspProfile(TSP_PROFILE_NAME, "TSP integration test profile", signingProfileUuid);
-
-        signingProfileValidatedUuid = createSigningProfile(
-                certificate, formatterConnector,
-                SIGNING_PROFILE_VALIDATED_NAME, "TSP integration test signing profile with token signature validation",
-                true);
-        createTspProfile(TSP_PROFILE_VALIDATED_NAME, "TSP integration test profile with token signature validation", signingProfileValidatedUuid);
-    }
-
-    /**
-     * Stub: POST /v1/cryptographyProvider/tokens/{any}/keys/{any}/sign → 200 with real signature.
+     * Parameterized end-to-end flow without token signature validation.
      *
-     * <p>The {@link RealRsaSignerTransformer} extension intercepts the request, extracts the
-     * base64-encoded DTBS from the JSON body, signs it with {@code SHA256withRSA} using the
-     * test TSA private key, and returns the real signature so the assembled timestamp token
-     * is cryptographically valid.
+     * <p>For each supported signing algorithm (RSA, ECDSA, FALCON-1024, ML-DSA-65, SLH-DSA-SHA2-128F):
+     * asserts that the controller returns PKI status GRANTED with a SHA-256 imprint algorithm.
      */
-    private void stubSignEndpoint() {
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("allSigningAlgorithmParameters")
+    public void withoutSignatureValidation(String label, KeyAlgorithm keyAlgorithm) throws Exception {
+        runTimestampFlow(label, keyAlgorithm, false);
+    }
+
+    /**
+     * Parameterized end-to-end flow with token signature validation enabled.
+     *
+     * <p>For each supported signing algorithm (RSA, ECDSA, FALCON-1024, ML-DSA-65, SLH-DSA-SHA2-128F):
+     * asserts that the controller returns PKI status GRANTED with a SHA-256 imprint algorithm,
+     * after verifying the cryptographic signature on the timestamp token.
+     */
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("allSigningAlgorithmParameters")
+    public void withSignatureValidation(String label, KeyAlgorithm keyAlgorithm) throws Exception {
+        runTimestampFlow(label, keyAlgorithm, true);
+    }
+
+    /**
+     * Parameter source for {@link #withoutSignatureValidation} and {@link #withSignatureValidation}.
+     *
+     * <p>Each entry is {@code (label, KeyAlgorithm)}, derived directly from {@link #ALGORITHM_SPECS}.
+     * All key material is pre-generated in {@link #setUp()} — no per-invocation generation occurs.
+     */
+    static Stream<Arguments> allSigningAlgorithmParameters() {
+        return ALGORITHM_SPECS.stream().map(s -> Arguments.of(s.label(), s.keyAlgorithm()));
+    }
+
+    private void runTimestampFlow(String label, KeyAlgorithm keyAlgorithm, boolean validateTokenSignature) throws Exception {
+        String profileSuffix = validateTokenSignature ? "-validated" : "";
+        String tspProfileName = "testTspProfile-" + label + profileSuffix;
+
+        UUID profileUuid = createSigningProfile(
+                keyAlgorithm,
+                dbCertificates.get(keyAlgorithm),
+                formatterConnectors.get(keyAlgorithm),
+                "testSigningProfile-" + label + profileSuffix,
+                "TSP integration test signing profile: " + label,
+                validateTokenSignature);
+        createTspProfile(tspProfileName, "TSP integration test profile: " + label, profileUuid);
+
+        assertGrantedSha256Response(tspController.timestamp(tspProfileName, buildSha256TspRequestBytes()));
+    }
+
+    private void buildSharedInfrastructure() throws Exception {
+        Connector connector = persistConnector();
+        tokenInstance = persistTokenInstance(connector);
+        tokenProfile = persistTokenProfile(tokenInstance);
+
+        for (AlgorithmSpec spec : ALGORITHM_SPECS) {
+            // Persist formatter connector and register its formatResponse stub
+            Connector fc = persistFormatterConnector(spec);
+            formatterConnectors.put(spec.keyAlgorithm(), fc);
+
+            FormattedResponseDto tokenResponse = new FormattedResponseDto();
+            tokenResponse.setResponse(precomputedTokens.get(spec.keyAlgorithm()));
+            wireMockServer.stubFor(
+                    post(urlPathMatching(spec.formatterUrlPath() + "/v1/signatureProvider/formatting/formatResponse"))
+                            .willReturn(aResponse()
+                                    .withStatus(200)
+                                    .withHeader("Content-Type", "application/json")
+                                    .withBody(objectMapper.writeValueAsString(tokenResponse)))
+            );
+
+            // Persist cryptographic key, register it with the signer transformer, then persist the certificate
+            CryptographicKey key = persistCryptographicKey(spec, tokenInstance, tokenProfile, keyPairs.get(spec.keyAlgorithm()));
+            UUID privKeyRefUuid = cryptographicKeyItemRepository.findByKeyUuidIn(List.of(key.getUuid())).stream()
+                    .filter(i -> i.getType() == KeyType.PRIVATE_KEY)
+                    .findFirst()
+                    .orElseThrow(() -> new IllegalStateException("No private key item for " + spec.label()))
+                    .getKeyReferenceUuid();
+            signerTransformer.registerKey(privKeyRefUuid, keyPairs.get(spec.keyAlgorithm()).getPrivate(), spec.certAndTokenSigAlg());
+
+            dbCertificates.put(spec.keyAlgorithm(), persistTsaCertificate(key, tsaCerts.get(spec.keyAlgorithm())));
+        }
+    }
+
+    /** Stubs POST /v1/cryptographyProvider/tokens/{any}/keys/{any}/sign → 200 via the real-signer transformer. */
+    private void stubSignEndpoints() {
         wireMockServer.stubFor(
                 post(urlPathMatching("/v1/cryptographyProvider/tokens/.+/keys/.+/sign"))
                         .willReturn(aResponse()
                                 .withStatus(200)
                                 .withHeader("Content-Type", "application/json")
-                                .withTransformers("real-rsa-signer"))
+                                .withTransformers("real-signer"))
         );
     }
 
     /**
-     * Stubs the two-phase signature formatter connector endpoints used by
-     * {@link com.czertainly.core.service.tsa.formatter.TimestampingConnectorSignatureFormatterClient}.
-     *
-     * <p>Phase 1 ({@code formatDtbs}): returns a fixed dummy DTBS byte array.
-     * The bytes are fed to the signer stub, which produces a real RSA signature over them.
-     *
-     * <p>Phase 2 ({@code formatResponse}): returns the pre-computed RFC 3161 token bytes
-     * generated in {@link #setUp()}.
+     * Stubs the shared phase-1 formatter endpoints (formatDtbs, attributes) for all algorithm URL prefixes.
+     * Per-algorithm phase-2 (formatResponse) stubs are registered in {@link #buildSharedInfrastructure()}.
      */
-    private void stubFormatterEndpoints() throws Exception {
-        // Phase 1: formatDtbs — return dummy DTBS bytes for the signer to sign
-        FormatDtbsResponseDto dtbsResponse = new FormatDtbsResponseDto();
+    private void stubFormatterEndpoints() throws Exception {        FormatDtbsResponseDto dtbsResponse = new FormatDtbsResponseDto();
         dtbsResponse.setDtbs(new byte[]{1, 2, 3, 4, 5});
         String dtbsJson = objectMapper.writeValueAsString(dtbsResponse);
         wireMockServer.stubFor(
-                post(urlPathMatching("/formatter/v1/signatureProvider/formatting/formatDtbs"))
+                post(urlPathMatching("/formatter-.*/v1/signatureProvider/formatting/formatDtbs"))
                         .willReturn(aResponse()
                                 .withStatus(200)
                                 .withHeader("Content-Type", "application/json")
                                 .withBody(dtbsJson))
         );
-
-        // Phase 2: formatResponse — return a structurally valid TimeStampToken
-        FormattedResponseDto tokenResponse = new FormattedResponseDto();
-        tokenResponse.setResponse(precomputedTokenBytes);
-        String tokenJson = objectMapper.writeValueAsString(tokenResponse);
         wireMockServer.stubFor(
-                post(urlPathMatching("/formatter/v1/signatureProvider/formatting/formatResponse"))
-                        .willReturn(aResponse()
-                                .withStatus(200)
-                                .withHeader("Content-Type", "application/json")
-                                .withBody(tokenJson))
-        );
-
-        wireMockServer.stubFor(
-                WireMock.get(WireMock.urlPathMatching("/formatter/v1/signatureProvider/formatting/attributes"))
+                WireMock.get(WireMock.urlPathMatching("/formatter-.*/v1/signatureProvider/formatting/attributes"))
                         .willReturn(WireMock.okJson("[]"))
         );
     }
@@ -296,10 +359,10 @@ public class TspProtocolFlowITest extends BaseSpringBootTest {
         return connectorRepository.save(connector);
     }
 
-    private Connector persistFormatterConnector() {
+    private Connector persistFormatterConnector(AlgorithmSpec spec) {
         Connector connector = new Connector();
-        connector.setName("tsp-formatter-connector");
-        connector.setUrl("http://localhost:" + wireMockServer.port() + "/formatter");
+        connector.setName("tsp-formatter-connector-" + spec.label().toLowerCase());
+        connector.setUrl("http://localhost:" + wireMockServer.port() + spec.formatterUrlPath());
         connector.setVersion(ConnectorVersion.V1);
         connector.setStatus(ConnectorStatus.CONNECTED);
         connector = connectorRepository.save(connector);
@@ -332,31 +395,35 @@ public class TspProtocolFlowITest extends BaseSpringBootTest {
         return tokenProfileRepository.saveAndFlush(profile);
     }
 
-    private CryptographicKey persistCryptographicKey(TokenInstanceReference tokenInstance,
+    /**
+     * Persists a {@link CryptographicKey} with private and public key items for the given algorithm.
+     * The public-key {@code keyData} (base64 SubjectPublicKeyInfo) is required by
+     * {@link com.czertainly.core.util.CryptographyUtil#resolveSignatureAlgorithmName} to derive
+     * the algorithm name from the embedded OID for post-quantum keys.
+     */
+    private CryptographicKey persistCryptographicKey(AlgorithmSpec spec,
+                                                     TokenInstanceReference tokenInstance,
                                                      TokenProfile tokenProfile,
                                                      KeyPair keyPair) {
         CryptographicKey key = new CryptographicKey();
-        key.setName("tsp-rsa-key");
+        key.setName("tsp-key-" + spec.label().toLowerCase());
         key.setTokenProfile(tokenProfile);
         key.setTokenInstanceReference(tokenInstance);
         key = cryptographicKeyRepository.saveAndFlush(key);
 
-        // Private key item
         CryptographicKeyItem privateItem = new CryptographicKeyItem();
         privateItem.setKey(key);
         privateItem.setKeyUuid(key.getUuid());
         privateItem.setType(KeyType.PRIVATE_KEY);
         privateItem.setState(com.czertainly.api.model.core.cryptography.key.KeyState.ACTIVE);
         privateItem.setEnabled(true);
-        privateItem.setKeyAlgorithm(KeyAlgorithm.RSA);
-        privateItem.setLength(2048);
+        privateItem.setKeyAlgorithm(spec.keyAlgorithm());
+        privateItem.setLength(spec.keyItemLength());
         privateItem.setUsage(List.of(com.czertainly.api.model.core.cryptography.key.KeyUsage.SIGN));
         privateItem = cryptographicKeyItemRepository.saveAndFlush(privateItem);
         privateItem.setKeyReferenceUuid(privateItem.getUuid());
         cryptographicKeyItemRepository.saveAndFlush(privateItem);
 
-        // Public key item — keyData carries the base64-encoded SubjectPublicKeyInfo (used by
-        // resolveSignatureAlgorithmName for FALCON/MLDSA; for RSA it is unused but must be present)
         String pubKeyBase64 = Base64.getEncoder().encodeToString(keyPair.getPublic().getEncoded());
         CryptographicKeyItem publicItem = new CryptographicKeyItem();
         publicItem.setKey(key);
@@ -364,8 +431,8 @@ public class TspProtocolFlowITest extends BaseSpringBootTest {
         publicItem.setType(KeyType.PUBLIC_KEY);
         publicItem.setState(com.czertainly.api.model.core.cryptography.key.KeyState.ACTIVE);
         publicItem.setEnabled(true);
-        publicItem.setKeyAlgorithm(KeyAlgorithm.RSA);
-        publicItem.setLength(2048);
+        publicItem.setKeyAlgorithm(spec.keyAlgorithm());
+        publicItem.setLength(spec.keyItemLength());
         publicItem.setUsage(List.of(com.czertainly.api.model.core.cryptography.key.KeyUsage.SIGN));
         publicItem.setKeyData(pubKeyBase64);
         publicItem = cryptographicKeyItemRepository.saveAndFlush(publicItem);
@@ -376,15 +443,15 @@ public class TspProtocolFlowITest extends BaseSpringBootTest {
     }
 
     /**
-     * Persists a Certificate entity with the TSA X.509 certificate content and all
-     * conditions required by {@code isCertificateDigitalSigningAcceptable} for TIMESTAMPING:
+     * Persists a Certificate entity with the TSA X.509 certificate content and all conditions required by
+     * {@code isCertificateDigitalSigningAcceptable} for TIMESTAMPING:
      * <ul>
      *   <li>state = ISSUED, validationStatus = VALID</li>
      *   <li>key has a token profile</li>
      *   <li>extendedKeyUsage = [id-kp-timeStamping], critical = true</li>
      * </ul>
      */
-    private Certificate persistTsaCertificate(CryptographicKey key, X509Certificate x509) throws Exception {
+    private Certificate persistTsaCertificate(CryptographicKey key, X509Certificate x509) throws CertificateEncodingException, NoSuchAlgorithmException {
         // Persist certificate content (base64-encoded DER without PEM headers, matching normalizeCertificateContent)
         String derBase64 = Base64.getEncoder().encodeToString(x509.getEncoded());
         String fingerprint = CertificateUtil.getThumbprint(x509.getEncoded());
@@ -406,13 +473,22 @@ public class TspProtocolFlowITest extends BaseSpringBootTest {
         return certificateRepository.saveAndFlush(cert);
     }
 
-    private UUID createSigningProfile(Certificate certificate, Connector formatterConnector, String name, String description,
+    /**
+     * Creates a signing profile for the given algorithm.
+     *
+     * <p>RSA profiles carry PKCS#1 v1.5 scheme and SHA-256 digest attributes; ECDSA profiles
+     * carry a SHA-256 digest attribute; post-quantum profiles carry no attributes (the algorithm
+     * is derived from the public key's SubjectPublicKeyInfo OID at signing time).
+     */
+    private UUID createSigningProfile(KeyAlgorithm keyAlgorithm,
+                                      Certificate certificate,
+                                      Connector formatterConnector,
+                                      String name,
+                                      String description,
                                       boolean validateTokenSignature) throws Exception {
         StaticKeyManagedSigningRequestDto scheme = new StaticKeyManagedSigningRequestDto();
         scheme.setCertificateUuid(certificate.getUuid());
-        scheme.setSigningOperationAttributes(List.of(
-                buildRsaSchemeAttribute(RsaSignatureScheme.PKCS1_v1_5),
-                buildDigestAttribute(DigestAlgorithm.SHA_256)));
+        scheme.setSigningOperationAttributes(buildSigningAttributes(keyAlgorithm));
 
         TimestampingWorkflowRequestDto workflow = new TimestampingWorkflowRequestDto();
         workflow.setSignatureFormatterConnectorUuid(formatterConnector.getUuid());
@@ -427,6 +503,15 @@ public class TspProtocolFlowITest extends BaseSpringBootTest {
         request.setWorkflow(workflow);
 
         return UUID.fromString(signingProfileService.createSigningProfile(request).getUuid());
+    }
+
+    /** Returns the signing-operation attributes required for {@code keyAlgorithm}'s profile. */
+    private static List<RequestAttribute> buildSigningAttributes(KeyAlgorithm keyAlgorithm) {
+        return switch (keyAlgorithm) {
+            case RSA -> List.of(buildRsaSchemeAttribute(RsaSignatureScheme.PKCS1_v1_5), buildDigestAttribute(DigestAlgorithm.SHA_256));
+            case ECDSA -> List.of(buildEcdsaDigestAttribute(DigestAlgorithm.SHA_256));
+            default -> List.of(); // PQ: algorithm derived from SubjectPublicKeyInfo OID
+        };
     }
 
     private void createTspProfile(String name, String description, UUID defaultSigningProfileUuid) throws Exception {
@@ -478,39 +563,67 @@ public class TspProtocolFlowITest extends BaseSpringBootTest {
         }
     }
 
-    private static KeyPair generateRsaKeyPair() throws Exception {
-        KeyPairGenerator gen = KeyPairGenerator.getInstance("RSA");
-        gen.initialize(2048);
-        return gen.generateKeyPair();
-    }
+    // ── WireMock transformer ──────────────────────────────────────────────────
 
     /**
-     * Builds a self-signed X.509 certificate with critical id-kp-timeStamping EKU.
-     * The resulting certificate satisfies the requirements checked by
-     * {@link com.czertainly.core.util.CertificateUtil#isCertificateDigitalSigningAcceptable}
-     * for the TIMESTAMPING workflow, as reflected in the {@code Certificate} entity's metadata fields.
+     * WireMock extension that routes each sign request to the correct private key by extracting
+     * the key-reference UUID from the request URL.
      */
-    private static X509Certificate buildTsaCertificate(KeyPair keyPair) throws Exception {
-        Date notBefore = new Date();
-        Date notAfter = new Date(System.currentTimeMillis() + 365L * 24 * 60 * 60 * 1000);
-        X500Principal subject = new X500Principal("CN=Test TSA, O=CZERTAINLY, C=CZ");
+    private static class UniversalSignerTransformer implements ResponseDefinitionTransformerV2 {
 
-        JcaX509v3CertificateBuilder certBuilder = new JcaX509v3CertificateBuilder(
-                subject, BigInteger.valueOf(System.currentTimeMillis()),
-                notBefore, notAfter, subject, keyPair.getPublic());
+        private static final Pattern KEY_REF_UUID_PATTERN = Pattern.compile("/keys/([^/]+)/sign");
 
-        // Critical id-kp-timeStamping EKU (RFC 3161 requirement)
-        certBuilder.addExtension(Extension.extendedKeyUsage, true,
-                new ExtendedKeyUsage(KeyPurposeId.id_kp_timeStamping));
+        private final Map<String, KeyEntry> keysByReferenceUuid = new ConcurrentHashMap<>();
 
-        ContentSigner signer = new JcaContentSignerBuilder("SHA256withRSA")
-                .setProvider(BouncyCastleProvider.PROVIDER_NAME)
-                .build(keyPair.getPrivate());
+        private record KeyEntry(PrivateKey privateKey, String algorithmName) {}
 
-        return new JcaX509CertificateConverter()
-                .setProvider(BouncyCastleProvider.PROVIDER_NAME)
-                .getCertificate(certBuilder.build(signer));
+        void registerKey(UUID keyReferenceUuid, PrivateKey privateKey, String algorithmName) {
+            keysByReferenceUuid.put(keyReferenceUuid.toString(), new KeyEntry(privateKey, algorithmName));
+        }
+
+        @Override
+        public ResponseDefinition transform(ServeEvent serveEvent) {
+            try {
+                ObjectMapper objectMapper = new ObjectMapper();
+                JsonNode body = objectMapper.readTree(serveEvent.getRequest().getBodyAsString());
+                byte[] dtbs = Base64.getDecoder().decode(body.at("/data/0/data").asText());
+
+                String url = serveEvent.getRequest().getUrl();
+                Matcher matcher = KEY_REF_UUID_PATTERN.matcher(url);
+                if (!matcher.find()) {
+                    throw new IllegalStateException("No key reference UUID in sign URL: " + url);
+                }
+                KeyEntry entry = keysByReferenceUuid.get(matcher.group(1));
+                if (entry == null) {
+                    throw new IllegalStateException("No registered key for reference UUID: " + matcher.group(1));
+                }
+
+                Signature sig = Signature.getInstance(entry.algorithmName(), BouncyCastleProvider.PROVIDER_NAME);
+                sig.initSign(entry.privateKey());
+                sig.update(dtbs);
+                byte[] signature = sig.sign();
+
+                String responseBody = objectMapper.writeValueAsString(
+                        new SignDataConnectorResponse(List.of(new SignatureEntry(signature))));
+
+                return ResponseDefinitionBuilder.responseDefinition()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody(responseBody)
+                        .build();
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to compute signature in WireMock transformer", e);
+            }
+        }
+
+        @Override
+        public String getName() { return "real-signer"; }
+
+        @Override
+        public boolean applyGlobally() { return false; }
     }
+
+    // ── Attribute builders ────────────────────────────────────────────────────
 
     private static RequestAttributeV2 buildRsaSchemeAttribute(RsaSignatureScheme scheme) {
         RequestAttributeV2 attr = new RequestAttributeV2();
@@ -530,52 +643,13 @@ public class TspProtocolFlowITest extends BaseSpringBootTest {
         return attr;
     }
 
-    // ── WireMock transformer ──────────────────────────────────────────────────
-
-    /**
-     * WireMock extension that computes a real {@code SHA256withRSA} signature over the incoming
-     * DTBS so the assembled timestamp token is cryptographically valid.
-     *
-     * <p>It parses the connector sign-request JSON ({@code data[0].data} = base64 DTBS),
-     * signs the decoded bytes with the test TSA private key, and returns the signature
-     * in the connector sign-response JSON ({@code signatures[0].data} = base64 signature).
-     */
-    private record RealRsaSignerTransformer(PrivateKey privateKey) implements ResponseDefinitionTransformerV2 {
-
-        @Override
-        public ResponseDefinition transform(ServeEvent serveEvent) {
-            try {
-                ObjectMapper objectMapper = new ObjectMapper();
-                JsonNode body = objectMapper.readTree(serveEvent.getRequest().getBodyAsString());
-                byte[] dtbs = Base64.getDecoder().decode(body.at("/data/0/data").asText());
-
-                Signature sig = Signature.getInstance("SHA256withRSA");
-                sig.initSign(privateKey);
-                sig.update(dtbs);
-                byte[] signature = sig.sign();
-
-                String responseBody = objectMapper.writeValueAsString(
-                        new SignDataConnectorResponse(List.of(new SignatureEntry(signature))));
-
-                return ResponseDefinitionBuilder.responseDefinition()
-                        .withStatus(200)
-                        .withHeader("Content-Type", "application/json")
-                        .withBody(responseBody)
-                        .build();
-            } catch (Exception e) {
-                throw new RuntimeException("Failed to compute SHA256withRSA signature in WireMock transformer", e);
-            }
-        }
-
-        @Override
-        public String getName() {
-            return "real-rsa-signer";
-        }
-
-        @Override
-        public boolean applyGlobally() {
-            return false;
-        }
+    private static RequestAttributeV2 buildEcdsaDigestAttribute(DigestAlgorithm algorithm) {
+        RequestAttributeV2 attr = new RequestAttributeV2();
+        attr.setUuid(UUID.fromString(EcdsaSignatureAttributes.ATTRIBUTE_DATA_SIG_DIGEST_UUID));
+        attr.setName(EcdsaSignatureAttributes.ATTRIBUTE_DATA_SIG_DIGEST);
+        attr.setContentType(AttributeContentType.STRING);
+        attr.setContent(List.of(new StringAttributeContentV2(algorithm.getLabel(), algorithm.getCode())));
+        return attr;
     }
 
     // ── WireMock response POJOs ───────────────────────────────────────────────
