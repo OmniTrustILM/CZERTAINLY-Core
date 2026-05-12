@@ -151,7 +151,9 @@ class EventServiceTest extends BaseSpringBootTest {
         Assertions.assertEquals(ResourceEvent.CERTIFICATE_DISCOVERED, dto.getEvent());
         Assertions.assertTrue(dto.isConditionsMatched());
         Assertions.assertTrue(dto.isActionsPerformed());
+        th = triggerHistoryRepository.findById(th.getUuid()).orElseThrow();
         Assertions.assertTrue(th.getTriggeredAt().truncatedTo(ChronoUnit.MICROS).isEqual(dto.getTriggeredAt().truncatedTo(ChronoUnit.MICROS)));
+
     }
 
     @Test
