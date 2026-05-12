@@ -9,7 +9,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import db.migration.V202507311051__MigrateToComplianceProfilesV2;
 import org.flywaydb.core.api.migration.Context;
 import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mockito;
@@ -36,7 +35,7 @@ class MigrateToComplianceProfilesV2Test extends BaseMigrationTest {
     @Autowired
     ObjectMapper objectMapper;
 
-    MigrateToComplianceProfilesV2Test() throws SQLException {
+    MigrateToComplianceProfilesV2Test() {
     }
 
     @Test
