@@ -352,5 +352,4 @@ public class AttributeServiceImpl implements AttributeService {
     public void evaluatePermissionChain(SecuredUUID uuid) throws NotFoundException {
         // not necessary to evaluate permissions to update
     }
-
 }
