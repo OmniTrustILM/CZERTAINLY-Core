@@ -28,7 +28,6 @@ import com.czertainly.core.security.authn.CzertainlyUserDetails;
 import com.czertainly.core.security.authn.client.AuthenticationInfo;
 import com.czertainly.core.security.authz.SecuredUUID;
 import com.czertainly.core.util.BaseMessagingIntTest;
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -100,8 +99,8 @@ class ApprovalFlowITest extends BaseMessagingIntTest {
         String rawData;
         try {
             rawData = new ObjectMapper().writeValueAsString(userProfileDto);
-        } catch (JsonProcessingException e) {
-            rawData = "{\"user\":{\"uuid\":\"%s\",\"username\":\"test-approver\"}}".formatted(APPROVER_UUID);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
         }
 
         AuthenticationInfo info = new AuthenticationInfo(AuthMethod.USER_PROXY, APPROVER_UUID.toString(), "test-approver", List.of(), rawData);
