@@ -79,7 +79,8 @@ public enum Resource {
     CBOM("cboms"),
 
     // SIGNING
-    TIME_QUALITY_CONFIGURATION("timeQualityConfigurations")
+    TIME_QUALITY_CONFIGURATION("timeQualityConfigurations"),
+    TSP_PROFILE("tspProfiles")
     ;
 
     @Schema(description = "Resource Name",
