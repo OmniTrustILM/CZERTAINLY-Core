@@ -35,7 +35,7 @@ public class AcmeExceptionHandlingAdvice {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ProblemDocument> handleOtherException(Exception ex) {
-        LOG.error(ex.getMessage(), ex);
+        LOG.error("Unexpected exception in ACME handler", ex);
         AcmeProblemDocumentException acmeException = new AcmeProblemDocumentException(HttpStatus.BAD_REQUEST, Problem.SERVER_INTERNAL);
         return handleAcmeProblemDocumentException(acmeException);
     }
