@@ -573,10 +573,7 @@ public class CertificateServiceImpl implements CertificateService, AttributeReso
         if (isEligibleForRevalidation(ca, platformEnabled)) {
             toRevalidate.add(ca.getUuid());
         }
-        certificateRepository.findAllDescendantCertificatesEligibleForValidation(ca.getUuid(), platformEnabled, certificateChainMaxDepth)
-                .stream()
-                .map(UUID::fromString)
-                .forEach(toRevalidate::add);
+        toRevalidate.addAll(certificateRepository.findAllDescendantCertificatesEligibleForValidation(ca.getUuid(), platformEnabled, certificateChainMaxDepth));
         if (!toRevalidate.isEmpty()) {
             log.debug("Publishing certificate validation event for CA subtree revalidation. caUuid={}, certificateCount={}", ca.getUuid(), toRevalidate.size());
             applicationEventPublisher.publishEvent(new CertificateValidationEvent(toRevalidate));

@@ -8,7 +8,7 @@ import com.czertainly.core.util.BaseSpringBootTest;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 
-import java.util.Collection;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -24,10 +24,6 @@ class FindEligibleDescendantCertificatesTest extends BaseSpringBootTest {
     private CertificateContentRepository certificateContentRepository;
     @Autowired
     private RaProfileRepository raProfileRepository;
-
-    private static List<UUID> toUuids(Collection<String> strings) {
-        return strings.stream().map(UUID::fromString).toList();
-    }
 
     private Certificate buildCert(Certificate issuer, boolean hasContent, CertificateValidationStatus status, boolean archived, RaProfile raProfile) {
         Certificate cert = new Certificate();
@@ -66,7 +62,7 @@ class FindEligibleDescendantCertificatesTest extends BaseSpringBootTest {
         Certificate childC = buildCert(root, true, CertificateValidationStatus.EXPIRING, false, null);
 
         // when
-        List<UUID> result = toUuids(certificateRepository.findAllDescendantCertificatesEligibleForValidation(root.getUuid(), true, MAX_DEPTH));
+        List<UUID> result = new ArrayList<>(certificateRepository.findAllDescendantCertificatesEligibleForValidation(root.getUuid(), true, MAX_DEPTH));
 
         // then
         assertThat(result).containsExactlyInAnyOrder(childA.getUuid(), childB.getUuid(), childC.getUuid());
@@ -79,7 +75,7 @@ class FindEligibleDescendantCertificatesTest extends BaseSpringBootTest {
         Certificate child = buildCert(root, true, CertificateValidationStatus.VALID, false, null);
 
         // when
-        List<UUID> result = toUuids(certificateRepository.findAllDescendantCertificatesEligibleForValidation(root.getUuid(), true, MAX_DEPTH));
+        List<UUID> result = new ArrayList<>(certificateRepository.findAllDescendantCertificatesEligibleForValidation(root.getUuid(), true, MAX_DEPTH));
 
         // then
         assertThat(result).containsExactly(child.getUuid()).doesNotContain(root.getUuid());
@@ -93,7 +89,7 @@ class FindEligibleDescendantCertificatesTest extends BaseSpringBootTest {
         Certificate leaf = buildCert(intermediate, true, CertificateValidationStatus.VALID, false, null);
 
         // when
-        List<UUID> result = toUuids(certificateRepository.findAllDescendantCertificatesEligibleForValidation(root.getUuid(), true, MAX_DEPTH));
+        List<UUID> result = new ArrayList<>(certificateRepository.findAllDescendantCertificatesEligibleForValidation(root.getUuid(), true, MAX_DEPTH));
 
         // then
         assertThat(result).containsExactlyInAnyOrder(intermediate.getUuid(), leaf.getUuid());
@@ -108,7 +104,7 @@ class FindEligibleDescendantCertificatesTest extends BaseSpringBootTest {
         Certificate level3 = buildCert(level2, true, CertificateValidationStatus.VALID, false, null);
 
         // when
-        List<UUID> result = toUuids(certificateRepository.findAllDescendantCertificatesEligibleForValidation(root.getUuid(), true, MAX_DEPTH));
+        List<UUID> result = new ArrayList<>(certificateRepository.findAllDescendantCertificatesEligibleForValidation(root.getUuid(), true, MAX_DEPTH));
 
         // then
         assertThat(result).containsExactlyInAnyOrder(level1.getUuid(), level2.getUuid(), level3.getUuid());
@@ -122,7 +118,7 @@ class FindEligibleDescendantCertificatesTest extends BaseSpringBootTest {
         Certificate archived = buildCert(root, true, CertificateValidationStatus.VALID, true, null);
 
         // when
-        List<UUID> result = toUuids(certificateRepository.findAllDescendantCertificatesEligibleForValidation(root.getUuid(), true, MAX_DEPTH));
+        List<UUID> result = new ArrayList<>(certificateRepository.findAllDescendantCertificatesEligibleForValidation(root.getUuid(), true, MAX_DEPTH));
 
         // then
         assertThat(result).containsExactly(active.getUuid()).doesNotContain(archived.getUuid());
@@ -136,7 +132,7 @@ class FindEligibleDescendantCertificatesTest extends BaseSpringBootTest {
         Certificate withoutContent = buildCert(root, false, CertificateValidationStatus.VALID, false, null);
 
         // when
-        List<UUID> result = toUuids(certificateRepository.findAllDescendantCertificatesEligibleForValidation(root.getUuid(), true, MAX_DEPTH));
+        List<UUID> result = new ArrayList<>(certificateRepository.findAllDescendantCertificatesEligibleForValidation(root.getUuid(), true, MAX_DEPTH));
 
         // then
         assertThat(result).containsExactly(withContent.getUuid()).doesNotContain(withoutContent.getUuid());
@@ -150,7 +146,7 @@ class FindEligibleDescendantCertificatesTest extends BaseSpringBootTest {
         Certificate revoked = buildCert(root, true, CertificateValidationStatus.REVOKED, false, null);
 
         // when
-        List<UUID> result = toUuids(certificateRepository.findAllDescendantCertificatesEligibleForValidation(root.getUuid(), true, MAX_DEPTH));
+        List<UUID> result = new ArrayList<>(certificateRepository.findAllDescendantCertificatesEligibleForValidation(root.getUuid(), true, MAX_DEPTH));
 
         // then
         assertThat(result).containsExactly(valid.getUuid()).doesNotContain(revoked.getUuid());
@@ -164,7 +160,7 @@ class FindEligibleDescendantCertificatesTest extends BaseSpringBootTest {
         Certificate expired = buildCert(root, true, CertificateValidationStatus.EXPIRED, false, null);
 
         // when
-        List<UUID> result = toUuids(certificateRepository.findAllDescendantCertificatesEligibleForValidation(root.getUuid(), true, MAX_DEPTH));
+        List<UUID> result = new ArrayList<>(certificateRepository.findAllDescendantCertificatesEligibleForValidation(root.getUuid(), true, MAX_DEPTH));
 
         // then
         assertThat(result).containsExactly(valid.getUuid()).doesNotContain(expired.getUuid());
@@ -178,7 +174,7 @@ class FindEligibleDescendantCertificatesTest extends BaseSpringBootTest {
         Certificate invalid = buildCert(root, true, CertificateValidationStatus.INVALID, false, null);
 
         // when
-        List<UUID> result = toUuids(certificateRepository.findAllDescendantCertificatesEligibleForValidation(root.getUuid(), true, MAX_DEPTH));
+        List<UUID> result = new ArrayList<>(certificateRepository.findAllDescendantCertificatesEligibleForValidation(root.getUuid(), true, MAX_DEPTH));
 
         // then
         assertThat(result).containsExactlyInAnyOrder(notChecked.getUuid(), invalid.getUuid());
@@ -197,7 +193,7 @@ class FindEligibleDescendantCertificatesTest extends BaseSpringBootTest {
         Certificate raEnabledFalse = buildCert(root, true, CertificateValidationStatus.VALID, false, raFalse);
 
         // when
-        List<UUID> result = toUuids(certificateRepository.findAllDescendantCertificatesEligibleForValidation(root.getUuid(), true, MAX_DEPTH));
+        List<UUID> result = new ArrayList<>(certificateRepository.findAllDescendantCertificatesEligibleForValidation(root.getUuid(), true, MAX_DEPTH));
 
         // then
         assertThat(result).containsExactlyInAnyOrder(noRa.getUuid(), raEnabledNull.getUuid(), raEnabledTrue.getUuid()).doesNotContain(raEnabledFalse.getUuid());
@@ -212,7 +208,7 @@ class FindEligibleDescendantCertificatesTest extends BaseSpringBootTest {
         Certificate childB = buildCert(rootB, true, CertificateValidationStatus.VALID, false, null);
 
         // when
-        List<UUID> result = toUuids(certificateRepository.findAllDescendantCertificatesEligibleForValidation(rootA.getUuid(), true, MAX_DEPTH));
+        List<UUID> result = new ArrayList<>(certificateRepository.findAllDescendantCertificatesEligibleForValidation(rootA.getUuid(), true, MAX_DEPTH));
 
         // then
         assertThat(result).containsExactly(childA.getUuid()).doesNotContain(rootB.getUuid(), childB.getUuid());
@@ -224,7 +220,7 @@ class FindEligibleDescendantCertificatesTest extends BaseSpringBootTest {
         Certificate root = buildCert(null, false, CertificateValidationStatus.VALID, false, null);
 
         // when
-        List<UUID> result = toUuids(certificateRepository.findAllDescendantCertificatesEligibleForValidation(root.getUuid(), true, MAX_DEPTH));
+        List<UUID> result = new ArrayList<>(certificateRepository.findAllDescendantCertificatesEligibleForValidation(root.getUuid(), true, MAX_DEPTH));
 
         // then
         assertThat(result).isEmpty();
@@ -240,7 +236,7 @@ class FindEligibleDescendantCertificatesTest extends BaseSpringBootTest {
         buildCert(root, true, CertificateValidationStatus.EXPIRED, false, null);
 
         // when
-        List<UUID> result = toUuids(certificateRepository.findAllDescendantCertificatesEligibleForValidation(root.getUuid(), true, MAX_DEPTH));
+        List<UUID> result = new ArrayList<>(certificateRepository.findAllDescendantCertificatesEligibleForValidation(root.getUuid(), true, MAX_DEPTH));
 
         // then
         assertThat(result).isEmpty();
@@ -254,7 +250,7 @@ class FindEligibleDescendantCertificatesTest extends BaseSpringBootTest {
         Certificate leaf = buildCert(intermediate, true, CertificateValidationStatus.VALID, false, null);
 
         // when
-        List<UUID> result = toUuids(certificateRepository.findAllDescendantCertificatesEligibleForValidation(root.getUuid(), true, MAX_DEPTH));
+        List<UUID> result = new ArrayList<>(certificateRepository.findAllDescendantCertificatesEligibleForValidation(root.getUuid(), true, MAX_DEPTH));
 
         // then
         assertThat(result).containsExactly(leaf.getUuid()).doesNotContain(intermediate.getUuid());
@@ -269,7 +265,7 @@ class FindEligibleDescendantCertificatesTest extends BaseSpringBootTest {
         Certificate child = buildCert(root, true, CertificateValidationStatus.VALID, false, null);
 
         // when
-        List<UUID> result = toUuids(certificateRepository.findAllDescendantCertificatesEligibleForValidation(root.getUuid(), true, MAX_DEPTH));
+        List<UUID> result = new ArrayList<>(certificateRepository.findAllDescendantCertificatesEligibleForValidation(root.getUuid(), true, MAX_DEPTH));
 
         // then
         assertThat(result).containsExactly(child.getUuid()).doesNotContain(root.getUuid());
@@ -284,7 +280,7 @@ class FindEligibleDescendantCertificatesTest extends BaseSpringBootTest {
         buildCert(root, true, CertificateValidationStatus.VALID, false, raNull);
 
         // when
-        List<UUID> result = toUuids(certificateRepository.findAllDescendantCertificatesEligibleForValidation(root.getUuid(), false, MAX_DEPTH));
+        List<UUID> result = new ArrayList<>(certificateRepository.findAllDescendantCertificatesEligibleForValidation(root.getUuid(), false, MAX_DEPTH));
 
         // then
         assertThat(result).isEmpty();
@@ -301,7 +297,7 @@ class FindEligibleDescendantCertificatesTest extends BaseSpringBootTest {
         Certificate noRa = buildCert(root, true, CertificateValidationStatus.VALID, false, null);
 
         // when
-        List<UUID> result = toUuids(certificateRepository.findAllDescendantCertificatesEligibleForValidation(root.getUuid(), false, MAX_DEPTH));
+        List<UUID> result = new ArrayList<>(certificateRepository.findAllDescendantCertificatesEligibleForValidation(root.getUuid(), false, MAX_DEPTH));
 
         // then
         assertThat(result).containsExactly(explicitTrue.getUuid()).doesNotContain(inheritsPlatform.getUuid(), noRa.getUuid());
@@ -318,7 +314,7 @@ class FindEligibleDescendantCertificatesTest extends BaseSpringBootTest {
         Certificate leafUnderRevoked = buildCert(intRevoked, true, CertificateValidationStatus.VALID, false, null);
 
         // when
-        List<UUID> result = toUuids(certificateRepository.findAllDescendantCertificatesEligibleForValidation(root.getUuid(), true, MAX_DEPTH));
+        List<UUID> result = new ArrayList<>(certificateRepository.findAllDescendantCertificatesEligibleForValidation(root.getUuid(), true, MAX_DEPTH));
 
         // then
         assertThat(result).containsExactlyInAnyOrder(intValid.getUuid(), leafOk.getUuid(), leafUnderRevoked.getUuid()).doesNotContain(intRevoked.getUuid(), leafArchived.getUuid());

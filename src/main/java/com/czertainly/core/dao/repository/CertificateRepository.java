@@ -290,7 +290,7 @@ public interface CertificateRepository extends SecurityFilterRepository<Certific
      * @param platformEnabled value of the platform-level certificate validation {@code enabled} flag;
      *                        applied to certificates whose RA profile has no explicit {@code validation_enabled} override
      * @param maxDepth        maximum number of hops to follow (safety cap against circular references)
-     * @return unordered list of UUID strings for all eligible descendants
+     * @return unordered set of UUIDs for all eligible descendants
      */
     @Query(value = """
             WITH RECURSIVE subtree AS (
@@ -304,7 +304,7 @@ public interface CertificateRepository extends SecurityFilterRepository<Certific
                 WHERE subtree.depth < :maxDepth
                   AND NOT (c.uuid = ANY(subtree.path))
             )
-            SELECT s.uuid::text FROM subtree s
+            SELECT s.uuid FROM subtree s
             INNER JOIN {h-schema}certificate c ON c.uuid = s.uuid
             LEFT JOIN {h-schema}ra_profile rp ON rp.uuid = c.ra_profile_uuid
             WHERE c.archived = false
@@ -315,7 +315,7 @@ public interface CertificateRepository extends SecurityFilterRepository<Certific
                   OR rp.validation_enabled = true
               )
             """, nativeQuery = true)
-    Set<String> findAllDescendantCertificatesEligibleForValidation(@Param("caUuid") UUID caUuid,
+    Set<UUID> findAllDescendantCertificatesEligibleForValidation(@Param("caUuid") UUID caUuid,
                                                                     @Param("platformEnabled") boolean platformEnabled,
                                                                     @Param("maxDepth") int maxDepth);
 
