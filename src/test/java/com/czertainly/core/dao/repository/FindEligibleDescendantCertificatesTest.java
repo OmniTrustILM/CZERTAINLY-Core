@@ -300,14 +300,14 @@ class FindEligibleDescendantCertificatesTest extends BaseSpringBootTest {
         // given — platformEnabled=false; certs with no explicit RA opt-in should be excluded
         Certificate root = buildCert(null, false, CertificateValidationStatus.VALID, false, null);
         RaProfile raNull = buildRaProfile(null);
-        Certificate noRa = buildCert(root, true, CertificateValidationStatus.VALID, false, null);
-        Certificate raEnabledNull = buildCert(root, true, CertificateValidationStatus.VALID, false, raNull);
+        buildCert(root, true, CertificateValidationStatus.VALID, false, null);
+        buildCert(root, true, CertificateValidationStatus.VALID, false, raNull);
 
         // when
         List<UUID> result = toUuids(certificateRepository.findAllDescendantCertificatesEligibleForValidation(root.getUuid(), false, MAX_DEPTH));
 
         // then
-        assertThat(result).doesNotContain(noRa.getUuid(), raEnabledNull.getUuid());
+        assertThat(result).isEmpty();
     }
 
     @Test
