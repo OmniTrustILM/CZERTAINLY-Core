@@ -97,7 +97,7 @@ public class CertificateHandler {
         this.cryptographicKeyService = cryptographicKeyService;
     }
 
-    @Transactional(propagation = Propagation.REQUIRES_NEW, isolation = Isolation.DEFAULT)
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public void validate(Certificate certificate) {
         if (CertificateUtil.isValidationEnabled(certificate, null)) {
             certificateService.validate(certificate);
