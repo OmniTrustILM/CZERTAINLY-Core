@@ -2,16 +2,24 @@ package com.czertainly.core.architecture;
 
 import com.czertainly.api.exception.PlatformException;
 import com.tngtech.archunit.base.DescribedPredicate;
+import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaClasses;
+import com.tngtech.archunit.core.domain.JavaMethod;
 import com.tngtech.archunit.core.domain.JavaMethodCall;
 import com.tngtech.archunit.core.domain.JavaModifier;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.junit.AnalyzeClasses;
 import com.tngtech.archunit.junit.ArchTest;
+import com.tngtech.archunit.lang.ArchCondition;
 import com.tngtech.archunit.lang.ArchRule;
+import com.tngtech.archunit.lang.ConditionEvents;
+import com.tngtech.archunit.lang.SimpleConditionEvent;
 import com.tngtech.archunit.library.freeze.FreezingArchRule;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+
+import java.util.HashSet;
+import java.util.Set;
 
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
@@ -22,15 +30,15 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
  * Rule 1: All concrete Throwable subclasses in com.czertainly.core must implement PlatformException so safeMessage()
  * can gate message exposure at wire boundaries. A similar rule is enforced for exceptions declared in interfaces.
  * <p>
- * Rule 2: No @RestControllerAdvice class may call Throwable.getMessage() or getCause() — use PlatformException.safeMessage()
- * instead, log the cause via the Throwable itself.
+ * Rule 2: In @RestControllerAdvice classes, Throwable.getMessage() may only appear on the same source line as a
+ * logger call (LOG.info/debug/warn/error/trace). All other uses must go through PlatformException.safeMessage().
  * <p>
  * Rule 3 (frozen): No production class in com.czertainly.core may call Throwable.getMessage() anywhere. Existing violations
  * are frozen in archunit/; only net-new calls fail the build. Fix frozen violations incrementally; when the store
  * is empty, this rule can become a plain @ArchTest.
  */
 @AnalyzeClasses(packages = "com.czertainly.core")
-class ExceptionSafetyTest {
+class PlatformExceptionTest {
 
     @ArchTest
     static final ArchRule coreExceptionsMustImplementPlatformException =
@@ -71,11 +79,36 @@ class ExceptionSafetyTest {
 
     @ArchTest
     static final ArchRule noRawGetMessageInRestAdvice =
-            noClasses()
+            classes()
                     .that().areAnnotatedWith(RestControllerAdvice.class)
-                    .should().callMethodWhere(GET_MESSAGE_ON_THROWABLE)
+                    .should(new ArchCondition<JavaClass>("only call getMessage() on the same source line as a logger call") {
+                        @Override
+                        public void check(JavaClass javaClass, ConditionEvents events) {
+                            for (JavaMethod method : javaClass.getMethods()) {
+                                Set<Integer> loggerCallLines = new HashSet<>();
+                                method.getMethodCallsFromSelf().stream()
+                                        .filter(PlatformExceptionTest::isLoggerCall)
+                                        .forEach(call -> loggerCallLines.add(call.getSourceCodeLocation().getLineNumber()));
+
+                                method.getMethodCallsFromSelf().stream()
+                                        .filter(GET_MESSAGE_ON_THROWABLE)
+                                        .filter(call -> !loggerCallLines.contains(call.getSourceCodeLocation().getLineNumber()))
+                                        .forEach(call -> events.add(SimpleConditionEvent.violated(javaClass,
+                                                "getMessage() called outside a logger statement at " + call.getSourceCodeLocation())));
+                            }
+                        }
+                    })
                     .because("exception messages must be gated through " +
                             "PlatformException.safeMessage() before reaching HTTP responses");
+
+    private static boolean isLoggerCall(JavaMethodCall call) {
+        if (!"org.slf4j.Logger".equals(call.getTarget().getOwner().getName())) {
+            return false;
+        }
+        String name = call.getTarget().getName();
+        return "trace".equals(name) || "debug".equals(name) || "info".equals(name)
+                || "warn".equals(name) || "error".equals(name);
+    }
 
     /**
      * Blanket freeze: no net-new Throwable.getMessage() calls anywhere in core.

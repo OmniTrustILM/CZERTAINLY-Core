@@ -49,15 +49,6 @@ public class ExceptionHandlingAdvice {
         StringBuilder messageBuilder = new StringBuilder();
         messageBuilder.append(PlatformException.safeMessage(ex, "Resource not found"));
 
-        if (ex.getConnector() != null) {
-            messageBuilder
-                    .append(" ")
-                    .append("Error is related to connector ")
-                    .append("name=").append(ex.getConnector().getName()).append(", ")
-                    .append("uuid=").append(ex.getConnector().getUuid())
-                    .append(". ");
-        }
-
         LOG.warn("HTTP 404: {}", messageBuilder);
         return ErrorMessageDto.getInstance(messageBuilder.toString());
     }
@@ -96,7 +87,7 @@ public class ExceptionHandlingAdvice {
     @ExceptionHandler(NoHandlerFoundException.class)
     @ResponseStatus(HttpStatus.NOT_FOUND)
     public ErrorMessageDto handleNoHandlerFoundException(NoHandlerFoundException ex) {
-        LOG.info("HTTP 404: {}", ex.getRequestURL(), ex);
+        LOG.info("HTTP 404: {}", ex.getMessage());
         return ErrorMessageDto.getInstance("Requested endpoint not found");
     }
 
@@ -108,7 +99,7 @@ public class ExceptionHandlingAdvice {
     @ExceptionHandler(AlreadyExistException.class)
     @ResponseStatus(HttpStatus.CONFLICT)
     public ErrorMessageDto handleAlreadyExistException(AlreadyExistException ex) {
-        LOG.info("HTTP 409", ex);
+        LOG.info("HTTP 409: {}", ex.getMessage());
         return ErrorMessageDto.getInstance(PlatformException.safeMessage(ex, "Resource already exists"));
     }
 
@@ -120,7 +111,7 @@ public class ExceptionHandlingAdvice {
     @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ErrorMessageDto handleHttpRequestMethodNotSupportedException(HttpRequestMethodNotSupportedException ex) {
-        LOG.info("HTTP 400: {}", ex.getMethod(), ex);
+        LOG.info("HTTP 400: {}", ex.getMessage());
         return ErrorMessageDto.getInstance("HTTP method not supported");
     }
 
@@ -132,7 +123,7 @@ public class ExceptionHandlingAdvice {
     @ExceptionHandler(IllegalArgumentException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ErrorMessageDto handleIllegalArgumentException(IllegalArgumentException ex) {
-        LOG.info("HTTP 400", ex);
+        LOG.info("HTTP 400: {}", ex.getMessage());
         return ErrorMessageDto.getInstance("Invalid argument");
     }
 
@@ -144,7 +135,7 @@ public class ExceptionHandlingAdvice {
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ErrorMessageDto handleMethodArgumentTypeMismatchException(MethodArgumentTypeMismatchException ex) {
-        LOG.info("HTTP 400", ex);
+        LOG.info("HTTP 400: {}", ex.getMessage());
         return ErrorMessageDto.getInstance("Invalid argument type");
     }
 
@@ -194,7 +185,7 @@ public class ExceptionHandlingAdvice {
     @ExceptionHandler(MissingRequestValueException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ErrorMessageDto handleMissingRequestValueException(MissingRequestValueException ex) {
-        LOG.info("HTTP 400", ex);
+        LOG.info("HTTP 400: {}", ex.getMessage());
         return ErrorMessageDto.getInstance("Required request value is missing");
     }
 
@@ -206,7 +197,7 @@ public class ExceptionHandlingAdvice {
     @ExceptionHandler(NotDeletableException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ErrorMessageDto handleNotDeletableException(NotDeletableException ex) {
-        LOG.info("HTTP 400", ex);
+        LOG.info("HTTP 400: {}", ex.getMessage());
         return ErrorMessageDto.getInstance(PlatformException.safeMessage(ex, "Object cannot be deleted"));
     }
 
@@ -218,7 +209,7 @@ public class ExceptionHandlingAdvice {
     @ExceptionHandler(ValidationException.class)
     @ResponseStatus(HttpStatus.UNPROCESSABLE_ENTITY)
     public List<String> handleValidationException(ValidationException ex) {
-        LOG.info("HTTP 422", ex);
+        LOG.info("HTTP 422: {}", ex.getMessage());
 
         return ex.getErrors().stream()
                 .map(ValidationError::getErrorDescription)
@@ -337,7 +328,7 @@ public class ExceptionHandlingAdvice {
     @ExceptionHandler(HttpMessageNotReadableException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ErrorMessageDto handleMessageNotReadable(HttpMessageNotReadableException ex) {
-        LOG.info("HTTP 400", ex);
+        LOG.info("HTTP 400: {}", ex.getMessage());
         return ErrorMessageDto.getInstance("Unable to read HTTP message");
     }
 
@@ -349,7 +340,7 @@ public class ExceptionHandlingAdvice {
     @ExceptionHandler(ConnectException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ErrorMessageDto handleConnectException(ConnectException ex) {
-        LOG.info("HTTP 400", ex);
+        LOG.info("HTTP 400: {}", ex.getMessage());
         return ErrorMessageDto.getInstance("Connection to external service failed");
     }
 
@@ -361,7 +352,7 @@ public class ExceptionHandlingAdvice {
     @ExceptionHandler(AttributeException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ErrorMessageDto handleAttributeException(AttributeException ex) {
-        LOG.info("HTTP 400", ex);
+        LOG.info("HTTP 400: {}", ex.getMessage());
         return ErrorMessageDto.getInstance(PlatformException.safeMessage(ex, "Attribute error"));
     }
 
@@ -417,7 +408,7 @@ public class ExceptionHandlingAdvice {
     @ExceptionHandler(LocationException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ErrorMessageDto handleLocationException(LocationException ex) {
-        LOG.info("HTTP 400", ex);
+        LOG.info("HTTP 400: {}", ex.getMessage());
         return ErrorMessageDto.getInstance(PlatformException.safeMessage(ex, "Location error"));
     }
 
@@ -429,7 +420,7 @@ public class ExceptionHandlingAdvice {
     @ExceptionHandler(CertificateOperationException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ErrorMessageDto handleCertificateOperationException(CertificateOperationException ex) {
-        LOG.info("HTTP 400", ex);
+        LOG.info("HTTP 400: {}", ex.getMessage());
         return ErrorMessageDto.getInstance(PlatformException.safeMessage(ex, "Certificate operation error"));
     }
 
@@ -441,7 +432,7 @@ public class ExceptionHandlingAdvice {
     @ExceptionHandler(SecretOperationException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ErrorMessageDto handleSecretOperationException(SecretOperationException ex) {
-        LOG.info("HTTP 400", ex);
+        LOG.info("HTTP 400: {}", ex.getMessage());
         return ErrorMessageDto.getInstance(PlatformException.safeMessage(ex, "Secret operation error"));
     }
 
@@ -470,7 +461,7 @@ public class ExceptionHandlingAdvice {
     @ExceptionHandler(CzertainlyAuthenticationException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ErrorMessageDto handleCzertainlyAuthenticationException(CzertainlyAuthenticationException ex) {
-        LOG.info("HTTP 400", ex);
+        LOG.info("HTTP 400: {}", ex.getMessage());
         return ErrorMessageDto.getInstance(PlatformException.safeMessage(ex, "Authentication error"));
     }
 
@@ -543,7 +534,7 @@ public class ExceptionHandlingAdvice {
     @ExceptionHandler(NotSupportedException.class)
     @ResponseStatus(HttpStatus.NOT_IMPLEMENTED)
     public ErrorMessageDto handleTokenInstanceException(NotSupportedException ex) {
-        LOG.debug("HTTP 501", ex);
+        LOG.debug("HTTP 501: {}", ex.getMessage());
         return ErrorMessageDto.getInstance(PlatformException.safeMessage(ex, "Operation not supported"));
     }
 
