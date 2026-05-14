@@ -83,7 +83,7 @@ public class CertificateUploadedEventHandler extends EventHandler<Certificate> {
     @Override
     protected Object getEventData(Certificate object, Object eventMessageData) {
         CertificateUploadEventMessageData uploadEventMessageData = objectMapper.convertValue(eventMessageData, CertificateUploadEventMessageData.class);
-        return EventDataBuilder.getCertificateUploadedEventData(object, uploadEventMessageData.userUuid(), uploadEventMessageData.customAttributes());
+        return EventDataBuilder.getCertificateUploadedEventData(object, uploadEventMessageData.userUuid());
     }
 
     @Override
@@ -138,7 +138,6 @@ public class CertificateUploadedEventHandler extends EventHandler<Certificate> {
             try {
                 attributeEngine.updateObjectCustomAttributesContent(Resource.CERTIFICATE, certificate.getUuid(), eventMessageData.customAttributes());
             } catch (NotFoundException | AttributeException e) {
-                ((CertificateUploadedEventData) context.getResourceObjectsEventData().getFirst()).setCustomAttributes(null);
                 logger.error("Error updating custom attributes for certificate {}: {}", certificate.getUuid(), e.getMessage());
             }
         }

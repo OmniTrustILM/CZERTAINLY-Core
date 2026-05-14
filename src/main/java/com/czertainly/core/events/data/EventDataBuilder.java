@@ -125,13 +125,10 @@ public class EventDataBuilder {
         return eventData;
     }
 
-    public static CertificateUploadedEventData getCertificateUploadedEventData(Certificate certificate, UUID userUuid, List<RequestAttribute> customAttributes) {
+    public static CertificateUploadedEventData getCertificateUploadedEventData(Certificate certificate, UUID userUuid) {
         CertificateUploadedEventData eventData = new CertificateUploadedEventData();
         setCertificateEventData(eventData, certificate);
         eventData.setUserUuid(userUuid);
-        if (customAttributes != null) {
-            eventData.setCustomAttributes(customAttributes.stream().map(RequestAttribute::getName).toList());
-        }
         return eventData;
     }
 
