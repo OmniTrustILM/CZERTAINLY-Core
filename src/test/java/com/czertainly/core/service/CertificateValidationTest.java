@@ -2,7 +2,6 @@ package com.czertainly.core.service;
 
 import com.czertainly.api.exception.NotFoundException;
 import com.czertainly.api.exception.ValidationException;
-import com.czertainly.api.model.common.events.data.CertificateUploadedEventData;
 import com.czertainly.core.events.handlers.CertificateUploadedEventHandler;
 import com.czertainly.api.model.client.connector.v2.ConnectorVersion;
 import com.czertainly.api.model.common.enums.cryptography.KeyAlgorithm;
@@ -17,6 +16,7 @@ import com.czertainly.core.dao.entity.*;
 import com.czertainly.core.dao.entity.Certificate;
 import com.czertainly.core.dao.repository.*;
 import com.czertainly.core.helpers.CertificateGeneratorHelper;
+import com.czertainly.core.messaging.model.CertificateUploadEventMessageData;
 import com.czertainly.core.security.authz.SecuredUUID;
 import com.czertainly.core.util.BaseSpringBootTest;
 import com.czertainly.core.util.CertificateTestUtil;
@@ -725,9 +725,10 @@ public class CertificateValidationTest extends BaseSpringBootTest {
     private Certificate uploadCertificate(String base64cert) throws Exception {
         X509Certificate x509 = CertificateUtil.parseCertificate(base64cert);
         String fingerprint = CertificateUtil.getThumbprint(x509);
-        CertificateUploadedEventData eventData = new CertificateUploadedEventData();
-        eventData.setCertificate(x509);
-        eventData.setFingerprint(fingerprint);
+        CertificateUploadEventMessageData eventData = CertificateUploadEventMessageData.builder()
+                .certificateContent(base64cert)
+                .fingerprint(fingerprint)
+                .build();
         certificateUploadedEventHandler.handleEvent(CertificateUploadedEventHandler.constructEventMessage(eventData));
         return certificateRepository.findByFingerprint(fingerprint).orElseThrow();
     }

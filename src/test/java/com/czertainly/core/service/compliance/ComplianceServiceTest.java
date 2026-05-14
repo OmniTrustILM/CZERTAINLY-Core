@@ -3,12 +3,10 @@ package com.czertainly.core.service.compliance;
 import com.czertainly.api.exception.NotFoundException;
 import com.czertainly.api.exception.ValidationException;
 import com.czertainly.api.model.client.attribute.RequestAttributeV3;
-import com.czertainly.api.model.client.certificate.UploadCertificateRequestDto;
 import com.czertainly.api.model.client.compliance.v2.ComplianceInternalRuleRequestDto;
 import com.czertainly.api.model.common.attribute.common.content.AttributeContentType;
 import com.czertainly.api.model.common.attribute.v3.content.IntegerAttributeContentV3;
 import com.czertainly.api.model.common.enums.cryptography.KeyAlgorithm;
-import com.czertainly.api.model.common.events.data.CertificateUploadedEventData;
 import com.czertainly.api.model.connector.secrets.SecretType;
 import com.czertainly.api.model.core.auth.Resource;
 import com.czertainly.api.model.core.certificate.CertificateDetailDto;
@@ -26,6 +24,7 @@ import com.czertainly.core.dao.entity.*;
 import com.czertainly.core.dao.repository.*;
 import com.czertainly.core.events.handlers.CertificateUploadedEventHandler;
 import com.czertainly.core.helpers.CertificateGeneratorHelper;
+import com.czertainly.core.messaging.model.CertificateUploadEventMessageData;
 import com.czertainly.core.model.compliance.ComplianceResultDto;
 import com.czertainly.core.model.compliance.ComplianceResultProviderRulesDto;
 import com.czertainly.core.model.compliance.ComplianceResultRulesDto;
@@ -156,16 +155,19 @@ class ComplianceServiceTest extends BaseComplianceTest {
 
         // create and persist a certificate subject that belongs to the seeded RA profile
         var certificateChainInfo = CertificateGeneratorHelper.generateCertificateWithIssuer(KeyAlgorithm.RSA, "CN=Test-Ca", "CN=Test-EndEntity", null);
-        CertificateUploadedEventData eventData = new CertificateUploadedEventData();
         X509Certificate x509Certificate = CertificateUtil.parseCertificate(certificateChainInfo.getCaCertificateBase64Encoded());
-        eventData.setCertificate(x509Certificate);
         String fingerprint = CertificateUtil.getThumbprint(x509Certificate);
-        eventData.setFingerprint(fingerprint);
+        CertificateUploadEventMessageData eventData = CertificateUploadEventMessageData.builder()
+                .certificateContent(certificateChainInfo.getEndEntityCertificateBase64Encoded())
+                .fingerprint(fingerprint)
+                .build();
         certificateUploadedEventHandler.handleEvent(CertificateUploadedEventHandler.constructEventMessage(eventData));
         x509Certificate = CertificateUtil.parseCertificate(certificateChainInfo.getEndEntityCertificateBase64Encoded());
-        eventData.setCertificate(x509Certificate);
         String fingerprint2 = CertificateUtil.getThumbprint(x509Certificate);
-        eventData.setFingerprint(fingerprint2);
+        eventData = CertificateUploadEventMessageData.builder()
+                .certificateContent(certificateChainInfo.getEndEntityCertificateBase64Encoded())
+                .fingerprint(fingerprint2)
+                .build();
         certificateUploadedEventHandler.handleEvent(CertificateUploadedEventHandler.constructEventMessage(eventData));
 
         // run compliance check for the seeded profile (should include internal rules and both providers)
@@ -362,11 +364,12 @@ class ComplianceServiceTest extends BaseComplianceTest {
         complianceProfileRuleRepository.save(internalRuleAssoc);
 
         var certificateChainInfo = CertificateGeneratorHelper.generateCertificateWithIssuer(KeyAlgorithm.RSA, "CN=Test-Ca-RSA", "CN=Test-EndEntity-RSA", null);
-        CertificateUploadedEventData eventData = new CertificateUploadedEventData();
         X509Certificate x509Certificate = CertificateUtil.parseCertificate(certificateChainInfo.getEndEntityCertificateBase64Encoded());
-        eventData.setCertificate(x509Certificate);
         String fingerprint = CertificateUtil.getThumbprint(x509Certificate);
-        eventData.setFingerprint(fingerprint);
+        CertificateUploadEventMessageData eventData = CertificateUploadEventMessageData.builder()
+                .certificateContent(certificateChainInfo.getEndEntityCertificateBase64Encoded())
+                .fingerprint(fingerprint)
+                .build();
         certificateUploadedEventHandler.handleEvent(CertificateUploadedEventHandler.constructEventMessage(eventData));
         Certificate certWithRsaKey = certificateRepository.findByFingerprint(fingerprint).orElseThrow();
         certWithRsaKey.setRaProfileUuid(associatedRaProfileUuid);
