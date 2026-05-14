@@ -199,7 +199,7 @@ public class CertificateTestUtil {
 
     /**
      * Creates an end-entity certificate whose issuer is a freshly-generated CA key that is <em>not</em> stored in any
-     * certificate inventory. Because the certificate is signed bya key other than its own, {@code isSelfSigned}
+     * certificate inventory. Because the certificate is signed by a key other than its own, {@code isSelfSigned}
      * returns {@code false}, and because the issuing CA is absent from the inventory, {@code getCertificateChain} will
      * report an incomplete chain.
      */
