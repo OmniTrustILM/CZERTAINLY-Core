@@ -933,9 +933,9 @@ public class CertificateUtil {
     public static boolean isCertificateDigitalSigningAcceptable(Certificate certificate, SigningWorkflowType workflowType, boolean qualifiedTimestamp) {
         if (certificate.isArchived()) return false;
         if (certificate.getKey() == null ||
-                !certificate.getState().equals(CertificateState.ISSUED) ||
-                (!certificate.getValidationStatus().equals(CertificateValidationStatus.VALID)
-                        && !certificate.getValidationStatus().equals(CertificateValidationStatus.EXPIRING))
+                certificate.getState() != CertificateState.ISSUED ||
+                (certificate.getValidationStatus() != CertificateValidationStatus.VALID
+                        && certificate.getValidationStatus() != CertificateValidationStatus.EXPIRING)
         ) {
             return false;
         }
