@@ -6,7 +6,7 @@ import org.bouncycastle.asn1.ASN1Integer;
 import org.bouncycastle.asn1.ASN1ObjectIdentifier;
 import org.bouncycastle.asn1.ASN1Sequence;
 import org.bouncycastle.asn1.DERSequence;
-import org.bouncycastle.asn1.DERUTF8String;
+import org.bouncycastle.asn1.DERPrintableString;
 import org.bouncycastle.asn1.nist.NISTObjectIdentifiers;
 import org.bouncycastle.asn1.pkcs.PKCSObjectIdentifiers;
 import org.bouncycastle.asn1.x500.X500Name;
@@ -303,7 +303,7 @@ public class CertificateTestUtil {
         if (ccLegislation != null && !ccLegislation.isEmpty()) {
             ASN1EncodableVector ccVec = new ASN1EncodableVector();
             for (String cc : ccLegislation) {
-                ccVec.add(new DERUTF8String(cc));
+                ccVec.add(new DERPrintableString(cc));
             }
             statements.add(new QCStatement(QC_CC_LEGISLATION, new DERSequence(ccVec)));
         }

@@ -510,7 +510,7 @@ public class CertificateUtil {
             } else if (ETSIQCObjectIdentifiers.id_etsi_qcs_QcCClegislation.equals(id)) {
                 ASN1Sequence countries = ASN1Sequence.getInstance(stmt.getStatementInfo());
                 for (ASN1Encodable cc : countries) {
-                    qcCcLegislation.add(cc.toString());
+                    qcCcLegislation.add(DERPrintableString.getInstance(cc).getString());
                 }
             }
             // QcLimitValue, QcRetentionPeriod, QcPDS intentionally not parsed since they are not operationally relevant
