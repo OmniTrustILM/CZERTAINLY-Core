@@ -257,11 +257,11 @@ public class ResourceServiceImpl implements ResourceService {
         }
 
         for (DataAttribute attribute : attributes) {
-            if (!AttributeContentType.RESOURCE.equals(attribute.getContentType())) {
+            if (!AttributeContentType.RESOURCE.equals(attribute.getContentType()) || attribute.getContent() == null || ((List<?>) attribute.getContent()).isEmpty()) {
                 continue;
             }
             List<NameAndUuidDto> resourceIds = AttributeDefinitionUtils.getNameAndUuidDataList(attribute.getName(), AttributeDefinitionUtils.getClientAttributes(attributes));
-            if (resourceIds == null || resourceIds.isEmpty()) {
+            if (resourceIds.isEmpty()) {
                 throw new AttributeException("No Resource Object UUIDs found for attribute: " + attribute.getName(), attribute.getUuid(), attribute.getName(), AttributeType.DATA, "");
             }
             List<ResourceObjectContent> contents = new ArrayList<>();
