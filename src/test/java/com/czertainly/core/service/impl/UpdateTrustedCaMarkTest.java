@@ -398,6 +398,34 @@ class UpdateTrustedCaMarkTest extends BaseSpringBootTest {
     }
 
     @Test
+    void noEventPublishedWhenTrustedCaMarkAlreadyTrue() throws Exception {
+        // given — CA is already trusted; eligible descendant exists
+        Certificate ca = buildCa();
+        ca.setTrustedCa(true);
+        certificateRepository.saveAndFlush(ca);
+        buildEligibleCert(ca);
+
+        // when — request the same value
+        callUpdateTrustedCa(ca.getUuid(), true);
+
+        // then — early-return guard fires; no revalidation triggered
+        verifyNoEventPublished();
+    }
+
+    @Test
+    void noEventPublishedWhenTrustedCaMarkAlreadyFalse() throws Exception {
+        // given — CA already has trustedCa=false (default from buildCa()); eligible descendant exists
+        Certificate ca = buildCa();
+        buildEligibleCert(ca);
+
+        // when — request the same value
+        callUpdateTrustedCa(ca.getUuid(), false);
+
+        // then — early-return guard fires; no revalidation triggered
+        verifyNoEventPublished();
+    }
+
+    @Test
     void explicitRaProfileOptInOverridesPlatformDisabled() throws Exception {
         // given — platform disabled; CA and child both have RA profile with validationEnabled=true
         setPlatformValidationEnabled(false);
