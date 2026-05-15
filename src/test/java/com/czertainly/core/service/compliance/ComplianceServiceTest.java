@@ -158,7 +158,7 @@ class ComplianceServiceTest extends BaseComplianceTest {
         X509Certificate x509Certificate = CertificateUtil.parseCertificate(certificateChainInfo.getCaCertificateBase64Encoded());
         String fingerprint = CertificateUtil.getThumbprint(x509Certificate);
         CertificateUploadEventMessageData eventData = CertificateUploadEventMessageData.builder()
-                .certificateContent(certificateChainInfo.getEndEntityCertificateBase64Encoded())
+                .certificateContent(certificateChainInfo.getCaCertificateBase64Encoded())
                 .fingerprint(fingerprint)
                 .build();
         certificateUploadedEventHandler.handleEvent(CertificateUploadedEventHandler.constructEventMessage(eventData));

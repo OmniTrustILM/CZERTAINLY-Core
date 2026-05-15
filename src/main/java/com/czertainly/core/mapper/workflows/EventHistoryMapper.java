@@ -47,7 +47,7 @@ public class EventHistoryMapper {
         triggerHistoryObjectSummaryDto.setObjectUuid(objectUuid);
         boolean ignored = triggerHistories.stream().filter(th -> th.getTrigger().isIgnoreTrigger()).anyMatch(TriggerHistory::isActionsPerformed);
         triggerHistoryObjectSummaryDto.setIgnored(ignored);
-        triggerHistoryObjectSummaryDto.setMatched(ignored || triggerHistories.stream().filter(th -> !th.getTrigger().isIgnoreTrigger()).allMatch(TriggerHistory::isConditionsMatched));
+        triggerHistoryObjectSummaryDto.setMatched(ignored || triggerHistories.stream().filter(th -> !th.getTrigger().isIgnoreTrigger()).anyMatch(TriggerHistory::isConditionsMatched));
         triggerHistoryObjectSummaryDto.setTriggers(triggerHistories.stream().map(EventHistoryMapper::toTriggerHistoryObjectTriggerSummaryDto).toList());
         return triggerHistoryObjectSummaryDto;
     }

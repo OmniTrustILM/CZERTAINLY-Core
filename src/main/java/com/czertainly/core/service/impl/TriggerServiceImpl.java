@@ -9,6 +9,7 @@ import com.czertainly.api.model.core.search.FilterFieldSource;
 import com.czertainly.api.model.core.workflows.*;
 import com.czertainly.core.dao.entity.workflows.*;
 import com.czertainly.core.dao.repository.workflows.*;
+import com.czertainly.core.enums.FilterField;
 import com.czertainly.core.model.auth.ResourceAction;
 import com.czertainly.core.security.authz.ExternalAuthorization;
 import com.czertainly.core.security.authz.SecuredUUID;
@@ -234,7 +235,7 @@ public class TriggerServiceImpl implements TriggerService {
             if (event == ResourceEvent.CERTIFICATE_UPLOADED && trigger.getRules().stream()
                     .flatMap(rule -> rule.getConditions().stream())
                     .flatMap(condition -> condition.getItems().stream())
-                    .anyMatch(conditionItem -> conditionItem.getFieldSource() != FilterFieldSource.PROPERTY)) {
+                    .anyMatch(TriggerServiceImpl::isCertificateUploadedEventCompatible)) {
                 throw new ValidationException("Trigger '%s' cannot be associated with event '%s' as it contains rule with invalid field source, which is not allowed for this event.".formatted(trigger.getName(), event.getLabel()));
             }
             if (trigger.getResource() != event.getResource()) {
@@ -268,6 +269,12 @@ public class TriggerServiceImpl implements TriggerService {
             trigger.setTriggerOrder(triggerOrder++);
             triggerAssociationRepository.save(trigger);
         }
+    }
+
+    private static boolean isCertificateUploadedEventCompatible(ConditionItem conditionItem) {
+        FilterField filterField = FilterField.valueOf(conditionItem.getFieldIdentifier());
+        // Condition should be applicable to not persisted certificate - it can only check its property not tied to another object
+        return conditionItem.getFieldSource() != FilterFieldSource.PROPERTY && filterField.getFieldResource() == null && (filterField.getJoinAttributes() == null || filterField.getJoinAttributes().isEmpty()) ;
     }
 
     @Override
