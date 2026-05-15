@@ -248,22 +248,21 @@ public interface CertificateRepository extends SecurityFilterRepository<Certific
      * @param maxDepth  maximum number of hops to follow (safety cap against circular references)
      * @return ordered list of UUID strings (depth 0 = start cert, depth N = root)
      */
-    // NOTE: PostgreSQL 14+ supports a cleaner native cycle-detection syntax via the CYCLE clause.
     @Query(value = """
             WITH RECURSIVE chain AS (
-                SELECT uuid, issuer_certificate_uuid, 0 AS depth, ARRAY[uuid] AS path
+                SELECT uuid, issuer_certificate_uuid, 0 AS depth
                 FROM {h-schema}certificate
                 WHERE uuid = :startUuid
 
                 UNION ALL
 
-                SELECT c.uuid, c.issuer_certificate_uuid, chain.depth + 1, chain.path || c.uuid
+                SELECT c.uuid, c.issuer_certificate_uuid, chain.depth + 1
                 FROM {h-schema}certificate c
                 INNER JOIN chain ON chain.issuer_certificate_uuid = c.uuid
                 WHERE chain.depth < :maxDepth
-                  AND NOT (c.uuid = ANY(chain.path))
             )
-            SELECT uuid::text FROM chain ORDER BY depth ASC
+            CYCLE uuid SET is_cycle USING path
+            SELECT uuid::text FROM chain WHERE NOT is_cycle ORDER BY depth ASC
             """, nativeQuery = true)
     List<String> findCertificateChainUuids(@Param("startUuid") UUID startUuid, @Param("maxDepth") int maxDepth);
 
@@ -283,8 +282,8 @@ public interface CertificateRepository extends SecurityFilterRepository<Certific
      *
      * <p>The CA certificate itself is not included in the result; callers are expected to add it separately.</p>
      *
-     * <p>Traversal is capped at {@code maxDepth} levels and uses a path array to break cycles in corrupt data
-     * (e.g. a self-signed root whose {@code issuer_certificate_uuid} points back to itself).</p>
+     * <p>Traversal is capped at {@code maxDepth} levels. PostgreSQL's native {@code CYCLE} clause detects cycles
+     * in corrupt data (e.g. a self-signed root whose {@code issuer_certificate_uuid} points back to itself).</p>
      *
      * @param caUuid          UUID of the issuing CA certificate
      * @param platformEnabled value of the platform-level certificate validation {@code enabled} flag;
@@ -294,20 +293,21 @@ public interface CertificateRepository extends SecurityFilterRepository<Certific
      */
     @Query(value = """
             WITH RECURSIVE subtree AS (
-                SELECT uuid, ARRAY[uuid] AS path, 0 AS depth
+                SELECT uuid, 0 AS depth
                 FROM {h-schema}certificate
                 WHERE issuer_certificate_uuid = :caUuid
                 UNION ALL
-                SELECT c.uuid, subtree.path || c.uuid, subtree.depth + 1
+                SELECT c.uuid, subtree.depth + 1
                 FROM {h-schema}certificate c
                 INNER JOIN subtree ON c.issuer_certificate_uuid = subtree.uuid
                 WHERE subtree.depth < :maxDepth
-                  AND NOT (c.uuid = ANY(subtree.path))
             )
+            CYCLE uuid SET is_cycle USING path
             SELECT s.uuid FROM subtree s
             INNER JOIN {h-schema}certificate c ON c.uuid = s.uuid
             LEFT JOIN {h-schema}ra_profile rp ON rp.uuid = c.ra_profile_uuid
-            WHERE c.archived = false
+            WHERE NOT s.is_cycle
+              AND c.archived = false
               AND c.certificate_content_id IS NOT NULL
               AND c.validation_status NOT IN (
                   ?#{T(com.czertainly.api.model.core.certificate.CertificateValidationStatus).REVOKED.name()},
