@@ -13,8 +13,8 @@ public class AuthenticationServiceException extends AuthenticationException {
     @Schema(description = "Exception Information", required = true)
     private AuthenticationServiceExceptionDto exception;
 
-    public AuthenticationServiceException(String message, Boolean isException) {
-        super("Authorization Exception");
+    public AuthenticationServiceException(String message) {
+        super("Authentication Service Exception");
         ObjectMapper mapper = new ObjectMapper();
         mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
 
