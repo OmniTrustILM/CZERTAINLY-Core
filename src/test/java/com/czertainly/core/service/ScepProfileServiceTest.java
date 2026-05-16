@@ -31,11 +31,18 @@ import com.czertainly.core.dao.repository.*;
 import com.czertainly.core.dao.repository.scep.ScepProfileRepository;
 import com.czertainly.core.security.authz.SecuredUUID;
 import com.czertainly.core.security.authz.SecurityFilter;
+import com.czertainly.core.service.model.SecuredItem;
+import com.czertainly.core.service.model.SecuredList;
 import com.czertainly.core.util.BaseSpringBootTest;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 
 import java.util.HashSet;
 import java.util.List;
@@ -72,6 +79,12 @@ class ScepProfileServiceTest extends BaseSpringBootTest {
     private CryptographicKeyItemRepository cryptographicKeyItemRepository;
     @Autowired
     private ProtocolCertificateAssociationsRepository protocolCertificateAssociationsRepository;
+
+    @MockitoSpyBean
+    private RaProfileService raProfileService;
+
+    @MockitoSpyBean
+    private ScepProfileRepository scepProfileRepositorySpy;
 
     private ScepProfile scepProfile;
     private Certificate certificate;
@@ -398,6 +411,38 @@ class ScepProfileServiceTest extends BaseSpringBootTest {
 
         Assertions.assertEquals(1, messages.size());
         Assertions.assertEquals("00000000-0000-0000-0000-000000000001", messages.getFirst().getUuid());
+        Assertions.assertNotNull(messages.getFirst().getMessage());
+    }
+
+    @Test
+    void testBulkDeleteScepProfile_withAssociatedRaProfile_returnsErrorWithEntityName() {
+        RaProfile linkedRaProfile = new RaProfile();
+        linkedRaProfile.setName("linkedRaProfile");
+        SecuredList<RaProfile> nonEmptyList = new SecuredList<>(List.of(new SecuredItem<>(linkedRaProfile, true)));
+        Mockito.doReturn(nonEmptyList)
+                .when(raProfileService)
+                .listRaProfilesAssociatedWithScepProfile(scepProfile.getUuid().toString(), SecurityFilter.create());
+
+        List<BulkActionMessageDto> messages = scepProfileService.bulkDeleteScepProfile(
+                List.of(scepProfile.getSecuredUuid()));
+
+        Assertions.assertEquals(1, messages.size());
+        Assertions.assertEquals(scepProfile.getUuid().toString(), messages.getFirst().getUuid());
+        Assertions.assertEquals(scepProfile.getName(), messages.getFirst().getName());
+        Assertions.assertTrue(messages.getFirst().getMessage().contains("Dependent SCEP Profiles"));
+    }
+
+    @Test
+    void testBulkForceRemoveScepProfiles_deleteFailure_returnsErrorWithEntityName() {
+        doThrow(new RuntimeException("DB delete error"))
+                .when(scepProfileRepositorySpy).delete(any());
+
+        List<BulkActionMessageDto> messages = scepProfileService.bulkForceRemoveScepProfiles(
+                List.of(scepProfile.getSecuredUuid()));
+
+        Assertions.assertEquals(1, messages.size());
+        Assertions.assertEquals(scepProfile.getUuid().toString(), messages.getFirst().getUuid());
+        Assertions.assertEquals(scepProfile.getName(), messages.getFirst().getName());
         Assertions.assertNotNull(messages.getFirst().getMessage());
     }
 }

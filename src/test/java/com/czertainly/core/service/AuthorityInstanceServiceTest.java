@@ -335,4 +335,18 @@ class AuthorityInstanceServiceTest extends BaseSpringBootTest {
         Assertions.assertEquals("00000000-0000-0000-0000-000000000001", messages.getFirst().getUuid());
         Assertions.assertNotNull(messages.getFirst().getMessage());
     }
+
+    @Test
+    void testForceDeleteAuthorityInstance_connectorError_returnsErrorWithEntityName() throws ValidationException, NotFoundException {
+        mockServer.stubFor(WireMock.delete(WireMock.anyUrl())
+                .willReturn(WireMock.aResponse().withStatus(500).withBody("Connector error")));
+
+        List<BulkActionMessageDto> messages = authorityInstanceService
+                .forceDeleteAuthorityInstance(List.of(authorityInstance.getSecuredUuid()));
+
+        Assertions.assertEquals(1, messages.size());
+        Assertions.assertEquals(authorityInstance.getUuid().toString(), messages.getFirst().getUuid());
+        Assertions.assertEquals(authorityInstance.getName(), messages.getFirst().getName());
+        Assertions.assertNotNull(messages.getFirst().getMessage());
+    }
 }

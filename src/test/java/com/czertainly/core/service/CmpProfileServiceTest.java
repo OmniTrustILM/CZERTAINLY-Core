@@ -37,9 +37,13 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
 import java.util.List;
 import java.util.UUID;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 
 class CmpProfileServiceTest extends BaseSpringBootTest {
 
@@ -54,6 +58,9 @@ class CmpProfileServiceTest extends BaseSpringBootTest {
 
     @Autowired
     private CmpProfileRepository cmpProfileRepository;
+
+    @MockitoSpyBean
+    private CmpProfileRepository cmpProfileRepositorySpy;
 
     @Autowired
     private CertificateContentRepository certificateContentRepository;
@@ -236,6 +243,20 @@ class CmpProfileServiceTest extends BaseSpringBootTest {
         raProfileRepository.save(raProfile);
 
         List<BulkActionMessageDto> messages = cmpProfileService.bulkDeleteCmpProfile(
+                List.of(cmpProfile.getSecuredUuid()));
+
+        Assertions.assertEquals(1, messages.size());
+        Assertions.assertEquals(cmpProfile.getUuid().toString(), messages.getFirst().getUuid());
+        Assertions.assertEquals(cmpProfile.getName(), messages.getFirst().getName());
+        Assertions.assertNotNull(messages.getFirst().getMessage());
+    }
+
+    @Test
+    void testBulkForceRemoveCmpProfiles_deleteFailure_returnsErrorWithEntityName() throws NotFoundException, ValidationException {
+        doThrow(new RuntimeException("DB delete error"))
+                .when(cmpProfileRepositorySpy).delete(any());
+
+        List<BulkActionMessageDto> messages = cmpProfileService.bulkForceRemoveCmpProfiles(
                 List.of(cmpProfile.getSecuredUuid()));
 
         Assertions.assertEquals(1, messages.size());
