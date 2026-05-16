@@ -17,7 +17,6 @@ import com.czertainly.core.events.transaction.CertificateValidationEvent;
 import com.czertainly.core.messaging.jms.producers.ValidationProducer;
 import com.czertainly.core.messaging.model.ValidationMessage;
 import com.czertainly.core.service.*;
-import com.czertainly.core.service.ComplianceInternalService;
 import com.czertainly.core.util.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,7 +35,6 @@ import java.security.cert.X509Certificate;
 import java.util.*;
 
 @Service
-@Transactional
 public class CertificateHandler {
 
     private static final Logger logger = LoggerFactory.getLogger(CertificateHandler.class);
@@ -98,7 +96,7 @@ public class CertificateHandler {
         this.cryptographicKeyService = cryptographicKeyService;
     }
 
-    @Transactional(propagation = Propagation.REQUIRES_NEW, isolation = Isolation.DEFAULT)
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public void validate(Certificate certificate) {
         if (CertificateUtil.isValidationEnabled(certificate, null)) {
             certificateService.validate(certificate);
@@ -181,8 +179,8 @@ public class CertificateHandler {
         return keyUuid;
     }
 
+    @Transactional
     public void updateDiscoveredCertificate(DiscoveryHistory discovery, Certificate certificate, List<MetadataAttribute> metadata) {
-        // Set metadata attributes, create certificate event history entry and validate certificate
         try {
             attributeEngine.updateMetadataAttributes(metadata, ObjectAttributeContentInfo.builder(Resource.CERTIFICATE, certificate.getUuid()).connector(discovery.getConnectorUuid()).source(Resource.DISCOVERY, discovery.getUuid()).sourceName(discovery.getName()).build());
         } catch (AttributeException e) {
