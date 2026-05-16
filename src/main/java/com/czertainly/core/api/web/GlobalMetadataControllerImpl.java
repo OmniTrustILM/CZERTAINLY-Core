@@ -11,7 +11,7 @@ import com.czertainly.api.model.core.logging.enums.Module;
 import com.czertainly.api.model.core.logging.enums.Operation;
 import com.czertainly.core.aop.AuditLogged;
 import com.czertainly.core.logging.LogResource;
-import com.czertainly.core.service.AttributeService;
+import com.czertainly.core.service.AttributeExternalService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
@@ -25,10 +25,10 @@ import java.util.UUID;
 @RestController
 public class GlobalMetadataControllerImpl implements GlobalMetadataController {
 
-    private AttributeService attributeService;
+    private AttributeExternalService attributeService;
 
     @Autowired
-    public void setAttributeService(AttributeService attributeService) {
+    public void setAttributeService(AttributeExternalService attributeService) {
         this.attributeService = attributeService;
     }
 

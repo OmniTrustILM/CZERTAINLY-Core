@@ -77,9 +77,9 @@ class EventHandlersTest extends BaseSpringBootTest {
     }
 
     @Autowired
-    private CertificateService certificateService;
+    private CertificateInternalService certificateService;
     @Autowired
-    private CertificateEventHistoryService certificateEventHistoryService;
+    private CertificateEventHistoryExternalService certificateEventHistoryService;
     @Autowired
     private RaProfileRepository raProfileRepository;
     @Autowired
@@ -99,7 +99,7 @@ class EventHandlersTest extends BaseSpringBootTest {
     @Autowired
     private ApprovalRepository approvalRepository;
     @Autowired
-    private ApprovalProfileService approvalProfileService;
+    private ApprovalProfileExternalService approvalProfileService;
     @Autowired
     private ApprovalClosedEventHandler approvalClosedEventHandler;
     @Autowired
@@ -113,11 +113,11 @@ class EventHandlersTest extends BaseSpringBootTest {
     @Autowired
     private AttributeEngine attributeEngine;
     @Autowired
-    private RuleService ruleService;
+    private RuleExternalService ruleService;
     @Autowired
-    private ActionService actionService;
+    private ActionExternalService actionService;
     @Autowired
-    private TriggerService triggerService;
+    private TriggerExternalService triggerService;
     @Autowired
     private TriggerAssociationRepository triggerAssociationRepository;
     @Autowired
@@ -133,7 +133,7 @@ class EventHandlersTest extends BaseSpringBootTest {
     @Autowired
     private NotificationListener notificationListener;
     @Autowired
-    private NotificationProfileService notificationProfileService;
+    private NotificationProfileExternalService notificationProfileService;
     @Autowired
     private PendingNotificationRepository pendingNotificationRepository;
     @Autowired

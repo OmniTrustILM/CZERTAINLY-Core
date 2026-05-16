@@ -38,6 +38,7 @@ import com.czertainly.core.model.auth.ResourceAction;
 import com.czertainly.core.security.authz.SecuredParentUUID;
 import com.czertainly.core.security.authz.SecuredUUID;
 import com.czertainly.core.security.authz.SecurityFilter;
+import com.czertainly.core.service.AttributeExternalService;
 import com.czertainly.core.util.*;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -82,7 +83,9 @@ class SecretServiceTest extends BaseSpringBootTest {
     }
 
     @Autowired
-    private SecretService secretService;
+    private SecretExternalService secretService;
+    @Autowired
+    private SecretInternalService secretInternalService;
     @Autowired
     private SecretRepository secretRepository;
     @Autowired
@@ -92,7 +95,7 @@ class SecretServiceTest extends BaseSpringBootTest {
     @Autowired
     private VaultProfileRepository vaultProfileRepository;
     @Autowired
-    private AttributeService attributeService;
+    private AttributeExternalService attributeService;
     @Autowired
     private GroupRepository groupRepository;
     @Autowired
@@ -286,7 +289,7 @@ class SecretServiceTest extends BaseSpringBootTest {
                 .encryptedContent(SecretsUtil.encryptAndEncodeSecretString(new ObjectMapper().writeValueAsString(request.getSecret()), SecretEncodingVersion.V1))
                 .deleteInVault(Boolean.TRUE)
                 .build());
-        Assertions.assertThrows(SecretOperationException.class, () -> secretService.processSecretAction(actionMessage, true, true));
+        Assertions.assertThrows(SecretOperationException.class, () -> secretInternalService.processSecretAction(actionMessage, true, true));
         Secret newSecret = secretRepository.findWithAssociationsByUuid(UUID.fromString(secretDetailDto.getUuid())).orElseThrow();
         Assertions.assertEquals(SecretState.FAILED, newSecret.getState());
 
@@ -295,23 +298,23 @@ class SecretServiceTest extends BaseSpringBootTest {
         SecretState originalState = secret.getState();
         actionMessage.setResourceAction(ResourceAction.UPDATE);
         actionMessage.setResourceUuid(secret.getUuid());
-        Assertions.assertThrows(SecretOperationException.class, () -> secretService.processSecretAction(actionMessage, true, true));
+        Assertions.assertThrows(SecretOperationException.class, () -> secretInternalService.processSecretAction(actionMessage, true, true));
         Secret secretReloaded = secretRepository.findWithAssociationsByUuid(secret.getUuid()).orElseThrow();
         Assertions.assertEquals(originalState, secretReloaded.getState());
 
         actionMessage.setResourceAction(ResourceAction.DELETE);
-        Assertions.assertThrows(SecretOperationException.class, () -> secretService.processSecretAction(actionMessage, true, true));
+        Assertions.assertThrows(SecretOperationException.class, () -> secretInternalService.processSecretAction(actionMessage, true, true));
         secretReloaded = secretRepository.findWithAssociationsByUuid(secret.getUuid()).orElseThrow();
         Assertions.assertEquals(originalState, secretReloaded.getState());
 
         actionMessage.setResourceAction(ResourceAction.UPDATE_SOURCE_VAULT_PROFILE);
-        Assertions.assertThrows(SecretOperationException.class, () -> secretService.processSecretAction(actionMessage, true, true));
+        Assertions.assertThrows(SecretOperationException.class, () -> secretInternalService.processSecretAction(actionMessage, true, true));
         secretReloaded = secretRepository.findWithAssociationsByUuid(secret.getUuid()).orElseThrow();
         Assertions.assertEquals(originalState, secretReloaded.getState());
 
         WireMock.stubFor(WireMock.post(WireMock.urlPathMatching("/v1/secretProvider/secrets/content"))
                 .willReturn(WireMock.okJson(new ObjectMapper().writeValueAsString(new BasicAuthSecretContent()))));
-        Assertions.assertThrows(SecretOperationException.class, () -> secretService.processSecretAction(actionMessage, true, true));
+        Assertions.assertThrows(SecretOperationException.class, () -> secretInternalService.processSecretAction(actionMessage, true, true));
         secretReloaded = secretRepository.findWithAssociationsByUuid(secret.getUuid()).orElseThrow();
         Assertions.assertEquals(originalState, secretReloaded.getState());
     }
@@ -633,7 +636,7 @@ class SecretServiceTest extends BaseSpringBootTest {
 
     @Test
     void testGetResourceObject() throws NotFoundException {
-        NameAndUuidDto nameAndUuidDto = secretService.getResourceObjectInternal(secret.getUuid());
+        NameAndUuidDto nameAndUuidDto = secretInternalService.getResourceObjectInternal(secret.getUuid());
         Assertions.assertEquals(secret.getUuid().toString(), nameAndUuidDto.getUuid());
         Assertions.assertEquals(secret.getName(), nameAndUuidDto.getName());
 
@@ -648,11 +651,11 @@ class SecretServiceTest extends BaseSpringBootTest {
         actionMessage.setResourceUuid(secret.getUuid());
         actionMessage.setResourceAction(ResourceAction.CREATE);
         actionMessage.setData(SecretActionData.builder().originalState(SecretState.ACTIVE).build());
-        secretService.processSecretAction(actionMessage, true, false);
+        secretInternalService.processSecretAction(actionMessage, true, false);
         secret = secretRepository.findWithAssociationsByUuid(secret.getUuid()).orElseThrow();
         Assertions.assertEquals(SecretState.REJECTED, secret.getState());
         actionMessage.setResourceAction(ResourceAction.UPDATE);
-        secretService.processSecretAction(actionMessage, true, false);
+        secretInternalService.processSecretAction(actionMessage, true, false);
         secret = secretRepository.findWithAssociationsByUuid(secret.getUuid()).orElseThrow();
         Assertions.assertEquals(SecretState.ACTIVE, secret.getState());
     }

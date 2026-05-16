@@ -14,6 +14,7 @@ import com.czertainly.core.security.authn.CzertainlyUserDetails;
 import com.czertainly.core.security.authn.client.AuthenticationInfo;
 import com.czertainly.core.util.AuthHelper;
 import com.czertainly.core.util.BaseSpringBootTest;
+import com.czertainly.core.service.AuthExternalService;
 import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.client.WireMock;
 import org.junit.jupiter.api.AfterEach;
@@ -42,7 +43,7 @@ class AuthServiceTest extends BaseSpringBootTest {
     private WireMockServer mockServer;
 
     @Autowired
-    private AuthService authService;
+    private AuthExternalService authService;
 
     @Autowired
     private ContextRefreshListener contextRefreshListener;

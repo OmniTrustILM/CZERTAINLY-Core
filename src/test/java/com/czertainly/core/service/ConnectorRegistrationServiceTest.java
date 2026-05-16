@@ -10,6 +10,7 @@ import com.czertainly.api.model.core.connector.AuthType;
 import com.czertainly.api.model.core.connector.ConnectorDto;
 import com.czertainly.api.model.core.connector.ConnectorStatus;
 import com.czertainly.core.security.authz.SecuredUUID;
+import com.czertainly.core.service.ConnectorRegistrationExternalService;
 import com.czertainly.core.util.AuthenticationTokenTestHelper;
 import com.czertainly.core.util.BaseSpringBootTest;
 import com.github.tomakehurst.wiremock.WireMockServer;
@@ -24,10 +25,10 @@ import org.springframework.security.core.Authentication;
 class ConnectorRegistrationServiceTest extends BaseSpringBootTest {
 
     @Autowired
-    private ConnectorService connectorService;
+    private ConnectorExternalService connectorService;
 
     @Autowired
-    private ConnectorRegistrationService connectorRegistrationService;
+    private ConnectorRegistrationExternalService connectorRegistrationService;
 
     private WireMockServer mockServer;
 

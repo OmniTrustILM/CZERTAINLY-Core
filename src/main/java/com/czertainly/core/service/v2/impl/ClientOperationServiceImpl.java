@@ -53,7 +53,12 @@ import com.czertainly.core.security.authz.ExternalAuthorization;
 import com.czertainly.core.security.authz.SecuredParentUUID;
 import com.czertainly.core.security.authz.SecuredUUID;
 import com.czertainly.core.service.*;
-import com.czertainly.core.service.v2.ClientOperationService;
+import com.czertainly.core.service.ComplianceExternalService;
+import com.czertainly.core.service.ComplianceInternalService;
+import com.czertainly.core.service.LocationExternalService;
+import com.czertainly.core.service.LocationInternalService;
+import com.czertainly.core.service.v2.ClientOperationExternalService;
+import com.czertainly.core.service.v2.ClientOperationInternalService;
 import com.czertainly.core.service.v2.ExtendedAttributeService;
 import com.czertainly.core.util.*;
 import org.bouncycastle.asn1.x500.X500Name;
@@ -81,7 +86,7 @@ import java.util.*;
 
 @Service("clientOperationServiceImplV2")
 @Transactional
-public class ClientOperationServiceImpl implements ClientOperationService {
+public class ClientOperationServiceImpl implements ClientOperationExternalService, ClientOperationInternalService {
     private static final Logger logger = LoggerFactory.getLogger(ClientOperationServiceImpl.class);
 
     /**
@@ -102,14 +107,18 @@ public class ClientOperationServiceImpl implements ClientOperationService {
 
     private RaProfileRepository raProfileRepository;
     private CertificateRepository certificateRepository;
-    private LocationService locationService;
-    private CertificateService certificateService;
-    private ComplianceService complianceService;
-    private CertificateEventHistoryService certificateEventHistoryService;
+    private LocationExternalService locationService;
+    private LocationInternalService locationInternalService;
+    private CertificateExternalService certificateExternalService;
+    private CertificateInternalService certificateInternalService;
+    private ComplianceExternalService complianceExternalService;
+    private ComplianceInternalService complianceInternalService;
+    private CertificateEventHistoryInternalService certificateEventHistoryService;
     private ExtendedAttributeService extendedAttributeService;
     private ConnectorApiFactory connectorApiFactory;
-    private CryptographicOperationService cryptographicOperationService;
-    private CryptographicKeyService keyService;
+    private CryptographicOperationInternalService cryptographicOperationService;
+    private CryptographicKeyExternalService keyService;
+    private CryptographicKeyInternalService keyInternalService;
     private AttributeEngine attributeEngine;
     private CertificateRelationRepository certificateRelationRepository;
 
@@ -148,22 +157,38 @@ public class ClientOperationServiceImpl implements ClientOperationService {
 
     @Lazy
     @Autowired
-    public void setLocationService(LocationService locationService) {
+    public void setLocationService(LocationExternalService locationService) {
         this.locationService = locationService;
     }
 
+    @Lazy
     @Autowired
-    public void setCertificateService(CertificateService certificateService) {
-        this.certificateService = certificateService;
+    public void setLocationInternalService(LocationInternalService locationInternalService) {
+        this.locationInternalService = locationInternalService;
     }
 
     @Autowired
-    public void setComplianceService(ComplianceService complianceService) {
-        this.complianceService = complianceService;
+    public void setCertificateExternalService(CertificateExternalService certificateExternalService) {
+        this.certificateExternalService = certificateExternalService;
     }
 
     @Autowired
-    public void setCertificateEventHistoryService(CertificateEventHistoryService certificateEventHistoryService) {
+    public void setCertificateInternalService(CertificateInternalService certificateInternalService) {
+        this.certificateInternalService = certificateInternalService;
+    }
+
+    @Autowired
+    public void setComplianceExternalService(ComplianceExternalService complianceExternalService) {
+        this.complianceExternalService = complianceExternalService;
+    }
+
+    @Autowired
+    public void setComplianceInternalService(ComplianceInternalService complianceInternalService) {
+        this.complianceInternalService = complianceInternalService;
+    }
+
+    @Autowired
+    public void setCertificateEventHistoryService(CertificateEventHistoryInternalService certificateEventHistoryService) {
         this.certificateEventHistoryService = certificateEventHistoryService;
     }
 
@@ -183,13 +208,18 @@ public class ClientOperationServiceImpl implements ClientOperationService {
     }
 
     @Autowired
-    public void setCryptographicOperationService(CryptographicOperationService cryptographicOperationService) {
+    public void setCryptographicOperationService(CryptographicOperationInternalService cryptographicOperationService) {
         this.cryptographicOperationService = cryptographicOperationService;
     }
 
     @Autowired
-    public void setKeyService(CryptographicKeyService keyService) {
+    public void setKeyService(CryptographicKeyExternalService keyService) {
         this.keyService = keyService;
+    }
+
+    @Autowired
+    public void setKeyInternalService(CryptographicKeyInternalService keyInternalService) {
+        this.keyInternalService = keyInternalService;
     }
 
     @Override
@@ -221,7 +251,7 @@ public class ClientOperationServiceImpl implements ClientOperationService {
         }
 
         String certificateRequest = generateBase64EncodedCsr(request.getRequest(), request.getFormat(), request.getCsrAttributes(), request.getKeyUuid(), request.getTokenProfileUuid(), request.getSignatureAttributes(), request.getAltKeyUuid(), request.getAltTokenProfileUuid(), request.getAltSignatureAttributes());
-        CertificateDetailDto certificate = certificateService.submitCertificateRequest(certificateRequest, request.getFormat(), request.getSignatureAttributes(), request.getAltSignatureAttributes(), request.getCsrAttributes(), request.getIssueAttributes(), request.getKeyUuid(), request.getAltKeyUuid(), request.getRaProfileUuid(), request.getSourceCertificateUuid(),
+        CertificateDetailDto certificate = certificateExternalService.submitCertificateRequest(certificateRequest, request.getFormat(), request.getSignatureAttributes(), request.getAltSignatureAttributes(), request.getCsrAttributes(), request.getIssueAttributes(), request.getKeyUuid(), request.getAltKeyUuid(), request.getRaProfileUuid(), request.getSourceCertificateUuid(),
                 protocolInfo);
 
         // create custom Attributes
@@ -301,7 +331,7 @@ public class ClientOperationServiceImpl implements ClientOperationService {
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public void issueCertificateAction(final UUID certificateUuid, boolean isApproved) throws CertificateOperationException, NotFoundException {
         if (!isApproved) {
-            certificateService.checkIssuePermissions();
+            certificateExternalService.checkIssuePermissions();
         }
 
         final Certificate certificate = certificateRepository.findWithAssociationsByUuid(certificateUuid).orElseThrow(() -> new NotFoundException(Certificate.class, certificateUuid));
@@ -344,7 +374,7 @@ public class ClientOperationServiceImpl implements ClientOperationService {
 
             logger.info("Certificate {} was issued by authority", certificateUuid);
 
-            certificateService.issueRequestedCertificate(certificateUuid, issueCaResponse.getCertificateData(), issueCaResponse.getMeta());
+            certificateInternalService.issueRequestedCertificate(certificateUuid, issueCaResponse.getCertificateData(), issueCaResponse.getMeta());
         } catch (Exception e) {
             handleFailedOrRejectedEvent(certificate, null, CertificateState.FAILED, CertificateEvent.ISSUE, new HashMap<>(), e.getMessage());
             throw new CertificateOperationException("Failed to issue certificate with UUID %s: ".formatted(certificateUuid) + e.getMessage());
@@ -353,7 +383,7 @@ public class ClientOperationServiceImpl implements ClientOperationService {
         // push certificate to locations
         for (CertificateLocation cl : certificate.getLocations()) {
             try {
-                locationService.pushRequestedCertificateToLocationAction(cl.getId(), false);
+                locationInternalService.pushRequestedCertificateToLocationAction(cl.getId(), false);
             } catch (Exception e) {
                 logger.error("Failed to push issued certificate to location: {}", e.getMessage());
             }
@@ -465,9 +495,9 @@ public class ClientOperationServiceImpl implements ClientOperationService {
     private boolean isRequestNotCompliant(UUID certificateUuid, UUID certificateRequestUuid, CertificateEvent certificateEvent) throws NotFoundException {
         // check for compliance of certificate request
         logger.debug("Checking compliance of certificate request for certificate {}", certificateUuid);
-        complianceService.checkResourceObjectsComplianceValidation(Resource.CERTIFICATE, List.of(certificateUuid));
-        complianceService.checkResourceObjectComplianceAsSystem(Resource.CERTIFICATE, certificateUuid);
-        ComplianceCheckResultDto complianceResult = complianceService.getComplianceCheckResult(Resource.CERTIFICATE_REQUEST, certificateRequestUuid);
+        complianceInternalService.checkResourceObjectsComplianceValidationInternal(Resource.CERTIFICATE, List.of(certificateUuid));
+        complianceInternalService.checkResourceObjectComplianceAsSystem(Resource.CERTIFICATE, certificateUuid);
+        ComplianceCheckResultDto complianceResult = complianceExternalService.getComplianceCheckResult(Resource.CERTIFICATE_REQUEST, certificateRequestUuid);
         if (complianceResult.getStatus() == ComplianceStatus.NOK || complianceResult.getStatus() == ComplianceStatus.FAILED) {
             Certificate newCertificate = certificateRepository.findByUuid(certificateUuid).orElseThrow(() -> new NotFoundException(Certificate.class, certificateUuid));
             handleFailedOrRejectedEvent(newCertificate, null, CertificateState.REJECTED, certificateEvent, null, "Certificate request is not compliant");
@@ -480,7 +510,7 @@ public class ClientOperationServiceImpl implements ClientOperationService {
     private void handleFailedOrRejectedEvent(Certificate certificate, UUID oldCertificateUuid, CertificateState state, CertificateEvent event, Map<String, Object> additionalInformation, String message) {
         for (CertificateLocation location : certificate.getLocations()) {
             try {
-                locationService.removeRejectedOrFailedCertificateFromLocationAction(location.getId());
+                locationInternalService.removeRejectedOrFailedCertificateFromLocationAction(location.getId());
             } catch (ConnectorException | NotFoundException ex) {
                 logger.error("Failed to remove certificate with UUID {} from location with UUID {}: {}", certificate.getUuid(), location.getId().getLocationUuid(), message);
             }
@@ -511,7 +541,7 @@ public class ClientOperationServiceImpl implements ClientOperationService {
     @Override
     @ExternalAuthorization(resource = Resource.RA_PROFILE, action = ResourceAction.DETAIL, parentResource = Resource.AUTHORITY, parentAction = ResourceAction.DETAIL)
     public ClientCertificateDataResponseDto issueRequestedCertificate(final SecuredParentUUID authorityUuid, final SecuredUUID raProfileUuid, final String certificateUuid) throws ConnectorException, NotFoundException {
-        Certificate certificate = certificateService.getCertificateEntity(SecuredUUID.fromString(certificateUuid));
+        Certificate certificate = certificateExternalService.getCertificateEntity(SecuredUUID.fromString(certificateUuid));
         if (certificate.getState() != CertificateState.REQUESTED) {
             throw new ValidationException(ValidationError.create(String.format("Cannot issue requested certificate with status %s. Certificate: %s", certificate.getState().getLabel(), certificate)));
         }
@@ -599,7 +629,7 @@ public class ClientOperationServiceImpl implements ClientOperationService {
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public void renewCertificateAction(final UUID certificateUuid, ClientCertificateRenewRequestDto request, boolean isApproved) throws NotFoundException, CertificateOperationException {
         if (!isApproved) {
-            certificateService.checkRenewPermissions();
+            certificateExternalService.checkRenewPermissions();
         }
         Certificate certificate = validateNewCertificateForOperation(certificateUuid);
         CertificateRelation certificateRelation = certificateRelationRepository.findFirstByIdSuccessorCertificateUuidAndRelationTypeOrderByCreatedAtAsc(certificateUuid, CertificateRelationType.PENDING).orElseThrow(() -> new NotFoundException("No certificate renewal relation has been found for certificate with UUID %s".formatted(certificateUuid)));
@@ -643,7 +673,7 @@ public class ClientOperationServiceImpl implements ClientOperationService {
 
             logger.info("Certificate {} was renewed by authority", certificateUuid);
 
-            CertificateDetailDto certificateDetailDto = certificateService.issueRequestedCertificate(certificateUuid, renewCaResponse.getCertificateData(), renewCaResponse.getMeta());
+            CertificateDetailDto certificateDetailDto = certificateInternalService.issueRequestedCertificate(certificateUuid, renewCaResponse.getCertificateData(), renewCaResponse.getMeta());
 
             additionalInformation.put("New Certificate Serial Number", certificateDetailDto.getSerialNumber());
             certificateEventHistoryService.addEventHistory(oldCertificate.getUuid(), CertificateEvent.RENEW, CertificateEventStatus.SUCCESS, "Renewed using RA Profile " + raProfile.getName(), MetaDefinitions.serialize(additionalInformation));
@@ -680,7 +710,7 @@ public class ClientOperationServiceImpl implements ClientOperationService {
             // push certificate to locations
             for (CertificateLocation cl : certificate.getLocations()) {
                 try {
-                    locationService.pushRequestedCertificateToLocationAction(cl.getId(), true);
+                    locationInternalService.pushRequestedCertificateToLocationAction(cl.getId(), true);
                 } catch (Exception e) {
                     logger.error("Failed to push renewed certificate to location: {}", e.getMessage());
                 }
@@ -806,7 +836,7 @@ public class ClientOperationServiceImpl implements ClientOperationService {
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public void rekeyCertificateAction(final UUID certificateUuid, ClientCertificateRekeyRequestDto request, boolean isApproved) throws NotFoundException, CertificateOperationException {
         if (!isApproved) {
-            certificateService.checkRenewPermissions();
+            certificateExternalService.checkRenewPermissions();
         }
         Certificate certificate = validateNewCertificateForOperation(certificateUuid);
 
@@ -851,7 +881,7 @@ public class ClientOperationServiceImpl implements ClientOperationService {
 
             logger.info("Certificate {} was rekeyed by authority", certificateUuid);
 
-            CertificateDetailDto certificateDetailDto = certificateService.issueRequestedCertificate(certificateUuid, renewCaResponse.getCertificateData(), renewCaResponse.getMeta());
+            CertificateDetailDto certificateDetailDto = certificateInternalService.issueRequestedCertificate(certificateUuid, renewCaResponse.getCertificateData(), renewCaResponse.getMeta());
 
             additionalInformation.put("New Certificate Serial Number", certificateDetailDto.getSerialNumber());
             certificateEventHistoryService.addEventHistory(oldCertificate.getUuid(), CertificateEvent.REKEY, CertificateEventStatus.SUCCESS, "Rekeyed using RA Profile " + raProfile.getName(), MetaDefinitions.serialize(additionalInformation));
@@ -914,7 +944,7 @@ public class ClientOperationServiceImpl implements ClientOperationService {
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public void revokeCertificateAction(final UUID certificateUuid, ClientCertificateRevocationDto request, boolean isApproved) throws NotFoundException, CertificateOperationException {
         if (!isApproved) {
-            certificateService.checkRevokePermissions();
+            certificateExternalService.checkRevokePermissions();
         }
         final Certificate certificate = certificateRepository.findWithAssociationsByUuid(certificateUuid).orElseThrow(() -> new NotFoundException(Certificate.class, certificateUuid));
         if (certificate.getState() != CertificateState.ISSUED && certificate.getState() != CertificateState.PENDING_APPROVAL) {
@@ -1214,7 +1244,7 @@ public class ClientOperationServiceImpl implements ClientOperationService {
             if (altKeyEncoded != null) {
                 PublicKey publicKey = CertificateUtil.getAltPublicKey(altKeyEncoded);
                 String fingerprint = CertificateUtil.getThumbprint(publicKey.getEncoded());
-                UUID keyWithSameFingerprintUuid = keyService.findKeyByFingerprint(fingerprint);
+                UUID keyWithSameFingerprintUuid = keyInternalService.findKeyByFingerprint(fingerprint);
                 if (altKeyUuid.equals(keyWithSameFingerprintUuid)) {
                     throw new ValidationException(ValidationError.create(
                             "Rekey operation not permitted. Cannot use same alternative key to rekey certificate"
@@ -1401,7 +1431,7 @@ public class ClientOperationServiceImpl implements ClientOperationService {
     public CertificateDetailDto manuallyIssueCertificate(
             SecuredParentUUID authorityUuid, SecuredUUID raProfileUuid, String certificateUuid,
             UploadCertificateRequestDto request) throws NotFoundException, CertificateException, AlreadyExistException, ConnectorException, AttributeException {
-        certificateService.checkIssuePermissions();
+        certificateExternalService.checkIssuePermissions();
 
         Certificate certificate = certificateRepository.findWithAssociationsByUuid(UUID.fromString(certificateUuid))
                 .orElseThrow(() -> new NotFoundException(Certificate.class, certificateUuid));
@@ -1418,7 +1448,7 @@ public class ClientOperationServiceImpl implements ClientOperationService {
                 ? identifyResponse.getMeta()
                 : List.of();
         try {
-            certificateService.issueRequestedCertificate(certificate.getUuid(), request.getCertificate(), identifyMeta);
+            certificateInternalService.issueRequestedCertificate(certificate.getUuid(), request.getCertificate(), identifyMeta);
         } catch (NoSuchAlgorithmException e) {
             throw new CertificateException(e);
         }
@@ -1490,7 +1520,7 @@ public class ClientOperationServiceImpl implements ClientOperationService {
     private void pushFinalizedCertificateToAllLocations(Certificate certificate) {
         for (CertificateLocation cl : certificate.getLocations()) {
             try {
-                locationService.pushRequestedCertificateToLocationAction(cl.getId(), false);
+                locationInternalService.pushRequestedCertificateToLocationAction(cl.getId(), false);
             } catch (Exception e) {
                 logger.error("Failed to push manually-finalized certificate {} to location {}: {}",
                         certificate.getUuid(), cl.getId().getLocationUuid(), e.getMessage(), e);
@@ -1508,7 +1538,7 @@ public class ClientOperationServiceImpl implements ClientOperationService {
     @ExternalAuthorization(resource = Resource.RA_PROFILE, action = ResourceAction.DETAIL, parentResource = Resource.AUTHORITY, parentAction = ResourceAction.DETAIL)
     public void manuallyConfirmRevoke(
             SecuredParentUUID authorityUuid, SecuredUUID raProfileUuid, String certificateUuid) throws NotFoundException {
-        certificateService.checkRevokePermissions();
+        certificateExternalService.checkRevokePermissions();
 
         // The state-transition writes run in an explicit transaction with a pessimistic
         // row lock; destroyKey is a connector-side HTTP call and runs OUTSIDE the locked
@@ -1629,11 +1659,11 @@ public class ClientOperationServiceImpl implements ClientOperationService {
 
     private CancelTarget determineCancelTarget(Certificate cert) {
         if (cert.getState() == CertificateState.PENDING_ISSUE) {
-            certificateService.checkIssuePermissions();
+            certificateExternalService.checkIssuePermissions();
             return new CancelTarget(true, CertificateState.FAILED, CertificateEvent.ISSUE, "issuance");
         }
         if (cert.getState() == CertificateState.PENDING_REVOKE) {
-            certificateService.checkRevokePermissions();
+            certificateExternalService.checkRevokePermissions();
             return new CancelTarget(false, CertificateState.ISSUED, CertificateEvent.REVOKE, "revocation");
         }
         throw new ValidationException("Cannot cancel: certificate is not in a pending state. Current state: %s. Certificate: %s"

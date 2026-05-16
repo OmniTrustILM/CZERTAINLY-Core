@@ -9,7 +9,7 @@ import com.czertainly.api.model.core.logging.enums.Module;
 import com.czertainly.api.model.core.logging.enums.Operation;
 import com.czertainly.core.aop.AuditLogged;
 import com.czertainly.core.logging.LogResource;
-import com.czertainly.core.service.RoleManagementService;
+import com.czertainly.core.service.RoleManagementExternalService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
@@ -21,10 +21,10 @@ import java.util.List;
 @RestController
 public class RoleManagementControllerImpl implements RoleManagementController {
 
-    private RoleManagementService roleManagementService;
+    private RoleManagementExternalService roleManagementService;
 
     @Autowired
-    public void setRoleManagementService(RoleManagementService roleManagementService) {
+    public void setRoleManagementService(RoleManagementExternalService roleManagementService) {
         this.roleManagementService = roleManagementService;
     }
 

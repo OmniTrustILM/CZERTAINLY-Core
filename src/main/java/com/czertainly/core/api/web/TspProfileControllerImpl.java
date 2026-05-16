@@ -19,7 +19,7 @@ import com.czertainly.core.auth.AuthEndpoint;
 import com.czertainly.core.logging.LogResource;
 import com.czertainly.core.security.authz.SecuredUUID;
 import com.czertainly.core.security.authz.SecurityFilter;
-import com.czertainly.core.service.TspProfileService;
+import com.czertainly.core.service.TspProfileExternalService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.RestController;
@@ -30,10 +30,10 @@ import java.util.UUID;
 @RestController
 public class TspProfileControllerImpl implements TspProfileController {
 
-    private final TspProfileService tspProfileService;
+    private final TspProfileExternalService tspProfileService;
 
     @Autowired
-    public TspProfileControllerImpl(TspProfileService tspProfileService) {
+    public TspProfileControllerImpl(TspProfileExternalService tspProfileService) {
         this.tspProfileService = tspProfileService;
     }
 

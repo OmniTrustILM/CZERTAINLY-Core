@@ -2,7 +2,7 @@ package com.czertainly.core.security.oauth2;
 
 import com.czertainly.api.model.core.settings.authentication.OAuth2ProviderSettingsUpdateDto;
 import com.czertainly.core.auth.oauth2.CzertainlyClientRegistrationRepository;
-import com.czertainly.core.service.SettingService;
+import com.czertainly.core.service.SettingExternalService;
 import com.czertainly.core.util.BaseSpringBootTest;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -15,7 +15,7 @@ class CzertainlyClientRegistrationRepositoryTest extends BaseSpringBootTest {
     private CzertainlyClientRegistrationRepository clientRegistrationRepository;
 
     @Autowired
-    private SettingService settingService;
+    private SettingExternalService settingService;
 
     @BeforeEach
     void setUp() {

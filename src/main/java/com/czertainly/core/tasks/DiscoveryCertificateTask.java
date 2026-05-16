@@ -6,7 +6,8 @@ import com.czertainly.api.model.core.auth.Resource;
 import com.czertainly.api.model.core.discovery.DiscoveryStatus;
 import com.czertainly.api.model.scheduler.SchedulerJobExecutionStatus;
 import com.czertainly.core.model.ScheduledTaskResult;
-import com.czertainly.core.service.DiscoveryService;
+import com.czertainly.core.service.DiscoveryExternalService;
+import com.czertainly.core.service.DiscoveryInternalService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.NoArgsConstructor;
 import org.slf4j.Logger;
@@ -30,7 +31,8 @@ public class DiscoveryCertificateTask implements ScheduledJobTask {
 
     private static final Logger logger = LoggerFactory.getLogger(DiscoveryCertificateTask.class);
 
-    private DiscoveryService discoveryService;
+    private DiscoveryExternalService discoveryExternalService;
+    private DiscoveryInternalService discoveryInternalService;
 
     private final ObjectMapper mapper = new ObjectMapper();
 
@@ -44,8 +46,13 @@ public class DiscoveryCertificateTask implements ScheduledJobTask {
     }
 
     @Autowired
-    public void setDiscoveryService(DiscoveryService discoveryService) {
-        this.discoveryService = discoveryService;
+    public void setDiscoveryExternalService(DiscoveryExternalService discoveryExternalService) {
+        this.discoveryExternalService = discoveryExternalService;
+    }
+
+    @Autowired
+    public void setDiscoveryInternalService(DiscoveryInternalService discoveryInternalService) {
+        this.discoveryInternalService = discoveryInternalService;
     }
 
     public String getDefaultJobName() {
@@ -78,7 +85,7 @@ public class DiscoveryCertificateTask implements ScheduledJobTask {
         DiscoveryHistoryDetailDto discovery = null;
         TransactionStatus status = transactionManager.getTransaction(new DefaultTransactionDefinition());
         try {
-            discovery = discoveryService.createDiscovery(discoveryDto, true);
+            discovery = discoveryExternalService.createDiscovery(discoveryDto, true);
             transactionManager.commit(status);
         } catch (Exception e) {
             transactionManager.rollback(status);
@@ -88,7 +95,7 @@ public class DiscoveryCertificateTask implements ScheduledJobTask {
         }
 
         // After the discovery is created and commited, run discovery
-        discovery = discoveryService.runDiscovery(UUID.fromString(discovery.getUuid()), scheduledJobInfo);
+        discovery = discoveryInternalService.runDiscovery(UUID.fromString(discovery.getUuid()), scheduledJobInfo);
         if (discovery.getStatus() != DiscoveryStatus.PROCESSING) {
             return new ScheduledTaskResult(discovery.getStatus() == DiscoveryStatus.FAILED ? SchedulerJobExecutionStatus.FAILED : SchedulerJobExecutionStatus.SUCCESS, discovery.getMessage(), Resource.DISCOVERY, discovery.getUuid());
         }

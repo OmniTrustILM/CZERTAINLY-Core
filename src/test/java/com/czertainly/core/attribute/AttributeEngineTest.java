@@ -40,7 +40,7 @@ import com.czertainly.core.dao.entity.*;
 import com.czertainly.core.dao.repository.*;
 import com.czertainly.core.security.authz.SecuredUUID;
 import com.czertainly.core.security.authz.SecurityResourceFilter;
-import com.czertainly.core.service.CertificateService;
+import com.czertainly.core.service.CertificateExternalService;
 import com.czertainly.core.util.BaseSpringBootTest;
 import org.jetbrains.annotations.NotNull;
 import org.junit.jupiter.api.Assertions;
@@ -66,7 +66,7 @@ class AttributeEngineTest extends BaseSpringBootTest {
     @Autowired
     private AttributeEngine attributeEngine;
     @Autowired
-    private CertificateService certificateService;
+    private CertificateExternalService certificateService;
     @Autowired
     private CertificateRepository certificateRepository;
     @Autowired

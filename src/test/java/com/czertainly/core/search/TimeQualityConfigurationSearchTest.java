@@ -12,7 +12,7 @@ import com.czertainly.core.dao.entity.signing.TimeQualityConfiguration;
 import com.czertainly.core.dao.repository.signing.TimeQualityConfigurationRepository;
 import com.czertainly.core.enums.FilterField;
 import com.czertainly.core.security.authz.SecurityFilter;
-import com.czertainly.core.service.TimeQualityConfigurationService;
+import com.czertainly.core.service.TimeQualityConfigurationExternalService;
 import com.czertainly.core.util.BaseSpringBootTest;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -25,7 +25,7 @@ import java.util.List;
 class TimeQualityConfigurationSearchTest extends BaseSpringBootTest {
 
     @Autowired
-    private TimeQualityConfigurationService timeQualityConfigurationService;
+    private TimeQualityConfigurationExternalService timeQualityConfigurationService;
 
     @Autowired
     private TimeQualityConfigurationRepository timeQualityConfigurationRepository;

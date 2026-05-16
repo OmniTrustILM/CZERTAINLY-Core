@@ -42,7 +42,7 @@ import com.czertainly.core.security.authz.SecuredParentUUID;
 import com.czertainly.core.security.authz.SecuredUUID;
 import com.czertainly.core.security.authz.SecurityFilter;
 import com.czertainly.core.service.*;
-import com.czertainly.core.service.v2.ConnectorService;
+import com.czertainly.core.service.v2.ConnectorExternalService;
 import com.czertainly.core.util.*;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -70,7 +70,7 @@ import java.util.stream.Collectors;
 
 @Service(value = Resource.Codes.SECRET)
 @Transactional
-public class SecretServiceImpl implements SecretService, AttributeResourceService {
+public class SecretServiceImpl implements SecretExternalService, SecretInternalService, AttributeResourceService {
     private static final Logger logger = LoggerFactory.getLogger(SecretServiceImpl.class);
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
@@ -89,8 +89,8 @@ public class SecretServiceImpl implements SecretService, AttributeResourceServic
     private UserManagementApiClient userManagementApiClient;
 
     private ResourceObjectAssociationService objectAssociationService;
-    private ConnectorService connectorService;
-    private VaultInstanceService vaultInstanceService;
+    private ConnectorExternalService connectorService;
+    private VaultInstanceInternalService vaultInstanceService;
 
     private ConnectorApiFactory connectorApiFactory;
 
@@ -102,7 +102,7 @@ public class SecretServiceImpl implements SecretService, AttributeResourceServic
     }
 
     @Autowired
-    public void setVaultInstanceService(VaultInstanceService vaultInstanceService) {
+    public void setVaultInstanceInternalService(VaultInstanceInternalService vaultInstanceService) {
         this.vaultInstanceService = vaultInstanceService;
     }
 
@@ -122,7 +122,7 @@ public class SecretServiceImpl implements SecretService, AttributeResourceServic
     }
 
     @Autowired
-    public void setConnectorService(ConnectorService connectorService) {
+    public void setConnectorService(ConnectorExternalService connectorService) {
         this.connectorService = connectorService;
     }
 

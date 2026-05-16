@@ -36,12 +36,13 @@ import com.czertainly.core.model.auth.CertificateProtocolInfo;
 import com.czertainly.core.provider.CzertainlyProvider;
 import com.czertainly.core.provider.key.CzertainlyPrivateKey;
 import com.czertainly.core.security.authz.SecuredUUID;
-import com.czertainly.core.service.CertificateService;
-import com.czertainly.core.service.CryptographicKeyService;
-import com.czertainly.core.service.scep.ScepService;
+import com.czertainly.core.service.CertificateExternalService;
+import com.czertainly.core.service.CertificateInternalService;
+import com.czertainly.core.service.CryptographicKeyInternalService;
+import com.czertainly.core.service.scep.ScepExternalService;
 import com.czertainly.core.service.scep.message.ScepRequest;
 import com.czertainly.core.service.scep.message.ScepResponse;
-import com.czertainly.core.service.v2.ClientOperationService;
+import com.czertainly.core.service.v2.ClientOperationExternalService;
 import com.czertainly.core.util.AttributeDefinitionUtils;
 import com.czertainly.core.util.CertificateUtil;
 import com.czertainly.core.util.CertificateRequestUtils;
@@ -76,7 +77,7 @@ import java.util.*;
 
 @Service
 @Transactional
-public class ScepServiceImpl implements ScepService {
+public class ScepServiceImpl implements ScepExternalService {
 
     public static final String SCEP_URL_PREFIX = "/v1/protocols/scep";
     public static final String SCEP_OPERATION_GET_CA_CERT = "GetCACert";
@@ -107,9 +108,10 @@ public class ScepServiceImpl implements ScepService {
     private RaProfileRepository raProfileRepository;
     private ScepProfileRepository scepProfileRepository;
     private ScepTransactionRepository scepTransactionRepository;
-    private ClientOperationService clientOperationService;
-    private CertificateService certificateService;
-    private CryptographicKeyService cryptographicKeyService;
+    private ClientOperationExternalService clientOperationService;
+    private CertificateExternalService certificateExternalService;
+    private CertificateInternalService certificateInternalService;
+    private CryptographicKeyInternalService cryptographicKeyService;
     private ConnectorApiFactory connectorApiFactory;
     private AttributeEngine attributeEngine;
 
@@ -134,17 +136,22 @@ public class ScepServiceImpl implements ScepService {
     }
 
     @Autowired
-    public void setClientOperationService(ClientOperationService clientOperationService) {
+    public void setClientOperationService(ClientOperationExternalService clientOperationService) {
         this.clientOperationService = clientOperationService;
     }
 
     @Autowired
-    public void setCertificateService(CertificateService certificateService) {
-        this.certificateService = certificateService;
+    public void setCertificateExternalService(CertificateExternalService certificateExternalService) {
+        this.certificateExternalService = certificateExternalService;
     }
 
     @Autowired
-    public void setCryptographicKeyService(CryptographicKeyService cryptographicKeyService) {
+    public void setCertificateInternalService(CertificateInternalService certificateInternalService) {
+        this.certificateInternalService = certificateInternalService;
+    }
+
+    @Autowired
+    public void setCryptographicKeyService(CryptographicKeyInternalService cryptographicKeyService) {
         this.cryptographicKeyService = cryptographicKeyService;
     }
 
@@ -501,7 +508,7 @@ public class ScepServiceImpl implements ScepService {
 
         Certificate certificateEntity;
         try {
-            certificateEntity = certificateService.getCertificateEntity(SecuredUUID.fromString(response.getUuid()));
+            certificateEntity = certificateExternalService.getCertificateEntity(SecuredUUID.fromString(response.getUuid()));
             scepResponse.setCertificateChain(getIssuedCertificateChain(certificateEntity));
         } catch (NotFoundException e) {
             throw new ScepException(String.format("Issued certificate not found in inventory: uuid=%s", response.getUuid()), FailInfo.BAD_REQUEST);
@@ -639,7 +646,7 @@ public class ScepServiceImpl implements ScepService {
 
     private List<X509Certificate> loadCertificateChain(Certificate leafCertificate) throws ScepException, NotFoundException {
         ArrayList<X509Certificate> certificateChain = new ArrayList<>();
-        for (CertificateDetailDto certificate : certificateService.getCertificateChain(leafCertificate.getSecuredUuid(), true).getCertificates()) {
+        for (CertificateDetailDto certificate : certificateExternalService.getCertificateChain(leafCertificate.getSecuredUuid(), true).getCertificates()) {
             // only certificate with valid status should be used
             checkCertificateValidity(certificate);
             try {
@@ -728,7 +735,7 @@ public class ScepServiceImpl implements ScepService {
         JcaPKCS10CertificationRequest pkcs10Request = scepRequest.getPkcs10Request();
         Certificate extCertificate;
         try {
-            extCertificate = certificateService.getCertificateEntityByFingerprint(CertificateUtil.getThumbprint(scepRequest.getSignerCertificate()));
+            extCertificate = certificateInternalService.getCertificateEntityByFingerprint(CertificateUtil.getThumbprint(scepRequest.getSignerCertificate()));
         } catch (NotFoundException e) {
             // Certificate is not found with the fingerprint. Meaning its not a renewal request. So do nothing
             return;

@@ -26,6 +26,8 @@ import com.czertainly.core.security.authz.ExternalAuthorization;
 import com.czertainly.core.security.authz.SecuredUUID;
 import com.czertainly.core.security.authz.SecurityFilter;
 import com.czertainly.core.service.*;
+import com.czertainly.core.service.ComplianceProfileExternalService;
+import com.czertainly.core.service.ComplianceProfileInternalService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,9 +38,10 @@ import java.util.UUID;
 
 @Service("complianceProfileServiceV1")
 @Transactional
-public class ComplianceProfileServiceImpl implements ComplianceProfileService {
+public class ComplianceProfileServiceImpl implements ComplianceProfileExternalService, ComplianceProfileInternalService {
 
-    private com.czertainly.core.service.v2.ComplianceProfileService complianceProfileServiceV2;
+    private com.czertainly.core.service.v2.ComplianceProfileExternalService complianceProfileServiceV2;
+    private com.czertainly.core.service.v2.ComplianceProfileInternalService complianceProfileInternalServiceV2;
 
     private ConnectorRepository connectorRepository;
     private RaProfileRepository raProfileRepository;
@@ -65,8 +68,13 @@ public class ComplianceProfileServiceImpl implements ComplianceProfileService {
     }
 
     @Autowired
-    public void setComplianceProfileServiceV2(com.czertainly.core.service.v2.ComplianceProfileService complianceProfileServiceV2) {
+    public void setComplianceProfileServiceV2(com.czertainly.core.service.v2.ComplianceProfileExternalService complianceProfileServiceV2) {
         this.complianceProfileServiceV2 = complianceProfileServiceV2;
+    }
+
+    @Autowired
+    public void setComplianceProfileInternalServiceV2(com.czertainly.core.service.v2.ComplianceProfileInternalService complianceProfileInternalServiceV2) {
+        this.complianceProfileInternalServiceV2 = complianceProfileInternalServiceV2;
     }
 
     @Autowired
@@ -422,7 +430,7 @@ public class ComplianceProfileServiceImpl implements ComplianceProfileService {
 
     @Override
     public NameAndUuidDto getResourceObjectInternal(UUID objectUuid) throws NotFoundException {
-        return complianceProfileServiceV2.getResourceObjectInternal(objectUuid);
+        return complianceProfileInternalServiceV2.getResourceObjectInternal(objectUuid);
     }
 
     @Override

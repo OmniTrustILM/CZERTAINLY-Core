@@ -7,8 +7,8 @@ import com.czertainly.api.model.core.settings.authentication.AuthenticationSetti
 import com.czertainly.api.model.core.settings.authentication.OAuth2ProviderSettingsDto;
 import com.czertainly.core.auth.oauth2.v2.OAuth2LoginControllerImpl;
 import com.czertainly.core.security.authn.CzertainlyAuthenticationException;
-import com.czertainly.core.service.AuditLogService;
-import com.czertainly.core.service.v2.OAuth2LoginService;
+import com.czertainly.core.service.AuditLogInternalService;
+import com.czertainly.core.service.v2.OAuth2LoginExternalService;
 import com.czertainly.core.settings.SettingsCache;
 import com.czertainly.core.util.OAuth2Constants;
 import com.czertainly.core.util.OAuth2LoginFlowHelper;
@@ -32,16 +32,16 @@ import java.util.List;
 @Controller
 public class LoginController {
 
-    private AuditLogService auditLogService;
-    private OAuth2LoginService oauth2LoginService;
+    private AuditLogInternalService auditLogService;
+    private OAuth2LoginExternalService oauth2LoginService;
 
     @Autowired
-    public void setAuditLogService(AuditLogService auditLogService) {
+    public void setAuditLogInternalService(AuditLogInternalService auditLogService) {
         this.auditLogService = auditLogService;
     }
 
     @Autowired
-    public void setOauth2LoginService(OAuth2LoginService oauth2LoginService) {
+    public void setOauth2LoginService(OAuth2LoginExternalService oauth2LoginService) {
         this.oauth2LoginService = oauth2LoginService;
     }
 

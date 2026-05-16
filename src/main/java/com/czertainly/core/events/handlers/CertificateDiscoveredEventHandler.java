@@ -25,7 +25,8 @@ import com.czertainly.core.events.transaction.TransactionHandler;
 import com.czertainly.core.messaging.jms.producers.ValidationProducer;
 import com.czertainly.core.messaging.model.EventMessage;
 import com.czertainly.core.messaging.model.ValidationMessage;
-import com.czertainly.core.service.CertificateService;
+import com.czertainly.core.service.CertificateExternalService;
+import com.czertainly.core.service.CertificateInternalService;
 import com.czertainly.core.service.handler.CertificateHandler;
 import com.czertainly.core.tasks.ScheduledJobInfo;
 import com.czertainly.core.util.CertificateUtil;
@@ -70,7 +71,8 @@ public class CertificateDiscoveredEventHandler extends EventHandler<Certificate>
     private TransactionHandler transactionHandler;
     private ValidationProducer validationProducer;
 
-    private CertificateService certificateService;
+    private CertificateExternalService certificateExternalService;
+    private CertificateInternalService certificateInternalService;
     private DiscoveryRepository discoveryRepository;
     private DiscoveryCertificateRepository discoveryCertificateRepository;
 
@@ -95,8 +97,13 @@ public class CertificateDiscoveredEventHandler extends EventHandler<Certificate>
     }
 
     @Autowired
-    public void setCertificateService(CertificateService certificateService) {
-        this.certificateService = certificateService;
+    public void setCertificateExternalService(CertificateExternalService certificateExternalService) {
+        this.certificateExternalService = certificateExternalService;
+    }
+
+    @Autowired
+    public void setCertificateInternalService(CertificateInternalService certificateInternalService) {
+        this.certificateInternalService = certificateInternalService;
     }
 
     @Autowired
@@ -245,7 +252,7 @@ public class CertificateDiscoveredEventHandler extends EventHandler<Certificate>
         X509Certificate x509Cert;
         try {
             x509Cert = CertificateUtil.parseCertificate(discoveryCertificate.getCertificateContent().getContent());
-            certificate = certificateService.createCertificateEntity(x509Cert);
+            certificate = certificateExternalService.createCertificateEntity(x509Cert);
         } catch (Exception e) {
             logger.error("Unable to create certificate from discovery certificate with UUID {}: {}", discoveryCertificate.getUuid(), e.getMessage());
             discoveryCertificate.setProcessed(true);
@@ -272,7 +279,7 @@ public class CertificateDiscoveredEventHandler extends EventHandler<Certificate>
             // If some trigger ignored this certificate, certificate is not saved and continue with next one
             if (!isIgnored) { // certificate was not ignored
                 // Save certificate to database
-                certificateService.updateCertificateEntity(certificate);
+                certificateInternalService.updateCertificateEntity(certificate);
                 // update objectUuid of not ignored certs
                 for (TriggerHistory ignoreTriggerHistory : triggerHistories) {
                     ignoreTriggerHistory.setObjectUuid(certificate.getUuid());

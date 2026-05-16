@@ -11,9 +11,10 @@ import com.czertainly.core.client.ConnectorApiFactory;
 import com.czertainly.core.dao.entity.Endpoint;
 import com.czertainly.core.dao.entity.FunctionGroup;
 import com.czertainly.core.dao.repository.*;
+import com.czertainly.core.service.ConnectorAuthExternalService;
 import com.czertainly.core.service.handler.ConnectorAdapter;
 import com.czertainly.core.service.handler.ConnectorV1Adapter;
-import com.czertainly.core.service.v2.ConnectorService;
+import com.czertainly.core.service.v2.ConnectorExternalService;
 import com.czertainly.core.service.v2.impl.ConnectorServiceImpl;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -62,7 +63,7 @@ class ConnectorServiceMockTest {
     private ComplianceProfileRuleRepository complianceProfileRuleRepository;
 
     @Mock
-    private ConnectorAuthService connectorAuthService;
+    private ConnectorAuthExternalService connectorAuthService;
 
     @Mock
     private AttributeEngine attributeEngine;

@@ -12,7 +12,7 @@ import com.czertainly.api.interfaces.core.cmp.error.CmpProcessingException;
 import com.czertainly.core.dao.entity.Certificate;
 import com.czertainly.core.dao.entity.CertificateContent;
 import com.czertainly.core.dao.entity.cmp.CmpTransaction;
-import com.czertainly.core.service.CertificateService;
+import com.czertainly.core.service.CertificateExternalService;
 import com.czertainly.core.service.cmp.configurations.ConfigurationContext;
 import com.czertainly.core.service.cmp.message.CmpTransactionService;
 import com.czertainly.core.service.cmp.message.PkiMessageDumper;
@@ -64,10 +64,10 @@ public class CrmfMessageHandler implements MessageHandler<PKIMessage> {
             PKIBody.TYPE_KEY_RECOVERY_REQ,  // krr      [9]  CertReqMessages,       --Key Recovery Req     (not implemented)
             PKIBody.TYPE_CROSS_CERT_REQ);   // ccr      [13] CertReqMessages,       --Cross-Cert.  Request (not implemented)
 
-    private CertificateService certificateService;
+    private CertificateExternalService certificateService;
 
     @Autowired
-    public void setCertificateService(CertificateService certificateService) {
+    public void setCertificateService(CertificateExternalService certificateService) {
         this.certificateService = certificateService;
     }
 

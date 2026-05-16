@@ -30,16 +30,16 @@ class TriggerServiceTest extends BaseSpringBootTest {
     private AttributeEngine attributeEngine;
 
     @Autowired
-    RuleService ruleService;
+    RuleExternalService ruleService;
 
     @Autowired
-    private ActionService actionService;
+    private ActionExternalService actionService;
 
     @Autowired
-    private TriggerService triggerService;
+    private TriggerExternalService triggerService;
 
     @Autowired
-    private NotificationProfileService notificationProfileService;
+    private NotificationProfileExternalService notificationProfileService;
 
     private CustomAttributeV3 domainAttr;
     private NotificationProfileDetailDto notificationProfile;

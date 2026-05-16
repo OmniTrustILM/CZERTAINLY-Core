@@ -11,7 +11,8 @@ import com.czertainly.core.dao.repository.workflows.*;
 import com.czertainly.core.model.auth.ResourceAction;
 import com.czertainly.core.security.authz.ExternalAuthorization;
 import com.czertainly.core.security.authz.SecuredUUID;
-import com.czertainly.core.service.TriggerService;
+import com.czertainly.core.service.TriggerExternalService;
+import com.czertainly.core.service.TriggerInternalService;
 import com.czertainly.core.util.AuthHelper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,7 +26,7 @@ import java.util.stream.Collectors;
 
 @Service
 @Transactional
-public class TriggerServiceImpl implements TriggerService {
+public class TriggerServiceImpl implements TriggerExternalService, TriggerInternalService {
 
     private static final Logger logger = LoggerFactory.getLogger(TriggerServiceImpl.class);
 

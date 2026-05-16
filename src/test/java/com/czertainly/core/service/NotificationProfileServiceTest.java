@@ -32,6 +32,7 @@ import com.czertainly.core.dao.repository.notifications.NotificationInstanceRefe
 import com.czertainly.core.messaging.jms.listeners.NotificationListener;
 import com.czertainly.core.messaging.model.NotificationMessage;
 import com.czertainly.core.security.authz.SecuredUUID;
+import com.czertainly.core.service.AttributeExternalService;
 import com.czertainly.core.util.BaseSpringBootTest;
 import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.client.WireMock;
@@ -57,13 +58,13 @@ class NotificationProfileServiceTest extends BaseSpringBootTest {
     private ConnectorRepository connectorRepository;
 
     @Autowired
-    private GroupService groupService;
+    private GroupExternalService groupService;
 
     @Autowired
     private NotificationListener notificationListener;
 
     @Autowired
-    private NotificationProfileService notificationProfileService;
+    private NotificationProfileExternalService notificationProfileService;
 
     @Autowired
     private NotificationInstanceReferenceRepository notificationInstanceReferenceRepository;
@@ -72,7 +73,7 @@ class NotificationProfileServiceTest extends BaseSpringBootTest {
     private NotificationInstanceMappedAttributeRepository notificationInstanceMappedAttributeRepository;
 
     @Autowired
-    private AttributeService attributeService;
+    private AttributeExternalService attributeService;
 
     private NotificationProfileDetailDto originalNotificationProfile;
 

@@ -3,7 +3,7 @@ package com.czertainly.core.service.impl;
 import com.czertainly.api.model.common.enums.IPlatformEnum;
 import com.czertainly.api.model.common.enums.PlatformEnum;
 import com.czertainly.api.model.core.enums.EnumItemDto;
-import com.czertainly.core.service.EnumService;
+import com.czertainly.core.service.EnumExternalService;
 import jakarta.transaction.Transactional;
 import org.springframework.stereotype.Service;
 
@@ -11,7 +11,7 @@ import java.util.*;
 
 @Service
 @Transactional
-public class EnumServiceImpl implements EnumService {
+public class EnumServiceImpl implements EnumExternalService {
 
     @Override
     public Map<PlatformEnum, Map<String, EnumItemDto>> getPlatformEnums() {

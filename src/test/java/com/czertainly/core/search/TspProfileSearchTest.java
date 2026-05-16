@@ -12,7 +12,7 @@ import com.czertainly.core.dao.entity.signing.TspProfile;
 import com.czertainly.core.dao.repository.signing.TspProfileRepository;
 import com.czertainly.core.enums.FilterField;
 import com.czertainly.core.security.authz.SecurityFilter;
-import com.czertainly.core.service.TspProfileService;
+import com.czertainly.core.service.TspProfileExternalService;
 import com.czertainly.core.util.BaseSpringBootTest;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -24,7 +24,7 @@ import java.util.List;
 class TspProfileSearchTest extends BaseSpringBootTest {
 
     @Autowired
-    private TspProfileService tspProfileService;
+    private TspProfileExternalService tspProfileService;
 
     @Autowired
     private TspProfileRepository tspProfileRepository;

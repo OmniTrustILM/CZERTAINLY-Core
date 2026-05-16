@@ -21,7 +21,7 @@ import com.czertainly.core.logging.LogResource;
 import com.czertainly.core.security.authz.SecuredParentUUID;
 import com.czertainly.core.security.authz.SecuredUUID;
 import com.czertainly.core.security.authz.SecurityFilter;
-import com.czertainly.core.service.LocationService;
+import com.czertainly.core.service.LocationExternalService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
@@ -33,10 +33,10 @@ import java.util.List;
 @RestController
 public class LocationManagementControllerImpl implements LocationManagementController {
 
-    private LocationService locationService;
+    private LocationExternalService locationService;
 
     @Autowired
-    public void setLocationService(LocationService locationService) {
+    public void setLocationService(LocationExternalService locationService) {
         this.locationService = locationService;
     }
 

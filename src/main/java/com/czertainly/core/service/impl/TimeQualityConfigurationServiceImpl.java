@@ -29,7 +29,8 @@ import com.czertainly.core.model.auth.ResourceAction;
 import com.czertainly.core.security.authz.ExternalAuthorization;
 import com.czertainly.core.security.authz.SecuredUUID;
 import com.czertainly.core.security.authz.SecurityFilter;
-import com.czertainly.core.service.TimeQualityConfigurationService;
+import com.czertainly.core.service.TimeQualityConfigurationExternalService;
+import com.czertainly.core.service.TimeQualityConfigurationInternalService;
 import com.czertainly.core.util.FilterPredicatesBuilder;
 import com.czertainly.core.util.SearchHelper;
 import jakarta.persistence.criteria.CriteriaBuilder;
@@ -54,7 +55,7 @@ import java.util.UUID;
 
 @Slf4j
 @Service(Resource.Codes.TIME_QUALITY_CONFIGURATION)
-public class TimeQualityConfigurationServiceImpl implements TimeQualityConfigurationService {
+public class TimeQualityConfigurationServiceImpl implements TimeQualityConfigurationExternalService, TimeQualityConfigurationInternalService {
 
     private static final String NOT_FOUND_MSG = "Time Quality Configuration not found: ";
 

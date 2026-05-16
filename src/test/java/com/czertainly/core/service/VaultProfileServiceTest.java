@@ -28,6 +28,7 @@ import com.czertainly.core.enums.FilterField;
 import com.czertainly.core.security.authz.SecuredParentUUID;
 import com.czertainly.core.security.authz.SecuredUUID;
 import com.czertainly.core.security.authz.SecurityFilter;
+import com.czertainly.core.service.AttributeExternalService;
 import com.czertainly.core.util.BaseSpringBootTest;
 import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.client.WireMock;
@@ -46,14 +47,17 @@ class VaultProfileServiceTest extends BaseSpringBootTest {
     public static final String TEST_CUSTOM_ATTRIBUTE = "testCustomAttribute";
 
     @Autowired
-    private VaultProfileService vaultProfileService;
+    private VaultProfileExternalService vaultProfileService;
+
+    @Autowired
+    private VaultProfileInternalService vaultProfileInternalService;
 
     @Autowired
     private VaultProfileRepository vaultProfileRepository;
     @Autowired
     private VaultInstanceRepository vaultInstanceRepository;
     @Autowired
-    private AttributeService attributeService;
+    private AttributeExternalService attributeService;
     @Autowired
     private SecretRepository secretRepository;
     @Autowired
@@ -269,7 +273,7 @@ class VaultProfileServiceTest extends BaseSpringBootTest {
         Assertions.assertEquals(vaultProfile.getUuid().toString(), dto.getUuid());
         Assertions.assertEquals(vaultProfile.getName(), dto.getName());
 
-        dto = vaultProfileService.getResourceObjectInternal(vaultProfile.getUuid());
+        dto = vaultProfileInternalService.getResourceObjectInternal(vaultProfile.getUuid());
         Assertions.assertEquals(vaultProfile.getUuid().toString(), dto.getUuid());
     }
 

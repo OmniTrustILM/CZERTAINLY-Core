@@ -28,9 +28,11 @@ import java.util.UUID;
 
 class ApprovalServiceTest extends ApprovalProfileData {
 
-    private ApprovalService approvalService;
+    private ApprovalInternalService approvalInternalService;
 
-    private ApprovalProfileService approvalProfileService;
+    private ApprovalExternalService approvalExternalService;
+
+    private ApprovalProfileExternalService approvalProfileService;
 
     private ApprovalRepository approvalRepository;
 
@@ -40,17 +42,17 @@ class ApprovalServiceTest extends ApprovalProfileData {
     @BeforeEach
     void setUp() throws NotFoundException, AlreadyExistException {
         approvalProfile = approvalProfileService.createApprovalProfile(approvalProfileRequestDto);
-        approval = approvalService.createApproval(approvalProfile.getTheLatestApprovalProfileVersion(), Resource.CERTIFICATE, ResourceAction.CREATE, UUID.randomUUID(), UUID.randomUUID(), null);
+        approval = approvalInternalService.createApproval(approvalProfile.getTheLatestApprovalProfileVersion(), Resource.CERTIFICATE, ResourceAction.CREATE, UUID.randomUUID(), UUID.randomUUID(), null);
     }
 
     @Test
     void testListOfApprovals() throws NotFoundException {
         UUID randomUserUuid = UUID.randomUUID();
-        approvalService.createApproval(approvalProfile.getTheLatestApprovalProfileVersion(), Resource.CERTIFICATE, ResourceAction.CREATE, UUID.randomUUID(), randomUserUuid, null);
-        approvalService.createApproval(approvalProfile.getTheLatestApprovalProfileVersion(), Resource.CERTIFICATE, ResourceAction.CREATE, UUID.randomUUID(), randomUserUuid, null);
-        approvalService.createApproval(approvalProfile.getTheLatestApprovalProfileVersion(), Resource.CERTIFICATE, ResourceAction.CREATE, UUID.randomUUID(), randomUserUuid, null);
+        approvalInternalService.createApproval(approvalProfile.getTheLatestApprovalProfileVersion(), Resource.CERTIFICATE, ResourceAction.CREATE, UUID.randomUUID(), randomUserUuid, null);
+        approvalInternalService.createApproval(approvalProfile.getTheLatestApprovalProfileVersion(), Resource.CERTIFICATE, ResourceAction.CREATE, UUID.randomUUID(), randomUserUuid, null);
+        approvalInternalService.createApproval(approvalProfile.getTheLatestApprovalProfileVersion(), Resource.CERTIFICATE, ResourceAction.CREATE, UUID.randomUUID(), randomUserUuid, null);
 
-        ApprovalResponseDto responseDto = approvalService.listApprovals(SecurityFilter.create(), new PaginationRequestDto());
+        ApprovalResponseDto responseDto = approvalExternalService.listApprovals(SecurityFilter.create(), new PaginationRequestDto());
         Assertions.assertEquals(4, responseDto.getApprovals().size());
     }
 
@@ -65,15 +67,15 @@ class ApprovalServiceTest extends ApprovalProfileData {
         approvalProfileUpdateRequestDto.getApprovalSteps().add(approvalStepDto);
         ApprovalProfile approvalProfile1 = approvalProfileService.createApprovalProfile(approvalProfileUpdateRequestDto);
 
-        approvalService.createApproval(approvalProfile1.getTheLatestApprovalProfileVersion(), Resource.CERTIFICATE, ResourceAction.CREATE, UUID.randomUUID(), UUID.fromString(userProfileDto.getUser().getUuid()), null);
-        ApprovalResponseDto responseDto = approvalService.listUserApprovals(SecurityFilter.create(), true, new PaginationRequestDto());
+        approvalInternalService.createApproval(approvalProfile1.getTheLatestApprovalProfileVersion(), Resource.CERTIFICATE, ResourceAction.CREATE, UUID.randomUUID(), UUID.fromString(userProfileDto.getUser().getUuid()), null);
+        ApprovalResponseDto responseDto = approvalExternalService.listUserApprovals(SecurityFilter.create(), true, new PaginationRequestDto());
         Assertions.assertEquals(1, responseDto.getApprovals().size());
 
     }
 
     @Test
     void testDetailOfApproval() throws NotFoundException {
-        final ApprovalDetailDto approvalDetailDto = approvalService.getApprovalDetail(approval.getUuid().toString());
+        final ApprovalDetailDto approvalDetailDto = approvalExternalService.getApprovalDetail(approval.getUuid().toString());
 
         Assertions.assertEquals(approvalProfileRequestDto.getExpiry(), approvalDetailDto.getExpiry());
         Assertions.assertEquals(approvalProfileRequestDto.getDescription(), approvalDetailDto.getDescription());
@@ -81,7 +83,7 @@ class ApprovalServiceTest extends ApprovalProfileData {
 
     @Test
     void testApprovalProfileHistoryVersion() throws NotFoundException {
-        approvalService.getApprovalDetail(approval.getUuid().toString());
+        approvalExternalService.getApprovalDetail(approval.getUuid().toString());
         approvalProfileService.editApprovalProfile(approvalProfile.getSecuredUuid(), approvalProfileUpdateRequestDto);
         approvalProfileService.editApprovalProfile(approvalProfile.getSecuredUuid(), approvalProfileUpdateRequestDto);
 
@@ -93,7 +95,7 @@ class ApprovalServiceTest extends ApprovalProfileData {
 
     @Test
     void testApproveApproval() throws NotFoundException {
-        approvalService.approveApproval(approval.getUuid().toString());
+        approvalExternalService.approveApproval(approval.getUuid().toString());
         Optional<Approval> approvalOptional = approvalRepository.findByUuid(SecuredUUID.fromUUID(approval.getUuid()));
 
         Assertions.assertTrue(approvalOptional.isPresent());
@@ -102,7 +104,7 @@ class ApprovalServiceTest extends ApprovalProfileData {
 
     @Test
     void testRejectApproval() throws NotFoundException {
-        approvalService.rejectApproval(approval.getUuid().toString());
+        approvalExternalService.rejectApproval(approval.getUuid().toString());
         Optional<Approval> approvalOptional = approvalRepository.findByUuid(SecuredUUID.fromUUID(approval.getUuid()));
 
         Assertions.assertTrue(approvalOptional.isPresent());
@@ -117,12 +119,17 @@ class ApprovalServiceTest extends ApprovalProfileData {
     }
 
     @Autowired
-    void setApprovalService(ApprovalService approvalService) {
-        this.approvalService = approvalService;
+    void setApprovalInternalService(ApprovalInternalService approvalInternalService) {
+        this.approvalInternalService = approvalInternalService;
     }
 
     @Autowired
-    void setApprovalProfileService(ApprovalProfileService approvalProfileService) {
+    void setApprovalExternalService(ApprovalExternalService approvalExternalService) {
+        this.approvalExternalService = approvalExternalService;
+    }
+
+    @Autowired
+    void setApprovalProfileService(ApprovalProfileExternalService approvalProfileService) {
         this.approvalProfileService = approvalProfileService;
     }
 }

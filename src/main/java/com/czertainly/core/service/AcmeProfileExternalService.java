@@ -1,0 +1,48 @@
+package com.czertainly.core.service;
+
+import com.czertainly.api.exception.*;
+import com.czertainly.api.model.client.acme.AcmeProfileEditRequestDto;
+import com.czertainly.api.model.client.acme.AcmeProfileRequestDto;
+import com.czertainly.api.model.client.certificate.SearchFilterRequestDto;
+import com.czertainly.api.model.common.BulkActionMessageDto;
+import com.czertainly.api.model.common.NameAndUuidDto;
+import com.czertainly.api.model.core.acme.AcmeProfileDto;
+import com.czertainly.api.model.core.acme.AcmeProfileListDto;
+import com.czertainly.api.model.core.scheduler.PaginationRequestDto;
+import com.czertainly.core.security.authz.SecuredUUID;
+import com.czertainly.core.security.authz.SecurityFilter;
+
+import java.util.List;
+
+public interface AcmeProfileExternalService {
+
+    List<AcmeProfileListDto> listAcmeProfile(SecurityFilter filter);
+
+    AcmeProfileDto getAcmeProfile(SecuredUUID uuid) throws NotFoundException;
+
+    AcmeProfileDto createAcmeProfile(AcmeProfileRequestDto request) throws AlreadyExistException, ValidationException, ConnectorException, AttributeException, NotFoundException;
+
+    AcmeProfileDto editAcmeProfile(SecuredUUID uuid, AcmeProfileEditRequestDto request) throws ConnectorException, AttributeException, NotFoundException;
+
+    void deleteAcmeProfile(SecuredUUID uuid) throws NotFoundException, ValidationException;
+
+    void enableAcmeProfile(SecuredUUID uuid) throws NotFoundException;
+
+    void disableAcmeProfile(SecuredUUID uuid) throws NotFoundException;
+
+    void bulkEnableAcmeProfile(List<SecuredUUID> uuids);
+
+    void bulkDisableAcmeProfile(List<SecuredUUID> uuids);
+
+    List<BulkActionMessageDto> bulkDeleteAcmeProfile(List<SecuredUUID> uuids);
+
+    void updateRaProfile(SecuredUUID uuid, String raProfileUuid) throws NotFoundException;
+
+    List<BulkActionMessageDto> bulkForceRemoveACMEProfiles(List<SecuredUUID> uuids) throws ValidationException;
+
+    NameAndUuidDto getResourceObjectExternal(SecuredUUID objectUuid) throws NotFoundException;
+
+    List<NameAndUuidDto> listResourceObjects(SecurityFilter filter, List<SearchFilterRequestDto> filters, PaginationRequestDto pagination);
+
+    void evaluatePermissionChain(SecuredUUID uuid) throws NotFoundException;
+}

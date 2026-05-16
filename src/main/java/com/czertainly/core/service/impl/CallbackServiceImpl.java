@@ -28,7 +28,7 @@ import com.czertainly.core.security.authz.ExternalAuthorization;
 import com.czertainly.core.security.authz.SecuredParentUUID;
 import com.czertainly.core.security.authz.SecuredUUID;
 import com.czertainly.core.service.*;
-import com.czertainly.core.service.v2.ConnectorService;
+import com.czertainly.core.service.v2.ConnectorExternalService;
 import com.czertainly.core.util.AttributeDefinitionUtils;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -42,28 +42,28 @@ import java.util.*;
 
 @Service
 @Transactional
-public class CallbackServiceImpl implements CallbackService {
+public class CallbackServiceImpl implements CallbackExternalService {
 
     private static final Logger logger = LoggerFactory.getLogger(CallbackServiceImpl.class);
 
-    private ConnectorService connectorService;
+    private ConnectorExternalService connectorService;
     private ConnectorApiFactory connectorApiFactory;
     private CoreCallbackService coreCallbackService;
-    private CredentialService credentialService;
+    private CredentialInternalService credentialService;
     private AuthorityInstanceReferenceRepository authorityInstanceReferenceRepository;
     private EntityInstanceReferenceRepository entityInstanceReferenceRepository;
-    private CryptographicKeyService cryptographicKeyService;
-    private TokenProfileService tokenProfileService;
+    private CryptographicKeyExternalService cryptographicKeyService;
+    private TokenProfileInternalService tokenProfileService;
     private AttributeEngine attributeEngine;
-    private ResourceService resourceService;
+    private ResourceInternalService resourceService;
 
     @Autowired
-    public void setResourceService(ResourceService resourceService) {
+    public void setResourceService(ResourceInternalService resourceService) {
         this.resourceService = resourceService;
     }
 
     @Autowired
-    public void setConnectorService(ConnectorService connectorService) {
+    public void setConnectorService(ConnectorExternalService connectorService) {
         this.connectorService = connectorService;
     }
 
@@ -78,7 +78,7 @@ public class CallbackServiceImpl implements CallbackService {
     }
 
     @Autowired
-    public void setCredentialService(CredentialService credentialService) {
+    public void setCredentialService(CredentialInternalService credentialService) {
         this.credentialService = credentialService;
     }
 
@@ -93,12 +93,12 @@ public class CallbackServiceImpl implements CallbackService {
     }
 
     @Autowired
-    public void setCryptographicKeyService(CryptographicKeyService cryptographicKeyService) {
+    public void setCryptographicKeyService(CryptographicKeyExternalService cryptographicKeyService) {
         this.cryptographicKeyService = cryptographicKeyService;
     }
 
     @Autowired
-    public void setTokenProfileService(TokenProfileService tokenProfileService) {
+    public void setTokenProfileService(TokenProfileInternalService tokenProfileService) {
         this.tokenProfileService = tokenProfileService;
     }
 

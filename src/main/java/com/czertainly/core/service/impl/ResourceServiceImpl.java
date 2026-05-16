@@ -28,6 +28,7 @@ import com.czertainly.api.model.core.search.SearchFieldDataDto;
 import com.czertainly.core.attribute.engine.AttributeEngine;
 import com.czertainly.core.enums.FilterField;
 import com.czertainly.core.enums.SearchFieldTypeEnum;
+import com.czertainly.core.security.authz.ExternalAuthorizationMissing;
 import com.czertainly.core.security.authz.SecuredUUID;
 import com.czertainly.core.security.authz.SecurityFilter;
 import com.czertainly.core.service.*;
@@ -49,7 +50,7 @@ import java.util.stream.Collectors;
 
 @Service
 @Transactional
-public class ResourceServiceImpl implements ResourceService {
+public class ResourceServiceImpl implements ResourceExternalService, ResourceInternalService {
     private static final Logger logger = LoggerFactory.getLogger(ResourceServiceImpl.class);
 
     private AttributeEngine attributeEngine;

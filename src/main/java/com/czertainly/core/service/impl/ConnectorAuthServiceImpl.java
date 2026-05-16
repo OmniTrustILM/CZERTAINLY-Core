@@ -14,7 +14,7 @@ import com.czertainly.api.model.common.attribute.v2.content.BaseAttributeContent
 import com.czertainly.api.model.common.attribute.v2.content.FileAttributeContentV2;
 import com.czertainly.api.model.common.attribute.v2.content.StringAttributeContentV2;
 import com.czertainly.api.model.core.connector.AuthType;
-import com.czertainly.core.service.ConnectorAuthService;
+import com.czertainly.core.service.ConnectorAuthExternalService;
 import com.czertainly.core.util.AttributeDefinitionUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
@@ -30,7 +30,7 @@ import static com.czertainly.api.clients.BaseApiClient.*;
 
 @Service
 @Transactional
-public class ConnectorAuthServiceImpl implements ConnectorAuthService {
+public class ConnectorAuthServiceImpl implements ConnectorAuthExternalService {
     private static final Logger logger = LoggerFactory.getLogger(ConnectorAuthServiceImpl.class);
 
     private static final ArrayList<String> SUPPORTED_KEY_STORE_TYPES = new ArrayList<>(List.of("PKCS12", "JKS"));

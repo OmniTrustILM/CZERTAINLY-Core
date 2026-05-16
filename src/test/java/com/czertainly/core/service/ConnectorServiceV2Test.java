@@ -13,7 +13,8 @@ import com.czertainly.core.dao.entity.*;
 import com.czertainly.core.dao.repository.*;
 import com.czertainly.core.security.authz.SecuredUUID;
 import com.czertainly.core.security.authz.SecurityFilter;
-import com.czertainly.core.service.v2.ConnectorService;
+import com.czertainly.core.service.v2.ConnectorExternalService;
+import com.czertainly.core.service.v2.ConnectorInternalService;
 import com.czertainly.core.util.BaseSpringBootTest;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -33,7 +34,10 @@ class ConnectorServiceV2Test extends BaseSpringBootTest {
     private static final String CONNECTOR_NAME = "testConnectorV2";
 
     @Autowired
-    private ConnectorService connectorService;
+    private ConnectorExternalService connectorService;
+
+    @Autowired
+    private ConnectorInternalService connectorServiceInternal;
 
     @Autowired
     private ConnectorRepository connectorRepository;
@@ -422,7 +426,7 @@ class ConnectorServiceV2Test extends BaseSpringBootTest {
 
     @Test
     void testGetResourceObject() throws NotFoundException {
-        NameAndUuidDto dto = connectorService.getResourceObjectInternal(connector.getUuid());
+        NameAndUuidDto dto = connectorServiceInternal.getResourceObjectInternal(connector.getUuid());
         Assertions.assertNotNull(dto);
         Assertions.assertEquals(connector.getName(), dto.getName());
         Assertions.assertEquals(connector.getUuid().toString(), dto.getUuid());

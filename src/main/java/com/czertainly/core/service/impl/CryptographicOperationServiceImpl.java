@@ -26,9 +26,10 @@ import com.czertainly.core.security.authz.ExternalAuthorization;
 import com.czertainly.core.security.authz.SecuredParentUUID;
 import com.czertainly.core.security.authz.SecuredUUID;
 import com.czertainly.core.service.CryptographicKeyEventHistoryService;
-import com.czertainly.core.service.CryptographicOperationService;
+import com.czertainly.core.service.CryptographicOperationExternalService;
+import com.czertainly.core.service.CryptographicOperationInternalService;
 import com.czertainly.core.service.PermissionEvaluator;
-import com.czertainly.core.service.TokenInstanceService;
+import com.czertainly.core.service.TokenInstanceInternalService;
 import com.czertainly.core.util.AttributeDefinitionUtils;
 import com.czertainly.core.util.CertificateRequestUtils;
 import org.bouncycastle.asn1.DERBitString;
@@ -54,14 +55,14 @@ import java.util.*;
 
 @Service
 @Transactional
-public class CryptographicOperationServiceImpl implements CryptographicOperationService {
+public class CryptographicOperationServiceImpl implements CryptographicOperationExternalService, CryptographicOperationInternalService {
 
     private static final Logger logger = LoggerFactory.getLogger(CryptographicOperationServiceImpl.class);
 
     // --------------------------------------------------------------------------------
     // Services & API Clients
     // --------------------------------------------------------------------------------
-    private TokenInstanceService tokenInstanceService;
+    private TokenInstanceInternalService tokenInstanceService;
     private CryptographicKeyEventHistoryService eventHistoryService;
     private ConnectorApiFactory connectorApiFactory;
     private PermissionEvaluator permissionEvaluator;
@@ -75,7 +76,7 @@ public class CryptographicOperationServiceImpl implements CryptographicOperation
     // Setters
 
     @Autowired
-    public void setTokenInstanceService(TokenInstanceService tokenInstanceService) {
+    public void setTokenInstanceService(TokenInstanceInternalService tokenInstanceService) {
         this.tokenInstanceService = tokenInstanceService;
     }
 

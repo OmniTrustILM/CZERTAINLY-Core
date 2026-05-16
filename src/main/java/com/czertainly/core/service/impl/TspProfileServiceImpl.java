@@ -32,7 +32,8 @@ import com.czertainly.core.model.signing.TspProfileModel;
 import com.czertainly.core.security.authz.ExternalAuthorization;
 import com.czertainly.core.security.authz.SecuredUUID;
 import com.czertainly.core.security.authz.SecurityFilter;
-import com.czertainly.core.service.TspProfileService;
+import com.czertainly.core.service.TspProfileExternalService;
+import com.czertainly.core.service.TspProfileInternalService;
 import com.czertainly.core.util.FilterPredicatesBuilder;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
@@ -56,7 +57,7 @@ import java.util.UUID;
 
 @Service(Resource.Codes.TSP_PROFILE)
 @Slf4j
-public class TspProfileServiceImpl implements TspProfileService {
+public class TspProfileServiceImpl implements TspProfileExternalService, TspProfileInternalService {
     private AttributeEngine attributeEngine;
     private TspProfileServiceImpl self;
     private TspProfileRepository tspProfileRepository;

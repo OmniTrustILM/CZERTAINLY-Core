@@ -7,8 +7,8 @@ import com.czertainly.core.auth.ContextRefreshListener;
 import com.czertainly.core.model.auth.ResourceAction;
 import com.czertainly.core.security.authn.client.ResourceApiClient;
 import com.czertainly.core.security.authn.client.UserManagementApiClient;
-import com.czertainly.core.service.AuthService;
-import com.czertainly.core.service.UserManagementService;
+import com.czertainly.core.service.AuthExternalService;
+import com.czertainly.core.service.UserManagementInternalService;
 import com.czertainly.core.util.AuthHelper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -23,11 +23,11 @@ import java.util.stream.Collectors;
 
 @Service
 @Transactional
-public class AuthServiceImpl implements AuthService {
+public class AuthServiceImpl implements AuthExternalService {
 
     private UserManagementApiClient userManagementApiClient;
     private ResourceApiClient resourceApiClient;
-    private UserManagementService userManagementService;
+    private UserManagementInternalService userManagementService;
 
     private ContextRefreshListener contextRefreshListener;
 
@@ -42,7 +42,7 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Autowired
-    public void setUserManagementService(UserManagementService userManagementService) {
+    public void setUserManagementService(UserManagementInternalService userManagementService) {
         this.userManagementService = userManagementService;
     }
 

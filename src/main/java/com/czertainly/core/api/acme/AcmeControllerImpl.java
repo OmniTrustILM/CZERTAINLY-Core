@@ -14,7 +14,7 @@ import com.czertainly.api.model.core.logging.enums.Module;
 import com.czertainly.api.model.core.logging.enums.Operation;
 import com.czertainly.core.aop.AuditLogged;
 import com.czertainly.core.logging.LogResource;
-import com.czertainly.core.service.acme.AcmeService;
+import com.czertainly.core.service.acme.AcmeExternalService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.Resource;
@@ -31,10 +31,10 @@ import java.util.List;
 @RestController
 public class AcmeControllerImpl implements AcmeController {
 
-    private AcmeService acmeService;
+    private AcmeExternalService acmeService;
 
     @Autowired
-    public void setAcmeService(AcmeService acmeService) {
+    public void setAcmeService(AcmeExternalService acmeService) {
         this.acmeService = acmeService;
     }
 

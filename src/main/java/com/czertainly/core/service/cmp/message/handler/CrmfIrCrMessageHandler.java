@@ -14,7 +14,7 @@ import com.czertainly.core.model.auth.CertificateProtocolInfo;
 import com.czertainly.core.security.authz.SecuredParentUUID;
 import com.czertainly.core.service.cmp.configurations.ConfigurationContext;
 import com.czertainly.core.service.cmp.message.PkiMessageDumper;
-import com.czertainly.core.service.v2.ClientOperationService;
+import com.czertainly.core.service.v2.ClientOperationExternalService;
 import org.bouncycastle.asn1.ASN1OctetString;
 import org.bouncycastle.asn1.cmp.*;
 import org.bouncycastle.asn1.crmf.*;
@@ -47,10 +47,10 @@ public class CrmfIrCrMessageHandler implements MessageHandler<ClientCertificateD
             PKIBody.TYPE_INIT_REQ,          // ir       [0]  CertReqMessages,       --Initialization Req
             PKIBody.TYPE_CERT_REQ);         // cr       [2]  CertReqMessages,       --Certification Req
 
-    private ClientOperationService clientOperationService;
+    private ClientOperationExternalService clientOperationService;
 
     @Autowired
-    public void setClientOperationService(ClientOperationService clientOperationService) {
+    public void setClientOperationService(ClientOperationExternalService clientOperationService) {
         this.clientOperationService = clientOperationService;
     }
 

@@ -4,7 +4,7 @@ import com.czertainly.api.model.core.settings.authentication.OAuth2ProviderSetti
 import com.czertainly.core.auth.oauth2.CzertainlyJwtAuthenticationConverter;
 import com.czertainly.core.security.authn.CzertainlyAuthenticationException;
 import com.czertainly.core.security.authn.CzertainlyAuthenticationToken;
-import com.czertainly.core.service.SettingService;
+import com.czertainly.core.service.SettingExternalService;
 import com.czertainly.core.util.BaseSpringBootTest;
 import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.client.WireMock;
@@ -30,7 +30,7 @@ class CzertainlyJwtConvertorTest extends BaseSpringBootTest {
     }
 
     @Autowired
-    SettingService settingService;
+    SettingExternalService settingService;
 
     @Autowired
     CzertainlyJwtAuthenticationConverter jwtAuthenticationConverter;

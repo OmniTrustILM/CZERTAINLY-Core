@@ -23,6 +23,8 @@ import com.czertainly.core.messaging.jms.listeners.AuditLogsListener;
 import com.czertainly.core.messaging.jms.producers.AuditLogsProducer;
 import com.czertainly.core.messaging.model.AuditLogMessage;
 import com.czertainly.core.model.auth.Resource;
+import com.czertainly.core.service.impl.AuditLogServiceImpl;
+import com.czertainly.core.service.SettingExternalService;
 import com.czertainly.core.util.BaseSpringBootTest;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -41,7 +43,7 @@ import java.util.UUID;
 class AuditLogServiceTest extends BaseSpringBootTest {
 
     @Autowired
-    private AuditLogService auditLogService;
+    private AuditLogServiceImpl auditLogService;
 
     @Autowired
     private AuditLogRepository auditLogRepository;
@@ -50,7 +52,7 @@ class AuditLogServiceTest extends BaseSpringBootTest {
     private SettingController settingController;
 
     @Autowired
-    private SettingService settingService;
+    private SettingExternalService settingService;
 
     @Autowired
     private AuditLogController auditLogController;

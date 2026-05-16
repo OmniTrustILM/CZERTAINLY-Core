@@ -41,6 +41,7 @@ import com.czertainly.core.security.authz.SecuredUUID;
 import com.czertainly.core.security.authz.SecurityFilter;
 import com.czertainly.core.security.authz.opa.dto.OpaObjectAccessResult;
 import com.czertainly.core.security.authz.opa.dto.OpaRequestedResource;
+import com.czertainly.core.service.AttributeExternalService;
 import com.czertainly.core.util.BaseSpringBootTest;
 import com.czertainly.core.util.CertificateTestData;
 import com.czertainly.core.util.CertificateTestUtil;
@@ -92,7 +93,9 @@ class CertificateServiceTest extends BaseSpringBootTest {
     @Autowired
     private CrlRepository crlRepository;
     @Autowired
-    private CertificateService certificateService;
+    private CertificateExternalService certificateService;
+    @Autowired
+    private CertificateInternalService certificateInternalService;
     @Autowired
     private CertificateRepository certificateRepository;
     @Autowired
@@ -120,7 +123,7 @@ class CertificateServiceTest extends BaseSpringBootTest {
     @Autowired
     private CryptographicKeyItemRepository cryptographicKeyItemRepository;
     @Autowired
-    private AttributeService attributeService;
+    private AttributeExternalService attributeService;
     @Autowired
     private AcmeProfileRepository acmeProfileRepository;
     @Autowired
@@ -415,7 +418,7 @@ class CertificateServiceTest extends BaseSpringBootTest {
 
     @Test
     void testCreateHybridCertificate() throws InvalidAlgorithmParameterException, CertificateException, NoSuchAlgorithmException, SignatureException, InvalidKeyException, OperatorCreationException, IOException, AlreadyExistException {
-        Certificate hybridCertificate = certificateService.checkCreateCertificate(Base64.getEncoder().encodeToString(
+        Certificate hybridCertificate = certificateInternalService.checkCreateCertificate(Base64.getEncoder().encodeToString(
                 CertificateTestUtil.createHybridCertificate().getEncoded()));
 
         Assertions.assertTrue(hybridCertificate.isHybridCertificate());
@@ -428,7 +431,7 @@ class CertificateServiceTest extends BaseSpringBootTest {
 
     @Test
     void testCheckCreateCertificate() throws CertificateException, AlreadyExistException, NoSuchAlgorithmException {
-        Certificate cert = certificateService.checkCreateCertificate(Base64.getEncoder().encodeToString(x509Cert.getEncoded()));
+        Certificate cert = certificateInternalService.checkCreateCertificate(Base64.getEncoder().encodeToString(x509Cert.getEncoded()));
 
         Assertions.assertNotNull(cert);
         Assertions.assertEquals("CLIENT1", cert.getCommonName());
@@ -437,7 +440,7 @@ class CertificateServiceTest extends BaseSpringBootTest {
 
     @Test
     void testAddCertificate_certificateException() {
-        Assertions.assertThrows(CertificateException.class, () -> certificateService.checkCreateCertificate("certificate"));
+        Assertions.assertThrows(CertificateException.class, () -> certificateInternalService.checkCreateCertificate("certificate"));
     }
 
     @Test
@@ -499,7 +502,7 @@ class CertificateServiceTest extends BaseSpringBootTest {
         certificateRepository.save(certificate);
 
         // when
-        Optional<Certificate> result = certificateService.findCertificateEntityByUserUuid(userUuid);
+        Optional<Certificate> result = certificateInternalService.findCertificateEntityByUserUuid(userUuid);
 
         // then
         Assertions.assertTrue(result.isPresent());
@@ -512,7 +515,7 @@ class CertificateServiceTest extends BaseSpringBootTest {
         UUID unknownUserUuid = UUID.randomUUID();
 
         // when
-        Optional<Certificate> result = certificateService.findCertificateEntityByUserUuid(unknownUserUuid);
+        Optional<Certificate> result = certificateInternalService.findCertificateEntityByUserUuid(unknownUserUuid);
 
         // then
         Assertions.assertTrue(result.isEmpty());
@@ -737,10 +740,10 @@ class CertificateServiceTest extends BaseSpringBootTest {
         certificate.setArchived(true);
         certificateRepository.save(certificate);
         UUID certificateUuid = certificate.getUuid();
-        Assertions.assertThrows(ValidationException.class, () -> certificateService.updateCertificateUser(certificateUuid, null));
+        Assertions.assertThrows(ValidationException.class, () -> certificateInternalService.updateCertificateUser(certificateUuid, null));
         certificate.setArchived(false);
         certificateRepository.save(certificate);
-        Assertions.assertDoesNotThrow(() -> certificateService.updateCertificateUser(certificateUuid, null));
+        Assertions.assertDoesNotThrow(() -> certificateInternalService.updateCertificateUser(certificateUuid, null));
     }
 
     @Test
@@ -755,7 +758,7 @@ class CertificateServiceTest extends BaseSpringBootTest {
         var uuidCache = primeUserUuidCache(UUID.randomUUID());
 
         // when - disassociate user by passing null
-        certificateService.updateCertificateUser(certificate.getUuid(), null);
+        certificateInternalService.updateCertificateUser(certificate.getUuid(), null);
 
         // then - only the certificate cache entry needs eviction; user's UUID/token caches are still valid
         certCache.assertEvicted();
@@ -775,7 +778,7 @@ class CertificateServiceTest extends BaseSpringBootTest {
         var uuidCache = primeUserUuidCache(UUID.randomUUID());
 
         // when - replace with a different user
-        certificateService.updateCertificateUser(certificate.getUuid(), newUserUuid.toString());
+        certificateInternalService.updateCertificateUser(certificate.getUuid(), newUserUuid.toString());
 
         // then - only the cert entry is stale; old user's UUID/token caches remain valid
         certCache.assertEvicted();
@@ -790,7 +793,7 @@ class CertificateServiceTest extends BaseSpringBootTest {
         var uuidCache = primeUserUuidCache(UUID.randomUUID());
 
         // when - associate a user for the first time
-        certificateService.updateCertificateUser(certificate.getUuid(), UUID.randomUUID().toString());
+        certificateInternalService.updateCertificateUser(certificate.getUuid(), UUID.randomUUID().toString());
 
         // then - nothing to evict for a previously unassociated certificate
         certCache.assertNotEvicted();
@@ -809,7 +812,7 @@ class CertificateServiceTest extends BaseSpringBootTest {
         var uuidCache = primeUserUuidCache(UUID.randomUUID());
 
         // when
-        certificateService.removeCertificateUser(userUuid);
+        certificateInternalService.removeCertificateUser(userUuid);
 
         // then - user still exists, only the cert link is dropped; UUID/token caches remain valid
         certCache.assertEvicted();
@@ -824,7 +827,7 @@ class CertificateServiceTest extends BaseSpringBootTest {
         var certCache = primeCertCache("unrelated-fingerprint");
 
         // when - no certificate found, method logs a warning and returns
-        certificateService.removeCertificateUser(userWithoutCertUuid);
+        certificateInternalService.removeCertificateUser(userWithoutCertUuid);
 
         // then
         uuidCache.assertNotEvicted();
@@ -1016,7 +1019,7 @@ class CertificateServiceTest extends BaseSpringBootTest {
         altCertificate.setAltKeyUuid(key.getUuid());
         certificateRepository.save(certificate);
         certificateRepository.save(altCertificate);
-        certificateService.clearKeyAssociations(key.getUuid());
+        certificateInternalService.clearKeyAssociations(key.getUuid());
         certificate = certificateRepository.findByUuid(certificate.getUuid()).get();
         altCertificate = certificateRepository.findByUuid(altCertificate.getUuid()).get();
         Assertions.assertNull(certificate.getKey());
@@ -1070,7 +1073,7 @@ class CertificateServiceTest extends BaseSpringBootTest {
         certificate.setIssuerDn("CN=cn, %s=org".formatted(oldCode));
         certificate.setIssuerDnNormalized("1.2.3.4=a, %s=f".formatted(oid));
         certificateRepository.save(certificate);
-        certificateService.updateCertificateDNs(oid, newCode, oldCode);
+        certificateInternalService.updateCertificateDNs(oid, newCode, oldCode);
         certificate = certificateRepository.findByUuid(certificate.getUuid()).orElseThrow();
         Assertions.assertEquals("%s=org, %sA=cn".formatted(newCode, oldCode), certificate.getSubjectDn());
         Assertions.assertEquals("CN=cn, %s=org".formatted(newCode), certificate.getIssuerDn());
@@ -1078,14 +1081,14 @@ class CertificateServiceTest extends BaseSpringBootTest {
         certificate.setIssuerDn("%s=org, CN=cn".formatted(oldCode));
         certificate.setSubjectDn("CN=cn, %s=org".formatted(oldCode));
         certificateRepository.save(certificate);
-        certificateService.updateCertificateDNs(oid, newCode, oldCode);
+        certificateInternalService.updateCertificateDNs(oid, newCode, oldCode);
         certificate = certificateRepository.findByUuid(certificate.getUuid()).orElseThrow();
         Assertions.assertEquals("%s=org, CN=cn".formatted(newCode), certificate.getIssuerDn());
         Assertions.assertEquals("CN=cn, %s=org".formatted(newCode), certificate.getSubjectDn());
 
         certificate.setIssuerDnNormalized("1.2.3.4=a, 1a2x3=f");
         certificateRepository.save(certificate);
-        certificateService.updateCertificateDNs(oid, "new", newCode);
+        certificateInternalService.updateCertificateDNs(oid, "new", newCode);
         certificate = certificateRepository.findByUuid(certificate.getUuid()).orElseThrow();
         Assertions.assertEquals("%s=org, CN=cn".formatted(newCode), certificate.getIssuerDn());
 
@@ -1240,7 +1243,7 @@ class CertificateServiceTest extends BaseSpringBootTest {
         certificateRepository.save(notIssued);
         certificateRepository.save(certificate);
 
-        certificateService.issueRequestedCertificate(notIssued.getUuid(), EE_BASE64_CONTENT, null);
+        certificateInternalService.issueRequestedCertificate(notIssued.getUuid(), EE_BASE64_CONTENT, null);
 
         CertificateRelationsDto relationsDto = certificateService.getCertificateRelations(notIssued.getUuid());
         Assertions.assertEquals(CertificateRelationType.REKEY, relationsDto.getPredecessorCertificates().getFirst().getRelationType());
@@ -1252,7 +1255,7 @@ class CertificateServiceTest extends BaseSpringBootTest {
         certificateRepository.save(certificate);
         relation.setRelationType(CertificateRelationType.PENDING);
         certificateRelationRepository.save(relation);
-        certificateService.issueRequestedCertificate(notIssued.getUuid(), EE_BASE64_CONTENT, null);
+        certificateInternalService.issueRequestedCertificate(notIssued.getUuid(), EE_BASE64_CONTENT, null);
 
         relationsDto = certificateService.getCertificateRelations(notIssued.getUuid());
         Assertions.assertEquals(CertificateRelationType.REPLACEMENT, relationsDto.getPredecessorCertificates().getFirst().getRelationType());
@@ -1287,7 +1290,7 @@ class CertificateServiceTest extends BaseSpringBootTest {
 
     @Test
     void testGetResourceObject() throws NotFoundException {
-        NameAndUuidDto nameAndUuidDto = certificateService.getResourceObjectInternal(certificate.getUuid());
+        NameAndUuidDto nameAndUuidDto = certificateInternalService.getResourceObjectInternal(certificate.getUuid());
         Assertions.assertEquals(certificate.getUuid().toString(), nameAndUuidDto.getUuid());
         Assertions.assertEquals(certificate.getSerialNumber(), nameAndUuidDto.getName());
 

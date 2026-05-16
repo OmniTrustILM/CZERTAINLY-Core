@@ -27,6 +27,7 @@ import com.czertainly.core.security.authn.CzertainlyAuthenticationToken;
 import com.czertainly.core.security.authn.CzertainlyUserDetails;
 import com.czertainly.core.security.authn.client.AuthenticationInfo;
 import com.czertainly.core.security.authz.SecuredUUID;
+import com.czertainly.core.service.CertificateEventHistoryExternalService;
 import com.czertainly.core.util.BaseMessagingIntTest;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
@@ -63,13 +64,16 @@ class ApprovalFlowITest extends BaseMessagingIntTest {
     private static final UUID APPROVER_UUID = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
 
     @Autowired
-    private ApprovalService approvalService;
+    private ApprovalInternalService approvalInternalService;
 
     @Autowired
-    private ApprovalProfileService approvalProfileService;
+    private ApprovalExternalService approvalExternalService;
 
     @Autowired
-    private CertificateEventHistoryService certHistoryService;
+    private ApprovalProfileExternalService approvalProfileService;
+
+    @Autowired
+    private CertificateEventHistoryExternalService certHistoryService;
 
     @Autowired
     private CertificateRepository certificateRepository;
@@ -145,7 +149,7 @@ class ApprovalFlowITest extends BaseMessagingIntTest {
         UUID creatorUuid = UUID.randomUUID();
 
         // --- 3. Create approval — fires APPROVAL_REQUESTED event via JMS ---
-        Approval approval = approvalService.createApproval(
+        Approval approval = approvalInternalService.createApproval(
                 approvalProfile.getTheLatestApprovalProfileVersion(),
                 Resource.CERTIFICATE,
                 ResourceAction.ISSUE,
@@ -180,7 +184,7 @@ class ApprovalFlowITest extends BaseMessagingIntTest {
         UserApprovalDto userApprovalDto = new UserApprovalDto();
         userApprovalDto.setComment("Approved in e2e test");
 
-        approvalService.approveApprovalRecipient(approval.getUuid().toString(), userApprovalDto);
+        approvalExternalService.approveApprovalRecipient(approval.getUuid().toString(), userApprovalDto);
 
         // The approval entity must be APPROVED after the service call returns
         Optional<Approval> updatedApproval = approvalRepository.findByUuid(SecuredUUID.fromUUID(approval.getUuid()));

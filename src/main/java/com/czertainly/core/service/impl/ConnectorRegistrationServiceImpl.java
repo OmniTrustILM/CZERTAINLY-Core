@@ -8,8 +8,8 @@ import com.czertainly.api.model.client.connector.v2.ConnectorVersion;
 import com.czertainly.api.model.common.UuidDto;
 import com.czertainly.api.model.core.connector.v2.ConnectorDetailDto;
 import com.czertainly.api.model.core.connector.v2.ConnectorRequestDto;
-import com.czertainly.core.service.ConnectorRegistrationService;
-import com.czertainly.core.service.v2.ConnectorService;
+import com.czertainly.core.service.ConnectorRegistrationExternalService;
+import com.czertainly.core.service.v2.ConnectorInternalService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,13 +19,13 @@ import jakarta.transaction.Transactional;
 
 @Service
 @Transactional
-public class ConnectorRegistrationServiceImpl implements ConnectorRegistrationService {
+public class ConnectorRegistrationServiceImpl implements ConnectorRegistrationExternalService {
     private static final Logger logger = LoggerFactory.getLogger(ConnectorRegistrationServiceImpl.class);
 
-    private ConnectorService connectorService;
+    private ConnectorInternalService connectorService;
 
     @Autowired
-    public void setConnectorService(ConnectorService connectorService) {
+    public void setConnectorService(ConnectorInternalService connectorService) {
         this.connectorService = connectorService;
     }
 

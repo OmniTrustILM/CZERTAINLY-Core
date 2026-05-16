@@ -17,7 +17,7 @@ import com.czertainly.core.aop.AuditLogged;
 import com.czertainly.core.auth.AuthEndpoint;
 import com.czertainly.core.security.authz.SecuredUUID;
 import com.czertainly.core.security.authz.SecurityFilter;
-import com.czertainly.core.service.v2.ConnectorService;
+import com.czertainly.core.service.v2.ConnectorExternalService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -28,10 +28,10 @@ import java.util.UUID;
 @RestController
 public class ConnectorControllerImpl implements ConnectorController {
 
-    private ConnectorService connectorService;
+    private ConnectorExternalService connectorService;
 
     @Autowired
-    public void setConnectorService(ConnectorService connectorService) {
+    public void setConnectorService(ConnectorExternalService connectorService) {
         this.connectorService = connectorService;
     }
 

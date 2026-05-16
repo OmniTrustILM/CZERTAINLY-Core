@@ -23,7 +23,8 @@ import com.czertainly.core.provisioning.ProxyProvisioningService;
 import com.czertainly.core.security.authz.ExternalAuthorization;
 import com.czertainly.core.security.authz.SecuredUUID;
 import com.czertainly.core.security.authz.SecurityFilter;
-import com.czertainly.core.service.ProxyService;
+import com.czertainly.core.service.ProxyExternalService;
+import com.czertainly.core.service.ProxyInternalService;
 import com.czertainly.core.util.ProxyCodeHelper;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -44,7 +45,7 @@ import java.util.stream.Collectors;
 @Service(Resource.Codes.PROXY)
 @Transactional
 @RequiredArgsConstructor
-public class ProxyServiceImpl implements ProxyService {
+public class ProxyServiceImpl implements ProxyExternalService, ProxyInternalService {
     private static final Logger logger = LoggerFactory.getLogger(ProxyServiceImpl.class);
 
     private final ProxyRepository proxyRepository;

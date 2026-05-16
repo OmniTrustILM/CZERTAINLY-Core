@@ -12,9 +12,9 @@ import com.czertainly.core.messaging.jms.configuration.MessagingProperties;
 import com.czertainly.core.messaging.jms.producers.NotificationProducer;
 import com.czertainly.core.messaging.model.ActionMessage;
 import com.czertainly.core.model.auth.ResourceAction;
-import com.czertainly.core.service.ApprovalService;
-import com.czertainly.core.service.SecretService;
-import com.czertainly.core.service.v2.ClientOperationService;
+import com.czertainly.core.service.ApprovalInternalService;
+import com.czertainly.core.service.SecretInternalService;
+import com.czertainly.core.service.v2.ClientOperationInternalService;
 import com.czertainly.core.util.AuthHelper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -45,11 +45,11 @@ class ActionsListenerTest {
     @Mock
     private ApprovalProfileRelationRepository approvalProfileRelationRepository;
     @Mock
-    private ApprovalService approvalService;
+    private ApprovalInternalService approvalService;
     @Mock
-    private ClientOperationService clientOperationService;
+    private ClientOperationInternalService clientOperationService;
     @Mock
-    private SecretService secretService;
+    private SecretInternalService secretService;
     @Mock
     private NotificationProducer notificationProducer;
     @Mock

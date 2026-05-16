@@ -17,8 +17,9 @@ import com.czertainly.core.oid.OidHandler;
 import com.czertainly.core.oid.OidRecord;
 import com.czertainly.core.security.authz.ExternalAuthorization;
 import com.czertainly.core.security.authz.SecurityFilter;
-import com.czertainly.core.service.CertificateService;
-import com.czertainly.core.service.CustomOidEntryService;
+import com.czertainly.core.service.CertificateInternalService;
+import com.czertainly.core.service.CustomOidEntryExternalService;
+import com.czertainly.core.service.CustomOidEntryInternalService;
 import com.czertainly.core.util.FilterPredicatesBuilder;
 import com.czertainly.core.util.RequestValidatorHelper;
 import com.czertainly.core.util.SearchHelper;
@@ -40,14 +41,14 @@ import java.util.stream.Collectors;
 
 @Service(Resource.Codes.OID)
 @Transactional
-public class CustomOidEntryServiceImpl implements CustomOidEntryService {
+public class CustomOidEntryServiceImpl implements CustomOidEntryExternalService, CustomOidEntryInternalService {
 
     public static final String OID_ENTRY = "OID Entry";
     private final CustomOidEntryRepository customOidEntryRepository;
-    private CertificateService certificateService;
+    private CertificateInternalService certificateService;
 
     @Autowired
-    public void setCertificateService(CertificateService certificateService) {
+    public void setCertificateService(CertificateInternalService certificateService) {
         this.certificateService = certificateService;
     }
 

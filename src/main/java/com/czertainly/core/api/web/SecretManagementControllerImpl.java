@@ -19,7 +19,7 @@ import com.czertainly.core.logging.LogResource;
 import com.czertainly.core.security.authz.SecuredParentUUID;
 import com.czertainly.core.security.authz.SecuredUUID;
 import com.czertainly.core.security.authz.SecurityFilter;
-import com.czertainly.core.service.SecretService;
+import com.czertainly.core.service.SecretExternalService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -30,10 +30,10 @@ import java.util.UUID;
 @RestController
 public class SecretManagementControllerImpl implements SecretManagementController {
 
-    private SecretService secretService;
+    private SecretExternalService secretService;
 
     @Autowired
-    public void setSecretService(SecretService secretService) {
+    public void setSecretService(SecretExternalService secretService) {
         this.secretService = secretService;
     }
 

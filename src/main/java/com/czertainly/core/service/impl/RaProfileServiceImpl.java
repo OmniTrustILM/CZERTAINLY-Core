@@ -33,11 +33,12 @@ import com.czertainly.core.security.authz.ExternalAuthorization;
 import com.czertainly.core.security.authz.SecuredParentUUID;
 import com.czertainly.core.security.authz.SecuredUUID;
 import com.czertainly.core.security.authz.SecurityFilter;
-import com.czertainly.core.service.ApprovalProfileService;
-import com.czertainly.core.service.v2.ComplianceProfileService;
-import com.czertainly.core.service.ComplianceService;
+import com.czertainly.core.service.ApprovalProfileExternalService;
+import com.czertainly.core.service.v2.ComplianceProfileExternalService;
+import com.czertainly.core.service.ComplianceExternalService;
 import com.czertainly.core.service.PermissionEvaluator;
-import com.czertainly.core.service.RaProfileService;
+import com.czertainly.core.service.RaProfileExternalService;
+import com.czertainly.core.service.RaProfileInternalService;
 import com.czertainly.core.service.model.SecuredList;
 import com.czertainly.core.service.v2.ExtendedAttributeService;
 import com.czertainly.core.util.AttributeDefinitionUtils;
@@ -59,7 +60,7 @@ import java.util.*;
 
 @Service(Resource.Codes.RA_PROFILE)
 @Transactional
-public class RaProfileServiceImpl implements RaProfileService {
+public class RaProfileServiceImpl implements RaProfileExternalService, RaProfileInternalService {
 
     private static final Logger logger = LoggerFactory.getLogger(RaProfileServiceImpl.class);
 
@@ -69,8 +70,8 @@ public class RaProfileServiceImpl implements RaProfileService {
     private CertificateRepository certificateRepository;
     private AcmeProfileRepository acmeProfileRepository;
     private ExtendedAttributeService extendedAttributeService;
-    private ComplianceService complianceService;
-    private ComplianceProfileService complianceProfileService;
+    private ComplianceExternalService complianceService;
+    private ComplianceProfileExternalService complianceProfileService;
     private AttributeEngine attributeEngine;
     private PermissionEvaluator permissionEvaluator;
     private RaProfileProtocolAttributeRepository raProfileProtocolAttributeRepository;
@@ -78,7 +79,7 @@ public class RaProfileServiceImpl implements RaProfileService {
     private CmpProfileRepository cmpProfileRepository;
     private ApprovalProfileRelationRepository approvalProfileRelationRepository;
     private CertificateContentRepository certificateContentRepository;
-    private ApprovalProfileService approvalProfileService;
+    private ApprovalProfileExternalService approvalProfileService;
 
     @Override
     @ExternalAuthorization(resource = Resource.RA_PROFILE, action = ResourceAction.LIST, parentResource = Resource.AUTHORITY, parentAction = ResourceAction.LIST)
@@ -510,7 +511,7 @@ public class RaProfileServiceImpl implements RaProfileService {
     @ExternalAuthorization(resource = Resource.COMPLIANCE_PROFILE, action = ResourceAction.LIST)
     public List<SimplifiedComplianceProfileDto> getComplianceProfiles(String authorityUuid, String raProfileUuid, SecurityFilter filter) throws NotFoundException {
         //Evaluate RA profile permissions
-        ((RaProfileService) AopContext.currentProxy()).getRaProfile(SecuredParentUUID.fromString(authorityUuid), SecuredUUID.fromString(raProfileUuid));
+        ((RaProfileExternalService) AopContext.currentProxy()).getRaProfile(SecuredParentUUID.fromString(authorityUuid), SecuredUUID.fromString(raProfileUuid));
         return complianceProfileService.getAssociatedComplianceProfiles(Resource.RA_PROFILE, UUID.fromString(raProfileUuid)).stream().map(cp -> {
             SimplifiedComplianceProfileDto dto = new SimplifiedComplianceProfileDto();
             dto.setUuid(cp.getUuid().toString());
@@ -581,7 +582,7 @@ public class RaProfileServiceImpl implements RaProfileService {
     @ExternalAuthorization(resource = Resource.APPROVAL_PROFILE, action = ResourceAction.LIST)
     public List<ApprovalProfileDto> getAssociatedApprovalProfiles(final String authorityInstanceUuid, final String raProfileUuid, final SecurityFilter securityFilter) throws NotFoundException {
         //Evaluate RA profile permissions
-        ((RaProfileService) AopContext.currentProxy()).getRaProfile(SecuredParentUUID.fromString(authorityInstanceUuid), SecuredUUID.fromString(raProfileUuid));
+        ((RaProfileExternalService) AopContext.currentProxy()).getRaProfile(SecuredParentUUID.fromString(authorityInstanceUuid), SecuredUUID.fromString(raProfileUuid));
         return approvalProfileService.getAssociatedApprovalProfiles(Resource.RA_PROFILE, UUID.fromString(raProfileUuid));
     }
 
@@ -589,7 +590,7 @@ public class RaProfileServiceImpl implements RaProfileService {
     @ExternalAuthorization(resource = Resource.APPROVAL_PROFILE, action = ResourceAction.DETAIL)
     public ApprovalProfileRelationDto associateApprovalProfile(String authorityInstanceUuid, String raProfileUuid, SecuredUUID approvalProfileUuid) throws NotFoundException {
         //Evaluate RA profile permissions
-        ((RaProfileService) AopContext.currentProxy()).getRaProfile(SecuredParentUUID.fromString(authorityInstanceUuid), SecuredUUID.fromString(raProfileUuid));
+        ((RaProfileExternalService) AopContext.currentProxy()).getRaProfile(SecuredParentUUID.fromString(authorityInstanceUuid), SecuredUUID.fromString(raProfileUuid));
         try {
             approvalProfileService.associateApprovalProfile(approvalProfileUuid, Resource.RA_PROFILE, UUID.fromString(raProfileUuid));
         } catch (AlreadyExistException e) {
@@ -605,7 +606,7 @@ public class RaProfileServiceImpl implements RaProfileService {
     @ExternalAuthorization(resource = Resource.APPROVAL_PROFILE, action = ResourceAction.DETAIL)
     public void disassociateApprovalProfile(String authorityInstanceUuid, String raProfileUuid, SecuredUUID approvalProfileUuid) throws NotFoundException {
         //Evaluate RA profile permissions
-        ((RaProfileService) AopContext.currentProxy()).getRaProfile(SecuredParentUUID.fromString(authorityInstanceUuid), SecuredUUID.fromString(raProfileUuid));
+        ((RaProfileExternalService) AopContext.currentProxy()).getRaProfile(SecuredParentUUID.fromString(authorityInstanceUuid), SecuredUUID.fromString(raProfileUuid));
         approvalProfileService.disassociateApprovalProfile(approvalProfileUuid, Resource.RA_PROFILE, UUID.fromString(raProfileUuid));
     }
 
@@ -762,12 +763,12 @@ public class RaProfileServiceImpl implements RaProfileService {
     }
 
     @Autowired
-    public void setComplianceService(ComplianceService complianceService) {
+    public void setComplianceService(ComplianceExternalService complianceService) {
         this.complianceService = complianceService;
     }
 
     @Autowired
-    public void setComplianceProfileService(ComplianceProfileService complianceProfileService) {
+    public void setComplianceProfileService(ComplianceProfileExternalService complianceProfileService) {
         this.complianceProfileService = complianceProfileService;
     }
 
@@ -807,7 +808,7 @@ public class RaProfileServiceImpl implements RaProfileService {
     }
 
     @Autowired
-    public void setApprovalProfileService(ApprovalProfileService approvalProfileService) {
+    public void setApprovalProfileService(ApprovalProfileExternalService approvalProfileService) {
         this.approvalProfileService = approvalProfileService;
     }
 }

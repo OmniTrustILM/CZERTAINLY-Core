@@ -49,7 +49,7 @@ class TimeQualityConfigurationServiceImplTest extends BaseSpringBootTest {
     private static final String CUSTOM_ATTR_NAME = "tqcTestAttribute";
 
     @Autowired
-    private TimeQualityConfigurationService timeQualityConfigurationService;
+    private TimeQualityConfigurationExternalService timeQualityConfigurationService;
 
     @MockitoSpyBean
     private TimeQualityConfigurationRepository timeQualityConfigurationRepository;

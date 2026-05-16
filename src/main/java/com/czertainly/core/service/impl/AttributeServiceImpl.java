@@ -32,7 +32,8 @@ import com.czertainly.core.model.auth.ResourceAction;
 import com.czertainly.core.security.authz.ExternalAuthorization;
 import com.czertainly.core.security.authz.SecuredUUID;
 import com.czertainly.core.security.authz.SecurityFilter;
-import com.czertainly.core.service.AttributeService;
+import com.czertainly.core.service.AttributeExternalService;
+import com.czertainly.core.service.AttributeInternalService;
 import jakarta.transaction.Transactional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -47,7 +48,7 @@ import java.util.stream.Collectors;
 
 @Service(Resource.Codes.ATTRIBUTE)
 @Transactional
-public class AttributeServiceImpl implements AttributeService {
+public class AttributeServiceImpl implements AttributeExternalService, AttributeInternalService {
     private static final Logger logger = LoggerFactory.getLogger(AttributeServiceImpl.class);
 
     private AttributeEngine attributeEngine;

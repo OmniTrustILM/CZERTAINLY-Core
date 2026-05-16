@@ -15,7 +15,8 @@ import com.czertainly.core.model.auth.ResourceAction;
 import com.czertainly.core.security.authz.ExternalAuthorization;
 import com.czertainly.core.security.authz.SecuredUUID;
 import com.czertainly.core.security.authz.SecurityFilter;
-import com.czertainly.core.service.GroupService;
+import com.czertainly.core.service.GroupExternalService;
+import com.czertainly.core.service.GroupInternalService;
 import com.czertainly.core.service.ResourceObjectAssociationService;
 import jakarta.transaction.Transactional;
 import org.apache.commons.lang3.StringUtils;
@@ -30,7 +31,7 @@ import java.util.stream.Collectors;
 
 @Service(Resource.Codes.GROUP)
 @Transactional
-public class GroupServiceImpl implements GroupService {
+public class GroupServiceImpl implements GroupExternalService, GroupInternalService {
     private static final Logger logger = LoggerFactory.getLogger(GroupServiceImpl.class);
 
     private GroupRepository groupRepository;

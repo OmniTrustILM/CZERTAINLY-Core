@@ -28,9 +28,10 @@ import com.czertainly.core.model.compliance.ComplianceResultProviderRulesDto;
 import com.czertainly.core.model.compliance.ComplianceResultRulesDto;
 import com.czertainly.core.security.authz.SecuredParentUUID;
 import com.czertainly.core.security.authz.SecuredUUID;
-import com.czertainly.core.service.CertificateService;
-import com.czertainly.core.service.ComplianceService;
-import com.czertainly.core.service.v2.ClientOperationService;
+import com.czertainly.core.service.CertificateExternalService;
+import com.czertainly.core.service.ComplianceExternalService;
+import com.czertainly.core.service.ComplianceInternalService;
+import com.czertainly.core.service.v2.ClientOperationExternalService;
 import com.github.tomakehurst.wiremock.client.WireMock;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -46,10 +47,13 @@ import java.util.UUID;
 class ComplianceServiceTest extends BaseComplianceTest {
 
     @Autowired
-    private ComplianceService complianceService;
+    private ComplianceExternalService complianceService;
 
     @Autowired
-    private CertificateService certificateService;
+    private ComplianceInternalService complianceInternalService;
+
+    @Autowired
+    private CertificateExternalService certificateService;
 
     @Autowired
     private TokenProfileRepository tokenProfileRepository;
@@ -67,7 +71,7 @@ class ComplianceServiceTest extends BaseComplianceTest {
     private SecretVersionRepository secretVersionRepository;
 
     @Autowired
-    ClientOperationService clientOperationService;
+    ClientOperationExternalService clientOperationService;
 
     @Test
     void testCheckCompliance() throws Exception {
@@ -407,7 +411,7 @@ class ComplianceServiceTest extends BaseComplianceTest {
         // objectUuid only used for logging in implementation; use random
         UUID objectUuid = UUID.randomUUID();
 
-        ComplianceCheckResultDto result = complianceService.getComplianceCheckResult(Resource.CERTIFICATE, objectUuid, complianceResult);
+        ComplianceCheckResultDto result = complianceInternalService.getComplianceCheckResult(Resource.CERTIFICATE,objectUuid, complianceResult);
 
         Assertions.assertNotNull(result);
         // Expect two failed rules: one internal and one provider
@@ -438,7 +442,7 @@ class ComplianceServiceTest extends BaseComplianceTest {
         provider.setNotAvailable(new HashSet<>(List.of(rNotAvailable)));
         complianceResult.setProviderRules(List.of(provider));
 
-        ComplianceCheckResultDto result = complianceService.getComplianceCheckResult(Resource.CERTIFICATE, UUID.randomUUID(), complianceResult);
+        ComplianceCheckResultDto result = complianceInternalService.getComplianceCheckResult(Resource.CERTIFICATE,UUID.randomUUID(), complianceResult);
 
         Assertions.assertEquals(3, result.getFailedRules().size());
 
@@ -457,7 +461,7 @@ class ComplianceServiceTest extends BaseComplianceTest {
         ComplianceResultDto complianceResult = new ComplianceResultDto();
         complianceResult.setProviderRules(null);
         complianceResult.setInternalRules(null);
-        Assertions.assertDoesNotThrow(() -> complianceService.getComplianceCheckResult(Resource.CERTIFICATE, UUID.randomUUID(), complianceResult));
+        Assertions.assertDoesNotThrow(() -> complianceInternalService.getComplianceCheckResult(Resource.CERTIFICATE,UUID.randomUUID(), complianceResult));
 
         ComplianceResultProviderRulesDto p1 = new ComplianceResultProviderRulesDto();
         p1.setConnectorUuid(connectorV1.getUuid());
@@ -475,7 +479,7 @@ class ComplianceServiceTest extends BaseComplianceTest {
 
         complianceResult.setProviderRules(List.of(p1, p2));
 
-        ComplianceCheckResultDto result = complianceService.getComplianceCheckResult(Resource.CERTIFICATE, UUID.randomUUID(), complianceResult);
+        ComplianceCheckResultDto result = complianceInternalService.getComplianceCheckResult(Resource.CERTIFICATE,UUID.randomUUID(), complianceResult);
 
         // Expect two provider rules present in failed rules
         Set<UUID> found = new HashSet<>();

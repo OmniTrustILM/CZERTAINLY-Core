@@ -42,6 +42,7 @@ import com.czertainly.core.model.auth.ResourceAction;
 import com.czertainly.core.security.authz.SecuredUUID;
 import com.czertainly.core.security.authz.opa.dto.OpaRequestedResource;
 import com.czertainly.core.security.authz.opa.dto.OpaResourceAccessResult;
+import com.czertainly.core.service.impl.ResourceServiceImpl;
 import com.czertainly.core.util.BaseSpringBootTest;
 import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.client.WireMock;
@@ -73,7 +74,7 @@ class ResourceServiceTest extends BaseSpringBootTest {
     }
 
     @Autowired
-    private ResourceService resourceService;
+    private ResourceServiceImpl resourceService;
 
     @Autowired
     private CertificateContentRepository certificateContentRepository;
@@ -94,7 +95,7 @@ class ResourceServiceTest extends BaseSpringBootTest {
     private AttributeRelationRepository attributeRelationRepository;
 
     @Autowired
-    private CertificateService certificateService;
+    private CertificateExternalService certificateService;
 
     private WireMockServer mockServer;
 

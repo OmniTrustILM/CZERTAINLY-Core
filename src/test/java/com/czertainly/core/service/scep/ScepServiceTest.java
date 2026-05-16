@@ -28,7 +28,7 @@ import java.util.Set;
 class ScepServiceTest extends BaseSpringBootTest {
 
     @Autowired
-    private ScepService scepService;
+    private ScepExternalService scepService;
 
     @Autowired
     private ScepProfileRepository scepProfileRepository;

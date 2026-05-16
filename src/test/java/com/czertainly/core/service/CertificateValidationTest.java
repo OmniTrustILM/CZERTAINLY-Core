@@ -17,6 +17,9 @@ import com.czertainly.core.dao.entity.Certificate;
 import com.czertainly.core.dao.repository.*;
 import com.czertainly.core.helpers.CertificateGeneratorHelper;
 import com.czertainly.core.security.authz.SecuredUUID;
+import com.czertainly.core.service.CertificateExternalService;
+import com.czertainly.core.service.CertificateInternalService;
+import com.czertainly.core.service.SettingExternalService;
 import com.czertainly.core.util.BaseSpringBootTest;
 import com.czertainly.core.util.CertificateTestUtil;
 import com.czertainly.core.util.CertificateUtil;
@@ -73,7 +76,9 @@ import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 public class CertificateValidationTest extends BaseSpringBootTest {
 
     @Autowired
-    private CertificateService certificateService;
+    private CertificateExternalService certificateService;
+    @Autowired
+    private CertificateInternalService certificateInternalService;
 
     @Autowired
     private CrlService crlService;
@@ -96,7 +101,7 @@ public class CertificateValidationTest extends BaseSpringBootTest {
     private ConnectorRepository connectorRepository;
 
     @Autowired
-    private SettingService settingService;
+    private SettingExternalService settingService;
 
     @Autowired
     private AuthorityInstanceReferenceRepository authorityInstanceReferenceRepository;
@@ -160,7 +165,7 @@ public class CertificateValidationTest extends BaseSpringBootTest {
 
     @Test
     void testValidateCertificate() throws NotFoundException, CertificateException {
-        certificateService.validate(certificate);
+        certificateInternalService.validate(certificate);
 
         String result = certificate.getCertificateValidationResult();
         Assertions.assertNotNull(result);
@@ -212,7 +217,7 @@ public class CertificateValidationTest extends BaseSpringBootTest {
         X509Certificate x509Certificate = CertificateTestUtil.createHybridCertificate();
         certificate.getCertificateContent().setContent(Base64.getEncoder().encodeToString(x509Certificate.getEncoded()));
         certificate.setHybridCertificate(true);
-        certificateService.validate(certificate);
+        certificateInternalService.validate(certificate);
         Map<CertificateValidationCheck, CertificateValidationCheckDto> resultMap = MetaDefinitions.deserializeValidation(certificate.getCertificateValidationResult());
         Assertions.assertEquals(CertificateValidationStatus.VALID, resultMap.get(CertificateValidationCheck.CERTIFICATE_VALIDITY).getStatus());
 
@@ -226,7 +231,7 @@ public class CertificateValidationTest extends BaseSpringBootTest {
         certificateRepository.save(issuerCertificate);
         certificate.setIssuerCertificateUuid(issuerCertificate.getUuid());
         certificateRepository.save(certificate);
-        certificateService.validate(certificate);
+        certificateInternalService.validate(certificate);
         resultMap = MetaDefinitions.deserializeValidation(certificate.getCertificateValidationResult());
         Assertions.assertEquals(CertificateValidationStatus.FAILED, resultMap.get(CertificateValidationCheck.SIGNATURE_VERIFICATION).getStatus());
         Assertions.assertEquals("Signature verification failed. Alternative signature verification failed.", resultMap.get(CertificateValidationCheck.SIGNATURE_VERIFICATION).getMessage());
@@ -243,13 +248,13 @@ public class CertificateValidationTest extends BaseSpringBootTest {
         X509Certificate x509Certificate = createCertificateWithCustomNotAfter(Date.from(expiringDate.atStartOfDay(ZoneId.systemDefault()).toInstant()));
         certificate.getCertificateContent().setContent(Base64.getEncoder().encodeToString(x509Certificate.getEncoded()));
 
-        certificateService.validate(certificate);
+        certificateInternalService.validate(certificate);
         Map<CertificateValidationCheck, CertificateValidationCheckDto> resultMap = MetaDefinitions.deserializeValidation(certificate.getCertificateValidationResult());
         Assertions.assertEquals(CertificateValidationStatus.EXPIRING, resultMap.get(CertificateValidationCheck.CERTIFICATE_VALIDITY).getStatus());
 
         // Expiring according to platform settings with not null RA Profile, but null validation enabled
         certificate.setRaProfile(getRaProfile(new RaProfileCertificateValidationSettingsUpdateDto()));
-        certificateService.validate(certificate);
+        certificateInternalService.validate(certificate);
         resultMap = MetaDefinitions.deserializeValidation(certificate.getCertificateValidationResult());
         Assertions.assertEquals(CertificateValidationStatus.EXPIRING, resultMap.get(CertificateValidationCheck.CERTIFICATE_VALIDITY).getStatus());
 
@@ -260,7 +265,7 @@ public class CertificateValidationTest extends BaseSpringBootTest {
         certificate.setRaProfile(getRaProfile(validationSettingsUpdateDto));
 
         // Certificate is not yet expiring
-        certificateService.validate(certificate);
+        certificateInternalService.validate(certificate);
         resultMap = MetaDefinitions.deserializeValidation(certificate.getCertificateValidationResult());
         Assertions.assertEquals(CertificateValidationStatus.VALID, resultMap.get(CertificateValidationCheck.CERTIFICATE_VALIDITY).getStatus());
 
@@ -268,7 +273,7 @@ public class CertificateValidationTest extends BaseSpringBootTest {
         expiringDate = today.plusDays(9);
         x509Certificate = createCertificateWithCustomNotAfter(Date.from(expiringDate.atStartOfDay(ZoneId.systemDefault()).toInstant()));
         certificate.getCertificateContent().setContent(Base64.getEncoder().encodeToString(x509Certificate.getEncoded()));
-        certificateService.validate(certificate);
+        certificateInternalService.validate(certificate);
         resultMap = MetaDefinitions.deserializeValidation(certificate.getCertificateValidationResult());
         Assertions.assertEquals(CertificateValidationStatus.EXPIRING, resultMap.get(CertificateValidationCheck.CERTIFICATE_VALIDITY).getStatus());
     }

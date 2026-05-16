@@ -43,7 +43,10 @@ class AcmeProfileServiceTest extends BaseSpringBootTest {
     private AttributeEngine attributeEngine;
 
     @Autowired
-    private AcmeProfileService acmeProfileService;
+    private AcmeProfileExternalService acmeProfileService;
+
+    @Autowired
+    private AcmeProfileInternalService acmeProfileInternalService;
 
     @Autowired
     private AcmeProfileRepository acmeProfileRepository;
@@ -282,7 +285,7 @@ class AcmeProfileServiceTest extends BaseSpringBootTest {
 
     @Test
     void testGetResourceObject() throws NotFoundException {
-        NameAndUuidDto nameAndUuidDto = acmeProfileService.getResourceObjectInternal(acmeProfile.getUuid());
+        NameAndUuidDto nameAndUuidDto = acmeProfileInternalService.getResourceObjectInternal(acmeProfile.getUuid());
         Assertions.assertNotNull(nameAndUuidDto);
         Assertions.assertEquals(acmeProfile.getName(), nameAndUuidDto.getName());
         Assertions.assertEquals(acmeProfile.getUuid().toString(), nameAndUuidDto.getUuid());

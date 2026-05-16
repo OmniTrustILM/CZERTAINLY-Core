@@ -25,15 +25,15 @@ import com.czertainly.core.logging.LogResource;
 import com.czertainly.api.exception.CbomRepositoryException;
 import com.czertainly.core.security.authz.SecuredUUID;
 import com.czertainly.core.security.authz.SecurityFilter;
-import com.czertainly.core.service.CbomService;
+import com.czertainly.core.service.CbomExternalService;
 
 @RestController
 public class CbomControllerImpl implements CbomController {
 
-    private CbomService cbomService;
+    private CbomExternalService cbomService;
 
     @Autowired
-    public void setCbomService(CbomService cbomService) {
+    public void setCbomService(CbomExternalService cbomService) {
         this.cbomService = cbomService;
     }
 

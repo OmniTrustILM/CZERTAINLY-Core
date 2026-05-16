@@ -22,7 +22,7 @@ import com.czertainly.core.logging.LogResource;
 import com.czertainly.core.security.authz.SecuredParentUUID;
 import com.czertainly.core.security.authz.SecuredUUID;
 import com.czertainly.core.security.authz.SecurityFilter;
-import com.czertainly.core.service.VaultProfileService;
+import com.czertainly.core.service.VaultProfileExternalService;
 import com.czertainly.core.util.converter.SecretTypeConverter;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.WebDataBinder;
@@ -35,7 +35,7 @@ import java.util.UUID;
 @RestController
 public class VaultProfileControllerImpl implements VaultProfileController {
 
-    private VaultProfileService vaultProfileService;
+    private VaultProfileExternalService vaultProfileService;
 
     @InitBinder
     public void initBinder(final WebDataBinder webdataBinder) {
@@ -43,7 +43,7 @@ public class VaultProfileControllerImpl implements VaultProfileController {
     }
 
     @Autowired
-    public void setVaultProfileService(VaultProfileService vaultProfileService) {
+    public void setVaultProfileExternalService(VaultProfileExternalService vaultProfileService) {
         this.vaultProfileService = vaultProfileService;
     }
 

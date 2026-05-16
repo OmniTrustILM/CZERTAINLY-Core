@@ -29,11 +29,12 @@ import com.czertainly.core.logging.LoggingHelper;
 import com.czertainly.core.model.auth.CertificateProtocolInfo;
 import com.czertainly.core.security.authz.SecuredParentUUID;
 import com.czertainly.core.security.authz.SecuredUUID;
-import com.czertainly.core.service.CertificateService;
+import com.czertainly.core.service.CertificateExternalService;
+import com.czertainly.core.service.CertificateInternalService;
 import com.czertainly.core.service.acme.AcmeConstants;
-import com.czertainly.core.service.acme.AcmeService;
+import com.czertainly.core.service.acme.AcmeExternalService;
 import com.czertainly.core.service.acme.message.AcmeJwsRequest;
-import com.czertainly.core.service.v2.ClientOperationService;
+import com.czertainly.core.service.v2.ClientOperationExternalService;
 import com.czertainly.core.util.*;
 import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.JWSObject;
@@ -89,7 +90,7 @@ import java.util.stream.Collectors;
 
 @Service
 @Transactional
-public class AcmeServiceImpl implements AcmeService {
+public class AcmeServiceImpl implements AcmeExternalService {
 
     private static final Logger logger = LoggerFactory.getLogger(AcmeServiceImpl.class);
 
@@ -100,8 +101,9 @@ public class AcmeServiceImpl implements AcmeService {
     private AcmeOrderRepository acmeOrderRepository;
     private AcmeAuthorizationRepository acmeAuthorizationRepository;
     private AcmeChallengeRepository acmeChallengeRepository;
-    private ClientOperationService clientOperationService;
-    private CertificateService certificateService;
+    private ClientOperationExternalService clientOperationService;
+    private CertificateExternalService certificateExternalService;
+    private CertificateInternalService certificateInternalService;
     private AttributeEngine attributeEngine;
 
     @Autowired
@@ -145,13 +147,18 @@ public class AcmeServiceImpl implements AcmeService {
     }
 
     @Autowired
-    public void setClientOperationService(ClientOperationService clientOperationService) {
+    public void setClientOperationService(ClientOperationExternalService clientOperationService) {
         this.clientOperationService = clientOperationService;
     }
 
     @Autowired
-    public void setCertificateService(CertificateService certificateService) {
-        this.certificateService = certificateService;
+    public void setCertificateExternalService(CertificateExternalService certificateExternalService) {
+        this.certificateExternalService = certificateExternalService;
+    }
+
+    @Autowired
+    public void setCertificateInternalService(CertificateInternalService certificateInternalService) {
+        this.certificateInternalService = certificateInternalService;
     }
 
 
@@ -648,7 +655,7 @@ public class AcmeServiceImpl implements AcmeService {
 
         ClientCertificateRevocationDto revokeRequest = new ClientCertificateRevocationDto();
 
-        Certificate cert = certificateService.getCertificateEntityByContent(base64Certificate);
+        Certificate cert = certificateInternalService.getCertificateEntityByContent(base64Certificate);
         LoggingHelper.putLogResourceInfo(com.czertainly.api.model.core.auth.Resource.CERTIFICATE, false, cert.getUuid().toString(), cert.getSubjectDn());
         if (cert.isArchived()) throw new AcmeProblemDocumentException(HttpStatus.BAD_REQUEST, Problem.ARCHIVED);
         if (cert.getState().equals(CertificateState.REVOKED)) {
@@ -1169,7 +1176,7 @@ public class AcmeServiceImpl implements AcmeService {
                 ClientCertificateDataResponseDto certificateOutput = clientOperationService.issueCertificate(SecuredParentUUID.fromUUID(order.getAcmeAccount().getRaProfile().getAuthorityInstanceReferenceUuid()), order.getAcmeAccount().getRaProfile().getSecuredUuid(), certificateSignRequestDto,
                         CertificateProtocolInfo.Acme(order.getAcmeAccount().getAcmeProfileUuid(), order.getAcmeAccountUuid()));
                 order.setCertificateId(AcmeRandomGeneratorAndValidator.generateRandomId());
-                order.setCertificateReference(certificateService.getCertificateEntity(SecuredUUID.fromString(certificateOutput.getUuid())));
+                order.setCertificateReference(certificateExternalService.getCertificateEntity(SecuredUUID.fromString(certificateOutput.getUuid())));
             } catch (Exception e) {
                 logger.error("Issue Certificate failed. Exception: {}", e.getMessage());
                 order.setStatus(OrderStatus.INVALID);
@@ -1201,7 +1208,7 @@ public class AcmeServiceImpl implements AcmeService {
         AcmeOrder order = acmeOrderRepository.findByCertificateId(certificateId).orElseThrow(() -> new NotFoundException(Order.class, certificateId));
         LoggingHelper.putLogResourceInfo(com.czertainly.api.model.core.auth.Resource.ACME_ORDER, true, order.getUuid().toString(), order.getOrderId());
 
-        CertificateChainResponseDto certificateChainResponse = certificateService.getCertificateChain(SecuredUUID.fromUUID(order.getCertificateReferenceUuid()), true);
+        CertificateChainResponseDto certificateChainResponse = certificateExternalService.getCertificateChain(SecuredUUID.fromUUID(order.getCertificateReferenceUuid()), true);
         if (!certificateChainResponse.getCertificates().isEmpty()) {
             LoggingHelper.putLogResourceInfo(com.czertainly.api.model.core.auth.Resource.CERTIFICATE, false, certificateChainResponse.getCertificates().getFirst().getUuid(), certificateChainResponse.getCertificates().getFirst().getSubjectDn());
         }

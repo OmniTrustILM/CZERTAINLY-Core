@@ -26,9 +26,10 @@ import com.czertainly.core.model.auth.ResourceAction;
 import com.czertainly.core.security.authz.ExternalAuthorization;
 import com.czertainly.core.security.authz.SecuredUUID;
 import com.czertainly.core.security.authz.SecurityFilter;
-import com.czertainly.core.service.CredentialService;
-import com.czertainly.core.service.ResourceService;
-import com.czertainly.core.service.TokenInstanceService;
+import com.czertainly.core.service.CredentialExternalService;
+import com.czertainly.core.service.ResourceInternalService;
+import com.czertainly.core.service.TokenInstanceExternalService;
+import com.czertainly.core.service.TokenInstanceInternalService;
 import com.czertainly.core.util.AttributeDefinitionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -43,7 +44,7 @@ import java.util.stream.Collectors;
 
 @Service(Resource.Codes.TOKEN)
 @Transactional
-public class TokenInstanceServiceImpl implements TokenInstanceService {
+public class TokenInstanceServiceImpl implements TokenInstanceExternalService, TokenInstanceInternalService {
 
     private static final Logger logger = LoggerFactory.getLogger(TokenInstanceServiceImpl.class);
 
@@ -52,9 +53,9 @@ public class TokenInstanceServiceImpl implements TokenInstanceService {
     // --------------------------------------------------------------------------------
     private ConnectorApiFactory connectorApiFactory;
     private ConnectorServiceImpl connectorService;
-    private CredentialService credentialService;
+    private CredentialExternalService credentialService;
     private AttributeEngine attributeEngine;
-    private ResourceService resourceService;
+    private ResourceInternalService resourceService;
 
     // --------------------------------------------------------------------------------
     // Repositories
@@ -62,7 +63,7 @@ public class TokenInstanceServiceImpl implements TokenInstanceService {
     private TokenInstanceReferenceRepository tokenInstanceReferenceRepository;
 
     @Autowired
-    public void setResourceService(ResourceService resourceService) {
+    public void setResourceService(ResourceInternalService resourceService) {
         this.resourceService = resourceService;
     }
 
@@ -87,7 +88,7 @@ public class TokenInstanceServiceImpl implements TokenInstanceService {
     }
 
     @Autowired
-    public void setCredentialService(CredentialService credentialService) {
+    public void setCredentialService(CredentialExternalService credentialService) {
         this.credentialService = credentialService;
     }
 

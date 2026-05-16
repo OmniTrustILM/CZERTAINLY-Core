@@ -20,7 +20,7 @@ import com.czertainly.core.model.auth.ResourceAction;
 import com.czertainly.core.security.authz.opa.dto.OpaRequestedResource;
 import com.czertainly.core.security.authz.opa.dto.OpaResourceAccessResult;
 import com.czertainly.core.service.acme.AcmeConstants;
-import com.czertainly.core.service.acme.AcmeService;
+import com.czertainly.core.service.acme.AcmeExternalService;
 import com.czertainly.core.util.AcmeCommonHelper;
 import com.czertainly.core.util.BaseSpringBootTest;
 import com.czertainly.core.util.CertificateUtil;
@@ -107,7 +107,7 @@ class AcmeServiceTest extends BaseSpringBootTest {
     private CertificateProtocolAssociationRepository certificateProtocolAssociationRepository;
 
     @Autowired
-    private AcmeService acmeService;
+    private AcmeExternalService acmeService;
 
     private AcmeNonce acmeValidNonce;
     private JWSSigner rsa2048Signer;

@@ -56,7 +56,7 @@ class ProxyServiceTest extends BaseSpringBootTest {
     }
 
     @Autowired
-    private ProxyService proxyService;
+    private ProxyExternalService proxyService;
 
     @Autowired
     private ProxyRepository proxyRepository;

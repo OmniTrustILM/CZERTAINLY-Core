@@ -47,6 +47,7 @@ import com.czertainly.core.security.authz.ExternalAuthorization;
 import com.czertainly.core.security.authz.SecuredUUID;
 import com.czertainly.core.security.authz.SecurityFilter;
 import com.czertainly.core.service.*;
+import com.czertainly.core.service.ConnectorExternalService;
 import com.czertainly.core.service.handler.CertificateHandler;
 import com.czertainly.core.tasks.ScheduledJobInfo;
 import com.czertainly.core.util.*;
@@ -75,7 +76,7 @@ import java.util.concurrent.*;
 
 @Service(Resource.Codes.DISCOVERY)
 @Transactional
-public class DiscoveryServiceImpl implements DiscoveryService {
+public class DiscoveryServiceImpl implements DiscoveryExternalService, DiscoveryInternalService {
 
     private static final Logger logger = LoggerFactory.getLogger(DiscoveryServiceImpl.class);
 
@@ -90,16 +91,17 @@ public class DiscoveryServiceImpl implements DiscoveryService {
     private AttributeEngine attributeEngine;
     private CertificateHandler certificateHandler;
 
-    private TriggerService triggerService;
+    private TriggerExternalService triggerExternalService;
+    private TriggerInternalService triggerInternalService;
     private DiscoveryRepository discoveryRepository;
     private CertificateRepository certificateRepository;
     private ConnectorApiFactory connectorApiFactory;
-    private ConnectorService connectorService;
-    private CredentialService credentialService;
+    private ConnectorExternalService connectorService;
+    private CredentialExternalService credentialService;
     private DiscoveryCertificateRepository discoveryCertificateRepository;
     private CertificateContentRepository certificateContentRepository;
 
-    private ResourceService resourceService;
+    private ResourceInternalService resourceService;
     private ConnectorRepository connectorRepository;
 
     public DiscoveryServiceImpl(DiscoveryProperties discoveryProperties) {
@@ -112,13 +114,18 @@ public class DiscoveryServiceImpl implements DiscoveryService {
     }
 
     @Autowired
-    public void setResourceService(ResourceService resourceService) {
+    public void setResourceService(ResourceInternalService resourceService) {
         this.resourceService = resourceService;
     }
 
     @Autowired
-    public void setTriggerService(TriggerService triggerService) {
-        this.triggerService = triggerService;
+    public void setTriggerExternalService(TriggerExternalService triggerExternalService) {
+        this.triggerExternalService = triggerExternalService;
+    }
+
+    @Autowired
+    public void setTriggerInternalService(TriggerInternalService triggerInternalService) {
+        this.triggerInternalService = triggerInternalService;
     }
 
     @Autowired
@@ -147,12 +154,12 @@ public class DiscoveryServiceImpl implements DiscoveryService {
     }
 
     @Autowired
-    public void setConnectorService(ConnectorService connectorService) {
+    public void setConnectorService(ConnectorExternalService connectorService) {
         this.connectorService = connectorService;
     }
 
     @Autowired
-    public void setCredentialService(CredentialService credentialService) {
+    public void setCredentialService(CredentialExternalService credentialService) {
         this.credentialService = credentialService;
     }
 
@@ -259,7 +266,7 @@ public class DiscoveryServiceImpl implements DiscoveryService {
 
         attributeEngine.deleteObjectAttributeContent(Resource.DISCOVERY, discovery.getUuid());
         discoveryRepository.delete(discovery);
-        triggerService.deleteTriggerAssociations(Resource.DISCOVERY, discovery.getUuid());
+        triggerInternalService.deleteTriggerAssociations(Resource.DISCOVERY, discovery.getUuid());
 
         try {
             String referenceUuid = discovery.getDiscoveryConnectorReference();
@@ -323,7 +330,7 @@ public class DiscoveryServiceImpl implements DiscoveryService {
             attributeEngine.updateObjectCustomAttributesContent(Resource.DISCOVERY, discovery.getUuid(), request.getCustomAttributes());
             attributeEngine.updateObjectDataAttributesContent(ObjectAttributeContentInfo.builder(Resource.DISCOVERY, discovery.getUuid()).connector(connector.getUuid()).build(), request.getAttributes());
             if (request.getTriggers() != null) {
-                triggerService.createTriggerAssociations(ResourceEvent.CERTIFICATE_DISCOVERED, Resource.DISCOVERY, discovery.getUuid(), request.getTriggers(), false);
+                triggerExternalService.createTriggerAssociations(ResourceEvent.CERTIFICATE_DISCOVERED, Resource.DISCOVERY, discovery.getUuid(), request.getTriggers(), false);
                 discovery = discoveryRepository.findWithTriggersByUuid(discovery.getUuid());
             }
             return discovery.mapToDto();

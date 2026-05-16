@@ -56,7 +56,7 @@ import java.util.*;
 
 @Service(Resource.Codes.USER)
 @Transactional
-public class UserManagementServiceImpl implements UserManagementService {
+public class UserManagementServiceImpl implements UserManagementExternalService, UserManagementInternalService {
     private static final LoggerWrapper logger = new LoggerWrapper(UserManagementServiceImpl.class, Module.AUTH, Resource.USER);
 
     @Value("${logging.schema-version}")
@@ -64,8 +64,9 @@ public class UserManagementServiceImpl implements UserManagementService {
 
     private UserManagementApiClient userManagementApiClient;
 
-    private CertificateService certificateService;
-    private GroupService groupService;
+    private CertificateExternalService certificateExternalService;
+    private CertificateInternalService certificateInternalService;
+    private GroupExternalService groupService;
     private ResourceObjectAssociationService objectAssociationService;
     private AuditLogsProducer auditLogsProducer;
 
@@ -96,12 +97,17 @@ public class UserManagementServiceImpl implements UserManagementService {
     }
 
     @Autowired
-    public void setCertificateService(CertificateService certificateService) {
-        this.certificateService = certificateService;
+    public void setCertificateExternalService(CertificateExternalService certificateExternalService) {
+        this.certificateExternalService = certificateExternalService;
     }
 
     @Autowired
-    public void setGroupService(GroupService groupService) {
+    public void setCertificateInternalService(CertificateInternalService certificateInternalService) {
+        this.certificateInternalService = certificateInternalService;
+    }
+
+    @Autowired
+    public void setGroupService(GroupExternalService groupService) {
         this.groupService = groupService;
     }
 
@@ -159,7 +165,7 @@ public class UserManagementServiceImpl implements UserManagementService {
 
         UserDetailDto response = userManagementApiClient.createUser(requestDto);
         if (certificate != null) {
-            certificateService.updateCertificateUser(certificate.getUuid(), response.getUuid());
+            certificateInternalService.updateCertificateUser(certificate.getUuid(), response.getUuid());
         }
 
         response.setCustomAttributes(attributeEngine.updateObjectCustomAttributesContent(Resource.USER, UUID.fromString(response.getUuid()), request.getCustomAttributes()));
@@ -191,7 +197,7 @@ public class UserManagementServiceImpl implements UserManagementService {
     public void deleteUser(String userUuid) {
         userManagementApiClient.removeUser(userUuid);
         UUID uuid = UUID.fromString(userUuid);
-        certificateService.removeCertificateUser(uuid);
+        certificateInternalService.removeCertificateUser(uuid);
         objectAssociationService.removeOwnerAssociations(uuid);
         attributeEngine.deleteObjectAttributeContent(Resource.USER, UUID.fromString(userUuid));
         clearAuthenticationData(userUuid, "deleted");
@@ -326,7 +332,7 @@ public class UserManagementServiceImpl implements UserManagementService {
         Certificate certificate = null;
         boolean uploadCertificate = false;
         if (StringUtils.isNotBlank(certificateUuid)) {
-            certificate = certificateService.getCertificateEntity(SecuredUUID.fromString(certificateUuid));
+            certificate = certificateExternalService.getCertificateEntity(SecuredUUID.fromString(certificateUuid));
         } else {
             X509Certificate x509Cert = CertificateUtil.parseCertificate(certificateData);
             try {
@@ -335,7 +341,7 @@ public class UserManagementServiceImpl implements UserManagementService {
                 throw new ValidationException(ValidationError.create("Certificate is not valid."));
             }
             try {
-                certificate = certificateService.getCertificateEntityByFingerprint(CertificateUtil.getThumbprint(x509Cert));
+                certificate = certificateInternalService.getCertificateEntityByFingerprint(CertificateUtil.getThumbprint(x509Cert));
             } catch (NotFoundException e) {
                 uploadCertificate = true;
             } catch (NoSuchAlgorithmException e) {
@@ -347,8 +353,8 @@ public class UserManagementServiceImpl implements UserManagementService {
             try {
                 UploadCertificateRequestDto uploadRequest = new UploadCertificateRequestDto();
                 uploadRequest.setCertificate(certificateData);
-                CertificateDetailDto certificateDetailDto = certificateService.upload(uploadRequest, true);
-                certificate = certificateService.getCertificateEntityByFingerprint(certificateDetailDto.getFingerprint());
+                CertificateDetailDto certificateDetailDto = certificateExternalService.upload(uploadRequest, true);
+                certificate = certificateInternalService.getCertificateEntityByFingerprint(certificateDetailDto.getFingerprint());
                 logger.getLogger().debug("New Certificate uploaded for the user");
             } catch (Exception e) {
                 throw new CertificateException("Cannot upload certificate that should be assigned to the user: " + e.getMessage());
@@ -396,12 +402,12 @@ public class UserManagementServiceImpl implements UserManagementService {
         UserDetailDto response = userManagementApiClient.updateUser(userUuid, requestDto);
 
         try {
-            certificateService.removeCertificateUser(UUID.fromString(response.getUuid()));
+            certificateInternalService.removeCertificateUser(UUID.fromString(response.getUuid()));
         } catch (Exception e) {
             logger.getLogger().info("Unable to remove user uuid. It may not exists {}", e.getMessage());
         }
         if (certificate != null) {
-            certificateService.updateCertificateUser(certificate.getUuid(), response.getUuid());
+            certificateInternalService.updateCertificateUser(certificate.getUuid(), response.getUuid());
         }
         return response;
     }

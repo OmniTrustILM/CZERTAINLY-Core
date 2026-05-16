@@ -26,6 +26,7 @@ import com.czertainly.core.dao.repository.AttributeRelationRepository;
 import com.czertainly.core.dao.repository.signing.TspProfileRepository;
 import com.czertainly.core.security.authz.SecuredUUID;
 import com.czertainly.core.security.authz.SecurityFilter;
+import com.czertainly.core.service.ResourceInternalService;
 import com.czertainly.core.util.BaseSpringBootTest;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -42,10 +43,10 @@ class TspProfileServiceImplTest extends BaseSpringBootTest {
     private static final String CUSTOM_ATTR_NAME = "tspTestAttribute";
 
     @Autowired
-    private TspProfileService tspService;
+    private TspProfileExternalService tspService;
 
     @Autowired
-    private ResourceService resourceService;
+    private ResourceInternalService resourceService;
 
     @Autowired
     private TspProfileRepository tspRepository;

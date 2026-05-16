@@ -39,10 +39,10 @@ import com.czertainly.core.dao.entity.acme.AcmeProfile;
 import com.czertainly.core.dao.repository.*;
 import com.czertainly.core.enums.FilterField;
 import com.czertainly.core.security.authz.SecurityFilter;
-import com.czertainly.core.service.AttributeService;
-import com.czertainly.core.service.AuditLogService;
-import com.czertainly.core.service.CertificateService;
-import com.czertainly.core.service.CryptographicKeyService;
+import com.czertainly.core.service.AttributeExternalService;
+import com.czertainly.core.service.AuditLogExternalService;
+import com.czertainly.core.service.CertificateExternalService;
+import com.czertainly.core.service.CryptographicKeyExternalService;
 import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.client.WireMock;
 import jakarta.persistence.EntityManager;
@@ -80,13 +80,13 @@ class FilterPredicatesBuilderTest extends BaseSpringBootTest {
     private EntityManager entityManager;
 
     @Autowired
-    private AttributeService attributeService;
+    private AttributeExternalService attributeService;
 
     @Autowired
     private AttributeEngine attributeEngine;
 
     @Autowired
-    private CertificateService certificateService;
+    private CertificateExternalService certificateService;
 
     @Autowired
     private CertificateRepository certificateRepository;
@@ -102,7 +102,7 @@ class FilterPredicatesBuilderTest extends BaseSpringBootTest {
     @Autowired
     private CryptographicKeyItemRepository cryptographicKeyItemRepository;
     @Autowired
-    private CryptographicKeyService cryptographicKeyService;
+    private CryptographicKeyExternalService cryptographicKeyService;
 
     @Autowired
     private LocationRepository locationRepository;
@@ -119,7 +119,7 @@ class FilterPredicatesBuilderTest extends BaseSpringBootTest {
     @Autowired
     private AuditLogRepository auditLogRepository;
     @Autowired
-    private AuditLogService auditLogService;
+    private AuditLogExternalService auditLogService;
 
     private CriteriaBuilder criteriaBuilder;
 

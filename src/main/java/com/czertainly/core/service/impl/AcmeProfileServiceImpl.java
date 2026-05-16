@@ -27,8 +27,9 @@ import com.czertainly.core.model.auth.ResourceAction;
 import com.czertainly.core.security.authz.ExternalAuthorization;
 import com.czertainly.core.security.authz.SecuredUUID;
 import com.czertainly.core.security.authz.SecurityFilter;
-import com.czertainly.core.service.AcmeProfileService;
-import com.czertainly.core.service.RaProfileService;
+import com.czertainly.core.service.AcmeProfileExternalService;
+import com.czertainly.core.service.AcmeProfileInternalService;
+import com.czertainly.core.service.RaProfileExternalService;
 import com.czertainly.core.service.model.SecuredList;
 import com.czertainly.core.service.v2.ExtendedAttributeService;
 import com.czertainly.core.util.ValidatorUtil;
@@ -46,12 +47,12 @@ import java.util.stream.Collectors;
 
 @Service(Resource.Codes.ACME_PROFILE)
 @Transactional
-public class AcmeProfileServiceImpl implements AcmeProfileService {
+public class AcmeProfileServiceImpl implements AcmeProfileExternalService, AcmeProfileInternalService {
 
     private static final Logger logger = LoggerFactory.getLogger(AcmeProfileServiceImpl.class);
     private final AcmeProfileRepository acmeProfileRepository;
     private AcmeAccountRepository acmeAccountRepository;
-    private RaProfileService raProfileService;
+    private RaProfileExternalService raProfileService;
     private ExtendedAttributeService extendedAttributeService;
     private AttributeEngine attributeEngine;
     private ProtocolCertificateAssociationsRepository certificateAssociationRepository;
@@ -77,7 +78,7 @@ public class AcmeProfileServiceImpl implements AcmeProfileService {
     }
 
     @Autowired
-    public void setRaProfileService(RaProfileService raProfileRepository) {
+    public void setRaProfileService(RaProfileExternalService raProfileRepository) {
         this.raProfileService = raProfileRepository;
     }
 

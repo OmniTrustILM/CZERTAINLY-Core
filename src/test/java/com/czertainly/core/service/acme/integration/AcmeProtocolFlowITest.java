@@ -39,12 +39,13 @@ import com.czertainly.core.messaging.jms.producers.ActionProducer;
 import com.czertainly.core.model.auth.ResourceAction;
 import com.czertainly.core.security.authz.SecuredParentUUID;
 import com.czertainly.core.security.authz.SecuredUUID;
-import com.czertainly.core.service.AcmeProfileService;
-import com.czertainly.core.service.AuthorityInstanceService;
-import com.czertainly.core.service.RaProfileService;
-import com.czertainly.core.service.acme.AcmeService;
+import com.czertainly.core.service.AcmeProfileExternalService;
+import com.czertainly.core.service.AuthorityInstanceExternalService;
+import com.czertainly.core.service.RaProfileExternalService;
+import com.czertainly.core.service.acme.AcmeExternalService;
 import com.czertainly.core.service.acme.AcmeTestUtil;
-import com.czertainly.core.service.v2.ClientOperationService;
+import com.czertainly.core.service.v2.ClientOperationExternalService;
+import com.czertainly.core.service.v2.ClientOperationInternalService;
 import com.czertainly.core.util.BaseSpringBootTest;
 import com.czertainly.core.util.MetaDefinitions;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -104,15 +105,17 @@ public class AcmeProtocolFlowITest extends BaseSpringBootTest {
     // ── Spring beans ──────────────────────────────────────────────────────────
 
     @Autowired
-    private AuthorityInstanceService authorityInstanceService;
+    private AuthorityInstanceExternalService authorityInstanceService;
     @Autowired
-    private RaProfileService raProfileService;
+    private RaProfileExternalService raProfileService;
     @Autowired
-    private AcmeProfileService acmeProfileService;
+    private AcmeProfileExternalService acmeProfileService;
     @Autowired
-    private AcmeService acmeService;
+    private AcmeExternalService acmeService;
     @Autowired
-    private ClientOperationService clientOperationService;
+    private ClientOperationExternalService clientOperationService;
+    @Autowired
+    private ClientOperationInternalService clientOperationInternalService;
 
     @MockitoSpyBean
     private ActionProducer actionProducer;
@@ -170,7 +173,7 @@ public class AcmeProtocolFlowITest extends BaseSpringBootTest {
         Mockito.doAnswer(inv -> {
             ActionMessage msg = inv.getArgument(0);
             if (msg.getResourceAction() == ResourceAction.ISSUE) {
-                clientOperationService.issueCertificateAction(msg.getResourceUuid(), false);
+                clientOperationInternalService.issueCertificateAction(msg.getResourceUuid(), false);
             }
             return null;
         }).when(actionProducer).produceMessage(Mockito.any());
@@ -234,7 +237,7 @@ public class AcmeProtocolFlowITest extends BaseSpringBootTest {
      *
      * <p>When an ACME account is created through the ACME-Profile-based flow it is marked with
      * {@code isDefaultRaProfile = true}. If the ACME Profile is later updated to a different RA Profile
-     * via {@link AcmeProfileService#updateRaProfile}, all such accounts must have their RA profiles updated
+     * via {@link AcmeProfileExternalService#updateRaProfile}, all such accounts must have their RA profiles updated
      * so that subsequent certificate operations are issued under the new RA Profile.
      *
      * <p>This test verifies that after switching the ACME Profile from

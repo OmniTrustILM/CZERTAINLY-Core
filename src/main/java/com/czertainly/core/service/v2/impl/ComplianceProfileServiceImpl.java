@@ -27,7 +27,8 @@ import com.czertainly.core.security.authz.SecuredUUID;
 import com.czertainly.core.security.authz.SecurityFilter;
 import com.czertainly.core.service.*;
 import com.czertainly.core.service.handler.ComplianceProfileRuleHandler;
-import com.czertainly.core.service.v2.ComplianceProfileService;
+import com.czertainly.core.service.v2.ComplianceProfileExternalService;
+import com.czertainly.core.service.v2.ComplianceProfileInternalService;
 import com.czertainly.core.util.NullUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -39,7 +40,7 @@ import java.util.*;
 
 @Service(Resource.Codes.COMPLIANCE_PROFILE)
 @Transactional
-public class ComplianceProfileServiceImpl implements ComplianceProfileService {
+public class ComplianceProfileServiceImpl implements ComplianceProfileExternalService, ComplianceProfileInternalService {
 
     private static final Logger logger = LoggerFactory.getLogger(ComplianceProfileServiceImpl.class);
 
@@ -49,7 +50,7 @@ public class ComplianceProfileServiceImpl implements ComplianceProfileService {
     private ComplianceProfileRuleRepository complianceProfileRuleRepository;
     private ComplianceProfileAssociationRepository complianceProfileAssociationRepository;
 
-    private ResourceService resourceService;
+    private ResourceInternalService resourceService;
     private ConnectorRepository connectorRepository;
     private ComplianceInternalRuleRepository internalRuleRepository;
     private ConditionItemRepository conditionItemRepository;
@@ -78,7 +79,7 @@ public class ComplianceProfileServiceImpl implements ComplianceProfileService {
     }
 
     @Autowired
-    public void setResourceService(ResourceService resourceService) {
+    public void setResourceService(ResourceInternalService resourceService) {
         this.resourceService = resourceService;
     }
 

@@ -14,7 +14,7 @@ import com.czertainly.core.auth.AuthEndpoint;
 import com.czertainly.core.logging.LogResource;
 import com.czertainly.core.security.authz.SecuredUUID;
 import com.czertainly.core.security.authz.SecurityFilter;
-import com.czertainly.core.service.CredentialService;
+import com.czertainly.core.service.CredentialExternalService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -28,10 +28,10 @@ import java.util.List;
 @RestController
 public class CredentialControllerImpl implements CredentialController {
 
-    private CredentialService credentialService;
+    private CredentialExternalService credentialService;
 
     @Autowired
-    public void setCredentialService(CredentialService credentialService) {
+    public void setCredentialService(CredentialExternalService credentialService) {
         this.credentialService = credentialService;
     }
 

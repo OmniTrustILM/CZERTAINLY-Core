@@ -6,8 +6,8 @@ import com.czertainly.api.exception.NotFoundException;
 import com.czertainly.api.model.client.auth.AddUserRequestDto;
 import com.czertainly.api.model.core.auth.UserDetailDto;
 import com.czertainly.core.security.authn.client.RoleManagementApiClient;
-import com.czertainly.core.service.LocalAdminService;
-import com.czertainly.core.service.UserManagementService;
+import com.czertainly.core.service.LocalAdminExternalService;
+import com.czertainly.core.service.UserManagementExternalService;
 import com.czertainly.core.util.AuthHelper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -18,13 +18,13 @@ import java.security.cert.CertificateException;
 
 @Service
 @Transactional
-public class LocalAdminServiceImpl implements LocalAdminService {
+public class LocalAdminServiceImpl implements LocalAdminExternalService {
 
     private RoleManagementApiClient roleManagementApiClient;
-    private UserManagementService userManagementService;
+    private UserManagementExternalService userManagementService;
 
     @Autowired
-    private void setUserManagementService(UserManagementService userManagementService) {
+    private void setUserManagementService(UserManagementExternalService userManagementService) {
         this.userManagementService = userManagementService;
     }
 

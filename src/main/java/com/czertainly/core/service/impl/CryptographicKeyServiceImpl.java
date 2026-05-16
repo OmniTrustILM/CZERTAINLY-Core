@@ -74,7 +74,7 @@ import static java.util.function.Predicate.not;
 
 @Service(Resource.Codes.CRYPTOGRAPHIC_KEY)
 @Transactional(noRollbackFor = ValidationException.class)
-public class CryptographicKeyServiceImpl implements CryptographicKeyService {
+public class CryptographicKeyServiceImpl implements CryptographicKeyExternalService, CryptographicKeyInternalService {
 
     private static final Logger logger = LoggerFactory.getLogger(CryptographicKeyServiceImpl.class);
 
@@ -104,10 +104,10 @@ public class CryptographicKeyServiceImpl implements CryptographicKeyService {
     // --------------------------------------------------------------------------------
     private AttributeEngine attributeEngine;
     private ConnectorApiFactory connectorApiFactory;
-    private TokenInstanceService tokenInstanceService;
+    private TokenInstanceInternalService tokenInstanceService;
     private CryptographicKeyEventHistoryService keyEventHistoryService;
     private PermissionEvaluator permissionEvaluator;
-    private CertificateService certificateService;
+    private CertificateInternalService certificateService;
     private ResourceObjectAssociationService objectAssociationService;
     private NotificationProducer notificationProducer;
 
@@ -152,7 +152,7 @@ public class CryptographicKeyServiceImpl implements CryptographicKeyService {
     }
 
     @Autowired
-    public void setTokenInstanceService(TokenInstanceService tokenInstanceService) {
+    public void setTokenInstanceService(TokenInstanceInternalService tokenInstanceService) {
         this.tokenInstanceService = tokenInstanceService;
     }
 
@@ -162,7 +162,7 @@ public class CryptographicKeyServiceImpl implements CryptographicKeyService {
     }
 
     @Autowired
-    public void setCertificateService(CertificateService certificateService) {
+    public void setCertificateService(CertificateInternalService certificateService) {
         this.certificateService = certificateService;
     }
 

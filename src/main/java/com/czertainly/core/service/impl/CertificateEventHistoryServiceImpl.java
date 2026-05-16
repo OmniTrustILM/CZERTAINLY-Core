@@ -9,7 +9,10 @@ import com.czertainly.core.dao.entity.CertificateEventHistory;
 import com.czertainly.core.dao.repository.CertificateEventHistoryRepository;
 import com.czertainly.core.dao.repository.CertificateRepository;
 import com.czertainly.core.events.transaction.UpdateCertificateHistoryEvent;
-import com.czertainly.core.service.CertificateEventHistoryService;
+import com.czertainly.api.model.core.auth.Resource;
+import com.czertainly.core.model.auth.ResourceAction;
+import com.czertainly.core.service.CertificateEventHistoryExternalService;
+import com.czertainly.core.service.CertificateEventHistoryInternalService;
 import com.czertainly.core.util.MetaDefinitions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,7 +30,7 @@ import java.util.UUID;
 
 @Service
 @Transactional
-public class CertificateEventHistoryServiceImpl implements CertificateEventHistoryService {
+public class CertificateEventHistoryServiceImpl implements CertificateEventHistoryExternalService, CertificateEventHistoryInternalService {
 
     private static final Logger logger = LoggerFactory.getLogger(CertificateEventHistoryServiceImpl.class);
 

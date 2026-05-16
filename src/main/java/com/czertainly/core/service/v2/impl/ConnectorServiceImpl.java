@@ -29,9 +29,10 @@ import com.czertainly.core.model.auth.ResourceAction;
 import com.czertainly.core.security.authz.ExternalAuthorization;
 import com.czertainly.core.security.authz.SecuredUUID;
 import com.czertainly.core.security.authz.SecurityFilter;
-import com.czertainly.core.service.ConnectorAuthService;
+import com.czertainly.core.service.ConnectorAuthExternalService;
 import com.czertainly.core.service.handler.ConnectorAdapter;
-import com.czertainly.core.service.v2.ConnectorService;
+import com.czertainly.core.service.v2.ConnectorExternalService;
+import com.czertainly.core.service.v2.ConnectorInternalService;
 import com.czertainly.core.util.AttributeDefinitionUtils;
 import com.czertainly.core.util.FilterPredicatesBuilder;
 import com.czertainly.core.util.RequestValidatorHelper;
@@ -56,7 +57,7 @@ import java.util.stream.Collectors;
 
 @Service(Resource.Codes.CONNECTOR)
 @Transactional
-public class ConnectorServiceImpl implements ConnectorService {
+public class ConnectorServiceImpl implements ConnectorExternalService, ConnectorInternalService {
 
     private static final Logger logger = LoggerFactory.getLogger(ConnectorServiceImpl.class);
 
@@ -73,7 +74,7 @@ public class ConnectorServiceImpl implements ConnectorService {
     private ComplianceProfileRuleRepository complianceProfileRuleRepository;
     private ProxyRepository proxyRepository;
 
-    private ConnectorAuthService connectorAuthService;
+    private ConnectorAuthExternalService connectorAuthService;
 
     private AttributeEngine attributeEngine;
     private TransactionHandler transactionHandler;
@@ -144,7 +145,7 @@ public class ConnectorServiceImpl implements ConnectorService {
     }
 
     @Autowired
-    public void setConnectorAuthService(ConnectorAuthService connectorAuthService) {
+    public void setConnectorAuthService(ConnectorAuthExternalService connectorAuthService) {
         this.connectorAuthService = connectorAuthService;
     }
 

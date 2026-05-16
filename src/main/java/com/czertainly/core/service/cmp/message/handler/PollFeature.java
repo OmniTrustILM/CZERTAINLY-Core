@@ -5,7 +5,7 @@ import com.czertainly.api.model.core.certificate.CertificateState;
 import com.czertainly.api.interfaces.core.cmp.error.CmpProcessingException;
 import com.czertainly.core.dao.entity.Certificate;
 import com.czertainly.core.security.authz.SecuredUUID;
-import com.czertainly.core.service.CertificateService;
+import com.czertainly.core.service.CertificateExternalService;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import lombok.extern.slf4j.Slf4j;
@@ -31,10 +31,10 @@ public class PollFeature {
     @Value("${cmp.protocol.poll.feature.timeout}")
     private Integer pollFeatureTimeout;
 
-    private CertificateService certificateService;
+    private CertificateExternalService certificateService;
 
     @Autowired
-    public void setCertificateService(CertificateService certificateService) {
+    public void setCertificateService(CertificateExternalService certificateService) {
         this.certificateService = certificateService;
     }
 

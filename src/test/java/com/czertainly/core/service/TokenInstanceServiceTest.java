@@ -45,7 +45,9 @@ class TokenInstanceServiceTest extends BaseSpringBootTest {
     private static final String AUTHORITY_INSTANCE_NAME = "testTokenInstance1";
 
     @Autowired
-    private TokenInstanceService tokenInstanceService;
+    private TokenInstanceExternalService tokenInstanceService;
+    @Autowired
+    private TokenInstanceInternalService tokenInstanceInternalService;
 
     @Autowired
     private TokenInstanceReferenceRepository tokenInstanceReferenceRepository;
@@ -282,14 +284,14 @@ class TokenInstanceServiceTest extends BaseSpringBootTest {
                 .post(WireMock.urlPathMatching("/v1/cryptographyProvider/tokens/[^/]+/tokenProfile/attributes/validate"))
                 .willReturn(WireMock.ok()));
 
-        tokenInstanceService.validateTokenProfileAttributes(tokenInstanceReference.getSecuredUuid(), List.of());
+        tokenInstanceInternalService.validateTokenProfileAttributes(tokenInstanceReference.getSecuredUuid(), List.of());
     }
 
     @Test
     void testValidateTokenProfileAttributes_notFound() {
         Assertions.assertThrows(
                 NotFoundException.class,
-                () -> tokenInstanceService.validateTokenProfileAttributes(
+                () -> tokenInstanceInternalService.validateTokenProfileAttributes(
                         SecuredUUID.fromString("abfbc322-29e1-11ed-a261-0242ac120002"),
                         null
                 )
@@ -318,7 +320,7 @@ class TokenInstanceServiceTest extends BaseSpringBootTest {
 
     @Test
     void testGetResourceObject() throws NotFoundException {
-        NameAndUuidDto nameAndUuidDto = tokenInstanceService.getResourceObjectInternal(tokenInstanceReference.getUuid());
+        NameAndUuidDto nameAndUuidDto = tokenInstanceInternalService.getResourceObjectInternal(tokenInstanceReference.getUuid());
         Assertions.assertEquals(tokenInstanceReference.getUuid().toString(), nameAndUuidDto.getUuid());
         Assertions.assertEquals(tokenInstanceReference.getName(), nameAndUuidDto.getName());
 

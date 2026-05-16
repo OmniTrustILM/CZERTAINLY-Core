@@ -46,10 +46,10 @@ class RaProfileServiceTest extends ApprovalProfileData {
     private static final String RA_PROFILE_NAME = "testRaProfile1";
 
     @Autowired
-    private com.czertainly.core.service.RaProfileService raProfileService;
+    private RaProfileExternalService raProfileService;
 
     @Autowired
-    private ApprovalProfileService approvalProfileService;
+    private ApprovalProfileExternalService approvalProfileService;
 
     @Autowired
     private RaProfileRepository raProfileRepository;

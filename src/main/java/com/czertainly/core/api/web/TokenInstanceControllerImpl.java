@@ -15,7 +15,7 @@ import com.czertainly.core.auth.AuthEndpoint;
 import com.czertainly.core.logging.LogResource;
 import com.czertainly.core.security.authz.SecuredUUID;
 import com.czertainly.core.security.authz.SecurityFilter;
-import com.czertainly.core.service.TokenInstanceService;
+import com.czertainly.core.service.TokenInstanceExternalService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -24,10 +24,10 @@ import java.util.List;
 @RestController
 public class TokenInstanceControllerImpl implements TokenInstanceController {
 
-    private TokenInstanceService tokenInstanceService;
+    private TokenInstanceExternalService tokenInstanceService;
 
     @Autowired
-    public void setTokenInstanceService(TokenInstanceService tokenInstanceService) {
+    public void setTokenInstanceService(TokenInstanceExternalService tokenInstanceService) {
         this.tokenInstanceService = tokenInstanceService;
     }
 

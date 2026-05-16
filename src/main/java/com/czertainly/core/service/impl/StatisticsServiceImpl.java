@@ -2,14 +2,14 @@ package com.czertainly.core.service.impl;
 
 import com.czertainly.api.model.client.dashboard.StatisticsDto;
 import com.czertainly.core.security.authz.SecurityFilter;
-import com.czertainly.core.service.CertificateService;
-import com.czertainly.core.service.DiscoveryService;
-import com.czertainly.core.service.GroupService;
-import com.czertainly.core.service.RaProfileService;
-import com.czertainly.core.service.SecretService;
-import com.czertainly.core.service.StatisticsService;
-import com.czertainly.core.service.VaultInstanceService;
-import com.czertainly.core.service.VaultProfileService;
+import com.czertainly.core.service.CertificateExternalService;
+import com.czertainly.core.service.DiscoveryExternalService;
+import com.czertainly.core.service.GroupExternalService;
+import com.czertainly.core.service.RaProfileExternalService;
+import com.czertainly.core.service.SecretExternalService;
+import com.czertainly.core.service.StatisticsExternalService;
+import com.czertainly.core.service.VaultInstanceExternalService;
+import com.czertainly.core.service.VaultProfileExternalService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,17 +20,17 @@ import jakarta.transaction.Transactional;
 
 @Service
 @Transactional
-public class StatisticsServiceImpl implements StatisticsService {
+public class StatisticsServiceImpl implements StatisticsExternalService {
 
     private static final Logger logger = LoggerFactory.getLogger(StatisticsServiceImpl.class);
 
-    private CertificateService certificateService;
-    private DiscoveryService discoveryService;
-    private GroupService groupService;
-    private RaProfileService raProfileService;
-    private SecretService secretService;
-    private VaultInstanceService vaultInstanceService;
-    private VaultProfileService vaultProfileService;
+    private CertificateExternalService certificateService;
+    private DiscoveryExternalService discoveryService;
+    private GroupExternalService groupService;
+    private RaProfileExternalService raProfileService;
+    private SecretExternalService secretService;
+    private VaultInstanceExternalService vaultInstanceService;
+    private VaultProfileExternalService vaultProfileService;
 
 
     @Override
@@ -78,37 +78,37 @@ public class StatisticsServiceImpl implements StatisticsService {
     }
 
     @Autowired
-    public void setCertificateService(CertificateService certificateService) {
+    public void setCertificateService(CertificateExternalService certificateService) {
         this.certificateService = certificateService;
     }
 
     @Autowired
-    public void setDiscoveryService(DiscoveryService discoveryService) {
+    public void setDiscoveryService(DiscoveryExternalService discoveryService) {
         this.discoveryService = discoveryService;
     }
 
     @Autowired
-    public void setGroupService(GroupService groupService) {
+    public void setGroupService(GroupExternalService groupService) {
         this.groupService = groupService;
     }
 
     @Autowired
-    public void setRaProfileService(RaProfileService raProfileService) {
+    public void setRaProfileService(RaProfileExternalService raProfileService) {
         this.raProfileService = raProfileService;
     }
 
     @Autowired
-    public void setSecretService(SecretService secretService) {
+    public void setSecretService(SecretExternalService secretService) {
         this.secretService = secretService;
     }
 
     @Autowired
-    public void setVaultInstanceService(VaultInstanceService vaultInstanceService) {
+    public void setVaultInstanceService(VaultInstanceExternalService vaultInstanceService) {
         this.vaultInstanceService = vaultInstanceService;
     }
 
     @Autowired
-    public void setVaultProfileService(VaultProfileService vaultProfileService) {
+    public void setVaultProfileService(VaultProfileExternalService vaultProfileService) {
         this.vaultProfileService = vaultProfileService;
     }
 }

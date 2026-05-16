@@ -29,7 +29,7 @@ import com.czertainly.core.dao.entity.*;
 import com.czertainly.core.dao.repository.*;
 import com.czertainly.core.enums.FilterField;
 import com.czertainly.core.security.authz.SecurityFilter;
-import com.czertainly.core.service.DiscoveryService;
+import com.czertainly.core.service.DiscoveryExternalService;
 import com.czertainly.core.util.BaseSpringBootTest;
 import com.czertainly.core.util.MetaDefinitions;
 import org.junit.jupiter.api.Assertions;
@@ -55,7 +55,7 @@ class DiscoveryHistorySearchTest extends BaseSpringBootTest {
     @Autowired
     private Connector2FunctionGroupRepository connector2FunctionGroupRepository;
     @Autowired
-    private DiscoveryService discoveryService;
+    private DiscoveryExternalService discoveryService;
     private AttributeEngine attributeEngine;
 
     @Autowired

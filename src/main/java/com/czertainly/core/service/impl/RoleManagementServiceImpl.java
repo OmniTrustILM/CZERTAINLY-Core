@@ -13,7 +13,8 @@ import com.czertainly.core.security.authn.client.RoleManagementApiClient;
 import com.czertainly.core.security.authz.ExternalAuthorization;
 import com.czertainly.core.security.authz.SecuredUUID;
 import com.czertainly.core.security.authz.SecurityFilter;
-import com.czertainly.core.service.RoleManagementService;
+import com.czertainly.core.service.RoleManagementExternalService;
+import com.czertainly.core.service.RoleManagementInternalService;
 import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -23,7 +24,7 @@ import java.util.UUID;
 
 @Service(Resource.Codes.ROLE)
 @Transactional
-public class RoleManagementServiceImpl implements RoleManagementService {
+public class RoleManagementServiceImpl implements RoleManagementExternalService, RoleManagementInternalService {
 
     private RoleManagementApiClient roleManagementApiClient;
     private AttributeEngine attributeEngine;

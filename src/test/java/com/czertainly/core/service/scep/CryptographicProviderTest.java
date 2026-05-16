@@ -13,7 +13,7 @@ import com.czertainly.core.dao.repository.*;
 import com.czertainly.core.provider.CzertainlyCipherService;
 import com.czertainly.core.provider.CzertainlyProvider;
 import com.czertainly.core.provider.key.CzertainlyPrivateKey;
-import com.czertainly.core.service.CryptographicKeyService;
+import com.czertainly.core.service.CryptographicKeyInternalService;
 import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.client.WireMock;
 import org.bouncycastle.asn1.ASN1ObjectIdentifier;
@@ -41,7 +41,7 @@ class CryptographicProviderTest {
     CryptographicOperationsApiClient cryptographicOperationsApiClient;
 
     @Autowired
-    private CryptographicKeyService cryptographicKeyService;
+    private CryptographicKeyInternalService cryptographicKeyService;
     @Autowired
     private CryptographicKeyRepository cryptographicKeyRepository;
     @Autowired

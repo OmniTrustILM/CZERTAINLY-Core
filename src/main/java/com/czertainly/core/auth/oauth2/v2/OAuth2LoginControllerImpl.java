@@ -7,8 +7,8 @@ import com.czertainly.api.model.core.logging.enums.OperationResult;
 import com.czertainly.api.model.core.settings.authentication.OAuth2ProviderSettingsDto;
 import com.czertainly.core.util.OAuth2LoginFlowHelper;
 import com.czertainly.core.security.authn.CzertainlyAuthenticationException;
-import com.czertainly.core.service.AuditLogService;
-import com.czertainly.core.service.v2.OAuth2LoginService;
+import com.czertainly.core.service.AuditLogInternalService;
+import com.czertainly.core.service.v2.OAuth2LoginExternalService;
 import com.czertainly.core.util.OAuth2Constants;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
@@ -26,16 +26,16 @@ import java.util.List;
 @Slf4j
 public class OAuth2LoginControllerImpl implements OAuth2LoginController {
 
-    private AuditLogService auditLogService;
-    private OAuth2LoginService oauth2LoginService;
+    private AuditLogInternalService auditLogService;
+    private OAuth2LoginExternalService oauth2LoginService;
 
     @Autowired
-    public void setAuditLogService(AuditLogService auditLogService) {
+    public void setAuditLogInternalService(AuditLogInternalService auditLogService) {
         this.auditLogService = auditLogService;
     }
 
     @Autowired
-    public void setOauth2LoginService(OAuth2LoginService oauth2LoginService) {
+    public void setOauth2LoginService(OAuth2LoginExternalService oauth2LoginService) {
         this.oauth2LoginService = oauth2LoginService;
     }
 

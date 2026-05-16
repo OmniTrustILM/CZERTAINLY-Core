@@ -12,7 +12,7 @@ import com.czertainly.core.aop.AuditLogged;
 import com.czertainly.core.logging.LogResource;
 import com.czertainly.core.security.authz.SecuredParentUUID;
 import com.czertainly.core.security.authz.SecuredUUID;
-import com.czertainly.core.service.v2.ClientOperationService;
+import com.czertainly.core.service.v2.ClientOperationExternalService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -25,10 +25,10 @@ import java.util.List;
 @RestController("clientOperationControllerV2")
 public class ClientOperationControllerImpl implements ClientOperationController {
 
-    private ClientOperationService clientOperationService;
+    private ClientOperationExternalService clientOperationService;
 
     @Autowired
-    public void setClientOperationService(ClientOperationService clientOperationService) {
+    public void setClientOperationService(ClientOperationExternalService clientOperationService) {
         this.clientOperationService = clientOperationService;
     }
 

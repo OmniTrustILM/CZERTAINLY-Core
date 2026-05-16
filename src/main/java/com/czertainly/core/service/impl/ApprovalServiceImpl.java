@@ -21,7 +21,8 @@ import com.czertainly.core.model.auth.ResourceAction;
 import com.czertainly.core.security.authz.ExternalAuthorization;
 import com.czertainly.core.security.authz.SecuredUUID;
 import com.czertainly.core.security.authz.SecurityFilter;
-import com.czertainly.core.service.ApprovalService;
+import com.czertainly.core.service.ApprovalExternalService;
+import com.czertainly.core.service.ApprovalInternalService;
 import com.czertainly.core.util.ApprovalRecipientHelper;
 import com.czertainly.core.util.AuthHelper;
 import com.czertainly.core.util.RequestValidatorHelper;
@@ -42,7 +43,7 @@ import java.util.*;
 
 @Service
 @Transactional
-public class ApprovalServiceImpl implements ApprovalService {
+public class ApprovalServiceImpl implements ApprovalExternalService, ApprovalInternalService {
 
     private static final Logger logger = LoggerFactory.getLogger(ApprovalServiceImpl.class);
 

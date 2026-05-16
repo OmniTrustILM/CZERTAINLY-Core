@@ -32,8 +32,9 @@ import com.czertainly.core.model.auth.ResourceAction;
 import com.czertainly.core.security.authz.ExternalAuthorization;
 import com.czertainly.core.security.authz.SecuredParentUUID;
 import com.czertainly.core.security.authz.SecuredUUID;
-import com.czertainly.core.service.CertificateService;
-import com.czertainly.core.service.ClientOperationService;
+import com.czertainly.core.service.CertificateExternalService;
+import com.czertainly.core.service.CertificateInternalService;
+import com.czertainly.core.service.ClientOperationExternalService;
 import com.czertainly.core.util.AttributeDefinitionUtils;
 import jakarta.transaction.Transactional;
 import org.slf4j.Logger;
@@ -48,13 +49,14 @@ import java.util.List;
 
 @Service
 @Transactional
-public class ClientOperationServiceImpl implements ClientOperationService {
+public class ClientOperationServiceImpl implements ClientOperationExternalService {
 
     private static final Logger logger = LoggerFactory.getLogger(ClientOperationServiceImpl.class);
 
     private RaProfileRepository raProfileRepository;
     private ConnectorApiFactory connectorApiFactory;
-    private CertificateService certificateService;
+    private CertificateExternalService certificateExternalService;
+    private CertificateInternalService certificateInternalService;
     private AttributeEngine attributeEngine;
 
     @Autowired
@@ -68,8 +70,13 @@ public class ClientOperationServiceImpl implements ClientOperationService {
     }
 
     @Autowired
-    public void setCertificateService(CertificateService certificateService) {
-        this.certificateService = certificateService;
+    public void setCertificateExternalService(CertificateExternalService certificateExternalService) {
+        this.certificateExternalService = certificateExternalService;
+    }
+
+    @Autowired
+    public void setCertificateInternalService(CertificateInternalService certificateInternalService) {
+        this.certificateInternalService = certificateInternalService;
     }
 
     @Autowired
@@ -94,13 +101,13 @@ public class ClientOperationServiceImpl implements ClientOperationService {
                 getEndEntityProfileName(raProfile),
                 caRequest);
 
-        Certificate certificate = certificateService.checkCreateCertificate(caResponse.getCertificateData());
+        Certificate certificate = certificateInternalService.checkCreateCertificate(caResponse.getCertificateData());
         logger.info("Certificate Created. Adding the certificate to Inventory");
         logger.debug("UUID of the certificate is {}", certificate.getUuid());
         logger.debug("UUID of the RA Profile is {}", raProfile.getUuid());
 
         certificate.setRaProfile(raProfile);
-        certificateService.validate(certificate);
+        certificateInternalService.validate(certificate);
 
         ClientCertificateSignResponseDto response = new ClientCertificateSignResponseDto();
         response.setCertificateData(caResponse.getCertificateData());
@@ -124,7 +131,7 @@ public class ClientOperationServiceImpl implements ClientOperationService {
                 getEndEntityProfileName(raProfile),
                 caRequest);
 
-        certificateService.revokeCertificate(request.getCertificateSN());
+        certificateExternalService.revokeCertificate(request.getCertificateSN());
     }
 
     @Override
@@ -265,7 +272,7 @@ public class ClientOperationServiceImpl implements ClientOperationService {
         RaProfile raProfile = raProfileRepository.findByNameAndEnabledIsTrue(raProfileName)
                 .orElseThrow(() -> new NotFoundException(RaProfile.class, raProfileName));
 
-        ((ClientOperationService) AopContext.currentProxy()).checkAccessPermissions(raProfile.getSecuredUuid(), SecuredParentUUID.fromString(raProfile.getAuthorityInstanceReferenceUuid().toString()));
+        ((ClientOperationExternalService) AopContext.currentProxy()).checkAccessPermissions(raProfile.getSecuredUuid(), SecuredParentUUID.fromString(raProfile.getAuthorityInstanceReferenceUuid().toString()));
 
         return raProfile;
     }

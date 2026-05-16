@@ -3,7 +3,7 @@ package com.czertainly.core.service.impl;
 import com.czertainly.api.model.core.settings.authentication.AuthenticationSettingsDto;
 import com.czertainly.api.model.core.settings.authentication.OAuth2ProviderSettingsDto;
 import com.czertainly.api.model.core.settings.SettingsSection;
-import com.czertainly.core.service.v2.OAuth2LoginService;
+import com.czertainly.core.service.v2.OAuth2LoginExternalService;
 import com.czertainly.core.settings.SettingsCache;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -13,7 +13,7 @@ import java.util.List;
 
 @Service
 @Transactional
-public class OAuth2LoginServiceImpl implements OAuth2LoginService {
+public class OAuth2LoginServiceImpl implements OAuth2LoginExternalService {
 
     @Override
     public boolean isOAuth2ProviderValid(OAuth2ProviderSettingsDto settingsDto) {

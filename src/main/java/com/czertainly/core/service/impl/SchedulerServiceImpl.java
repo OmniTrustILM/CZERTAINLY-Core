@@ -22,9 +22,11 @@ import com.czertainly.core.messaging.jms.producers.EventProducer;
 import com.czertainly.core.model.ScheduledTaskResult;
 import com.czertainly.core.model.auth.ResourceAction;
 import com.czertainly.core.security.authz.ExternalAuthorization;
+import com.czertainly.core.security.authz.ExternalAuthorizationMissing;
 import com.czertainly.core.security.authz.SecuredUUID;
 import com.czertainly.core.security.authz.SecurityFilter;
-import com.czertainly.core.service.SchedulerService;
+import com.czertainly.core.service.SchedulerExternalService;
+import com.czertainly.core.service.SchedulerInternalService;
 import com.czertainly.core.tasks.ScheduledJobInfo;
 import com.czertainly.core.tasks.ScheduledJobTask;
 import com.czertainly.core.util.AuthHelper;
@@ -54,7 +56,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 @Service
-public class SchedulerServiceImpl implements SchedulerService {
+public class SchedulerServiceImpl implements SchedulerExternalService, SchedulerInternalService {
 
     private static final Logger logger = LoggerFactory.getLogger(SchedulerServiceImpl.class);
 

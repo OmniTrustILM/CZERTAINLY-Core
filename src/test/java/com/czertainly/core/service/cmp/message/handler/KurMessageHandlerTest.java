@@ -17,7 +17,7 @@ import com.czertainly.core.service.cmp.CmpTestUtil;
 import com.czertainly.core.service.cmp.configurations.ConfigurationContext;
 import com.czertainly.core.service.cmp.configurations.variants.Mobile3gppProfileContext;
 import com.czertainly.core.service.cmp.message.CertificateKeyService;
-import com.czertainly.core.service.v2.ClientOperationService;
+import com.czertainly.core.service.v2.ClientOperationExternalService;
 import com.czertainly.core.util.CertificateUtil;
 import org.bouncycastle.asn1.DEROctetString;
 import org.bouncycastle.asn1.cmp.PKIFailureInfo;
@@ -48,7 +48,7 @@ public class KurMessageHandlerTest {
     private CrmfKurMessageHandler tested;
 
     @Mock private CertificateRepository certificateRepository;
-    @Mock private ClientOperationService clientOperationService;
+    @Mock private ClientOperationExternalService clientOperationService;
     @Mock private CertificateKeyService certificateKeyService;
     @Mock private RaProfileRepository raProfileRepository;
 

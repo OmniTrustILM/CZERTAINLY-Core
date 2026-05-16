@@ -30,7 +30,7 @@ import com.czertainly.core.dao.repository.EntityInstanceReferenceRepository;
 import com.czertainly.core.dao.repository.LocationRepository;
 import com.czertainly.core.enums.FilterField;
 import com.czertainly.core.security.authz.SecurityFilter;
-import com.czertainly.core.service.EntityInstanceService;
+import com.czertainly.core.service.EntityInstanceExternalService;
 import com.czertainly.core.util.BaseSpringBootTest;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -51,7 +51,7 @@ class EntityInstanceSearchTest extends BaseSpringBootTest {
     @Autowired
     private LocationRepository locationRepository;
     @Autowired
-    private EntityInstanceService entityInstanceService;
+    private EntityInstanceExternalService entityInstanceService;
     private AttributeEngine attributeEngine;
 
     @Autowired

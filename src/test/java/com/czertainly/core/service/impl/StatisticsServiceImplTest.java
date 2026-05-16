@@ -18,13 +18,13 @@ class StatisticsServiceImplTest {
 
     private StatisticsServiceImpl statisticsService;
 
-    @Mock private CertificateService certificateService;
-    @Mock private DiscoveryService discoveryService;
-    @Mock private GroupService groupService;
-    @Mock private RaProfileService raProfileService;
-    @Mock private SecretService secretService;
-    @Mock private VaultInstanceService vaultInstanceService;
-    @Mock private VaultProfileService vaultProfileService;
+    @Mock private CertificateExternalService certificateService;
+    @Mock private DiscoveryExternalService discoveryService;
+    @Mock private GroupExternalService groupService;
+    @Mock private RaProfileExternalService raProfileService;
+    @Mock private SecretExternalService secretService;
+    @Mock private VaultInstanceExternalService vaultInstanceService;
+    @Mock private VaultProfileExternalService vaultProfileService;
 
     @BeforeEach
     void setUp() {

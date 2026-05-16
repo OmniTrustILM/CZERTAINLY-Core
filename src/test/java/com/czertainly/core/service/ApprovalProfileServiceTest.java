@@ -25,10 +25,10 @@ import java.util.UUID;
 class ApprovalProfileServiceTest extends ApprovalProfileData {
 
     @Autowired
-    private ApprovalService approvalService;
+    private ApprovalInternalService approvalService;
 
     @Autowired
-    private ApprovalProfileService approvalProfileService;
+    private ApprovalProfileExternalService approvalProfileService;
 
     @Autowired
     private ApprovalProfileRepository approvalProfileRepository;

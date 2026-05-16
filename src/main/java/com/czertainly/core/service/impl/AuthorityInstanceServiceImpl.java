@@ -31,6 +31,7 @@ import com.czertainly.core.security.authz.ExternalAuthorization;
 import com.czertainly.core.security.authz.SecuredUUID;
 import com.czertainly.core.security.authz.SecurityFilter;
 import com.czertainly.core.service.*;
+import com.czertainly.core.service.ConnectorExternalService;
 import com.czertainly.core.util.AttributeDefinitionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -45,19 +46,19 @@ import java.util.stream.Collectors;
 
 @Service(Resource.Codes.AUTHORITY)
 @Transactional
-public class AuthorityInstanceServiceImpl implements AuthorityInstanceService, AttributeResourceService {
+public class AuthorityInstanceServiceImpl implements AuthorityInstanceExternalService, AuthorityInstanceInternalService, AttributeResourceService {
     private static final Logger logger = LoggerFactory.getLogger(AuthorityInstanceServiceImpl.class);
 
     private AuthorityInstanceReferenceRepository authorityInstanceReferenceRepository;
-    private ConnectorService connectorService;
-    private CredentialService credentialService;
+    private ConnectorExternalService connectorService;
+    private CredentialExternalService credentialService;
     private ConnectorApiFactory connectorApiFactory;
-    private RaProfileService raProfileService;
+    private RaProfileInternalService raProfileService;
     private AttributeEngine attributeEngine;
-    private ResourceService resourceService;
+    private ResourceInternalService resourceService;
 
     @Autowired
-    public void setResourceService(ResourceService resourceService) {
+    public void setResourceService(ResourceInternalService resourceService) {
         this.resourceService = resourceService;
     }
 
@@ -67,12 +68,12 @@ public class AuthorityInstanceServiceImpl implements AuthorityInstanceService, A
     }
 
     @Autowired
-    public void setConnectorService(ConnectorService connectorService) {
+    public void setConnectorService(ConnectorExternalService connectorService) {
         this.connectorService = connectorService;
     }
 
     @Autowired
-    public void setCredentialService(CredentialService credentialService) {
+    public void setCredentialService(CredentialExternalService credentialService) {
         this.credentialService = credentialService;
     }
 
@@ -82,7 +83,7 @@ public class AuthorityInstanceServiceImpl implements AuthorityInstanceService, A
     }
 
     @Autowired
-    public void setRaProfileService(RaProfileService raProfileService) {
+    public void setRaProfileService(RaProfileInternalService raProfileService) {
         this.raProfileService = raProfileService;
     }
 

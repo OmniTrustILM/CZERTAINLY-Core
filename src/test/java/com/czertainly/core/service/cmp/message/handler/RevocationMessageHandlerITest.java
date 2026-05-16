@@ -18,7 +18,8 @@ import com.czertainly.core.service.cmp.CmpTestUtil;
 import com.czertainly.core.service.cmp.configurations.variants.Mobile3gppProfileContext;
 import com.czertainly.core.service.cmp.message.CertificateKeyServiceImpl;
 import com.czertainly.core.service.cmp.message.CmpTransactionService;
-import com.czertainly.core.service.v2.ClientOperationService;
+import com.czertainly.core.service.v2.ClientOperationExternalService;
+import com.czertainly.core.service.v2.ClientOperationInternalService;
 import com.czertainly.core.util.BaseSpringBootTest;
 import com.czertainly.core.util.CertificateUtil;
 import com.czertainly.core.util.MetaDefinitions;
@@ -67,7 +68,9 @@ class RevocationMessageHandlerITest extends BaseSpringBootTest {
     // that the revoke call completes successfully so execution reaches the PollFeature
     // gate — short-circuit with a no-op mock.
     @MockitoBean
-    private ClientOperationService clientOperationService;
+    private ClientOperationExternalService clientOperationService;
+    @MockitoBean
+    private ClientOperationInternalService clientOperationInternalService;
 
     private RevocationMessageHandler testedHandler;
     private CmpProfile cmpProfileSigPrt;

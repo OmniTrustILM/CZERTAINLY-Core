@@ -9,7 +9,8 @@ import com.czertainly.api.model.core.search.FilterFieldSource;
 import com.czertainly.core.dao.entity.Certificate;
 import com.czertainly.core.enums.FilterField;
 import com.czertainly.core.security.authz.SecuredUUID;
-import com.czertainly.core.service.CertificateService;
+import com.czertainly.core.service.CertificateExternalService;
+import com.czertainly.core.service.CertificateInternalService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,11 +21,17 @@ import java.util.*;
 @Transactional
 public class CertificateTriggerEvaluator extends TriggerEvaluator<Certificate> {
 
-    private CertificateService certificateService;
+    private CertificateExternalService certificateExternalService;
+    private CertificateInternalService certificateInternalService;
 
     @Autowired
-    public void setCertificateService(CertificateService certificateService) {
-        this.certificateService = certificateService;
+    public void setCertificateExternalService(CertificateExternalService certificateExternalService) {
+        this.certificateExternalService = certificateExternalService;
+    }
+
+    @Autowired
+    public void setCertificateInternalService(CertificateInternalService certificateInternalService) {
+        this.certificateInternalService = certificateInternalService;
     }
 
     @Override
@@ -68,11 +75,11 @@ public class CertificateTriggerEvaluator extends TriggerEvaluator<Certificate> {
 
         SecuredUUID newPropertyUuid = removeValue ? null : SecuredUUID.fromUUID(propertyUuid != null ? propertyUuid : propertyUuids.getFirst());
         switch (searchableField) {
-            case RA_PROFILE_NAME -> certificateService.switchRaProfile(certificateUuid, newPropertyUuid);
+            case RA_PROFILE_NAME -> certificateInternalService.switchRaProfile(certificateUuid, newPropertyUuid);
             case GROUP_NAME ->
-                    certificateService.updateCertificateGroups(object.getSecuredUuid(), removeValue ? Set.of() : (propertyUuids == null ? Set.of(newPropertyUuid.getValue()) : new HashSet<>(propertyUuids)));
+                    certificateExternalService.updateCertificateGroups(object.getSecuredUuid(), removeValue ? Set.of() : (propertyUuids == null ? Set.of(newPropertyUuid.getValue()) : new HashSet<>(propertyUuids)));
             case OWNER ->
-                    certificateService.updateOwner(certificateUuid, newPropertyUuid == null ? null : newPropertyUuid.toString());
+                    certificateExternalService.updateOwner(certificateUuid, newPropertyUuid == null ? null : newPropertyUuid.toString());
             default -> throw new RuleException("Field identifier '%s' is not supported field to set for certificate.".formatted(fieldIdentifier));
         }
     }

@@ -50,7 +50,9 @@ class CredentialServiceTest extends BaseSpringBootTest {
     private static final String CREDENTIAL_NAME = "testCredential1";
 
     @Autowired
-    private CredentialService credentialService;
+    private CredentialExternalService credentialService;
+    @Autowired
+    private CredentialInternalService credentialInternalService;
 
     @Autowired
     private CredentialRepository credentialRepository;
@@ -312,7 +314,7 @@ class CredentialServiceTest extends BaseSpringBootTest {
         RequestAttributeCallback requestAttributeCallback = new RequestAttributeCallback();
         requestAttributeCallback.setBody(requestBodyMap);
 
-        credentialService.loadFullCredentialData(callback, requestAttributeCallback);
+        credentialInternalService.loadFullCredentialData(callback, requestAttributeCallback);
 
         Assertions.assertTrue(requestAttributeCallback.getBody().get(credentialBodyKey) instanceof CredentialAttributeContentData);
 
@@ -347,7 +349,7 @@ class CredentialServiceTest extends BaseSpringBootTest {
         RequestAttributeCallback requestAttributeCallback = new RequestAttributeCallback();
         requestAttributeCallback.setBody(requestBodyMap);
 
-        Assertions.assertThrows(ValidationException.class, () -> credentialService.loadFullCredentialData(callback, requestAttributeCallback));
+        Assertions.assertThrows(ValidationException.class, () -> credentialInternalService.loadFullCredentialData(callback, requestAttributeCallback));
     }
 
     @Test
@@ -370,7 +372,7 @@ class CredentialServiceTest extends BaseSpringBootTest {
         RequestAttributeCallback requestAttributeCallback = new RequestAttributeCallback();
         requestAttributeCallback.setBody(requestBodyMap);
 
-        Assertions.assertThrows(ValidationException.class, () -> credentialService.loadFullCredentialData(callback, requestAttributeCallback));
+        Assertions.assertThrows(ValidationException.class, () -> credentialInternalService.loadFullCredentialData(callback, requestAttributeCallback));
     }
 
     @Test
@@ -381,7 +383,7 @@ class CredentialServiceTest extends BaseSpringBootTest {
 
     @Test
     void testGetResourceObject() throws NotFoundException {
-        NameAndUuidDto nameAndUuidDto = credentialService.getResourceObjectInternal(credential.getUuid());
+        NameAndUuidDto nameAndUuidDto = credentialInternalService.getResourceObjectInternal(credential.getUuid());
         Assertions.assertEquals(credential.getUuid().toString(), nameAndUuidDto.getUuid());
         Assertions.assertEquals(credential.getName(), nameAndUuidDto.getName());
 

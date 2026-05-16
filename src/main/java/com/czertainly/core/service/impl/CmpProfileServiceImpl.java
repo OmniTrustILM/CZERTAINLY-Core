@@ -27,9 +27,11 @@ import com.czertainly.core.model.auth.ResourceAction;
 import com.czertainly.core.security.authz.ExternalAuthorization;
 import com.czertainly.core.security.authz.SecuredUUID;
 import com.czertainly.core.security.authz.SecurityFilter;
-import com.czertainly.core.service.CertificateService;
-import com.czertainly.core.service.CmpProfileService;
-import com.czertainly.core.service.RaProfileService;
+import com.czertainly.core.service.CertificateExternalService;
+import com.czertainly.core.service.CmpProfileExternalService;
+import com.czertainly.core.service.CmpProfileInternalService;
+import com.czertainly.core.service.RaProfileExternalService;
+import com.czertainly.core.service.RaProfileInternalService;
 import com.czertainly.core.service.model.SecuredList;
 import com.czertainly.core.service.v2.ExtendedAttributeService;
 import com.czertainly.core.util.CertificateUtil;
@@ -46,7 +48,7 @@ import java.util.stream.Collectors;
 
 @Service(Resource.Codes.CMP_PROFILE)
 @Transactional
-public class CmpProfileServiceImpl implements CmpProfileService {
+public class CmpProfileServiceImpl implements CmpProfileExternalService, CmpProfileInternalService {
 
     private static final Logger logger = LoggerFactory.getLogger(CmpProfileServiceImpl.class);
 
@@ -57,9 +59,10 @@ public class CmpProfileServiceImpl implements CmpProfileService {
     // -----------------------------------------------------------------------------------------------------------------
 
     private CmpProfileRepository cmpProfileRepository;
-    private RaProfileService raProfileService;
+    private RaProfileExternalService raProfileService;
+    private RaProfileInternalService raProfileInternalService;
     private ExtendedAttributeService extendedAttributeService;
-    private CertificateService certificateService;
+    private CertificateExternalService certificateService;
     private AttributeEngine attributeEngine;
     private ProtocolCertificateAssociationsRepository certificateAssociationRepository;
 
@@ -79,8 +82,13 @@ public class CmpProfileServiceImpl implements CmpProfileService {
     }
 
     @Autowired
-    public void setRaProfileService(RaProfileService raProfileRepository) {
+    public void setRaProfileService(RaProfileExternalService raProfileRepository) {
         this.raProfileService = raProfileRepository;
+    }
+
+    @Autowired
+    public void setRaProfileInternalService(RaProfileInternalService raProfileInternalService) {
+        this.raProfileInternalService = raProfileInternalService;
     }
 
     @Autowired
@@ -89,7 +97,7 @@ public class CmpProfileServiceImpl implements CmpProfileService {
     }
 
     @Autowired
-    public void setCertificateService(CertificateService certificateService) {
+    public void setCertificateService(CertificateExternalService certificateService) {
         this.certificateService = certificateService;
     }
 
@@ -270,7 +278,7 @@ public class CmpProfileServiceImpl implements CmpProfileService {
                 SecuredList<RaProfile> raProfiles = raProfileService.listRaProfilesAssociatedWithCmpProfile(
                         cmpProfile.getUuid().toString(), SecurityFilter.create());
                 // CMP Profile only from allowed ones, but that would make the forbidden RA Profiles point to non-existing CMP Profile.
-                raProfileService.bulkRemoveAssociatedCmpProfile(
+                raProfileInternalService.bulkRemoveAssociatedCmpProfile(
                         raProfiles.getAll().stream().map(UniquelyIdentifiedAndAudited::getSecuredParentUuid).collect(Collectors.toList()));
                 deleteCmpProfile(cmpProfile);
             } catch (Exception e) {

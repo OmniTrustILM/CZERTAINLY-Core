@@ -14,7 +14,7 @@ import com.czertainly.core.dao.entity.Certificate;
 import com.czertainly.core.dao.entity.cmp.CmpProfile;
 import com.czertainly.core.dao.repository.*;
 import com.czertainly.core.dao.repository.cmp.CmpProfileRepository;
-import com.czertainly.core.service.CertificateService;
+import com.czertainly.core.service.CertificateExternalService;
 import com.czertainly.core.service.cmp.CmpEntityUtil;
 import com.czertainly.core.service.cmp.CmpTestUtil;
 import com.czertainly.core.service.cmp.configurations.variants.Mobile3gppProfileContext;
@@ -52,7 +52,7 @@ public class CrmfMessageHandlerITest extends BaseSpringBootTest {
     @Autowired private CmpProfileRepository cmpProfileRepository;
     @Autowired private RaProfileRepository raProfileRepository;
     @Autowired private CertificateKeyServiceImpl certificateKeyService;
-    @Autowired private CertificateService certificateService;
+    @Autowired private CertificateExternalService certificateService;
     @Autowired private CryptographicKeyRepository cryptographicKeyRepository;
     @Autowired private CryptographicKeyItemRepository cryptographicKeyItemRepository;
     @Autowired private TokenInstanceReferenceRepository tokenInstanceReferenceRepository;

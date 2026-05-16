@@ -15,7 +15,7 @@ import com.czertainly.api.model.core.logging.enums.Module;
 import com.czertainly.api.model.core.logging.enums.Operation;
 import com.czertainly.core.aop.AuditLogged;
 import com.czertainly.core.logging.LogResource;
-import com.czertainly.core.service.ClientOperationService;
+import com.czertainly.core.service.ClientOperationExternalService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -28,10 +28,10 @@ import java.util.List;
 @RestController
 public class ClientOperationControllerImpl implements ClientOperationController {
 
-    private ClientOperationService clientOperationService;
+    private ClientOperationExternalService clientOperationService;
 
     @Autowired
-    public void setClientOperationService(ClientOperationService clientOperationService) {
+    public void setClientOperationService(ClientOperationExternalService clientOperationService) {
         this.clientOperationService = clientOperationService;
     }
 

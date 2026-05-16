@@ -11,7 +11,7 @@ import com.czertainly.api.model.core.logging.enums.Module;
 import com.czertainly.api.model.core.logging.enums.Operation;
 import com.czertainly.core.aop.AuditLogged;
 import com.czertainly.core.logging.LogResource;
-import com.czertainly.core.service.UserManagementService;
+import com.czertainly.core.service.UserManagementExternalService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
@@ -24,10 +24,10 @@ import java.util.List;
 @RestController
 public class UserManagementControllerImpl implements UserManagementController {
 
-    private UserManagementService userManagementService;
+    private UserManagementExternalService userManagementService;
 
     @Autowired
-    public void setUserManagementService(UserManagementService userManagementService) {
+    public void setUserManagementService(UserManagementExternalService userManagementService) {
         this.userManagementService = userManagementService;
     }
 

@@ -17,7 +17,7 @@ import com.czertainly.core.logging.LogResource;
 import com.czertainly.core.security.authz.SecuredParentUUID;
 import com.czertainly.core.security.authz.SecuredUUID;
 import com.czertainly.core.security.authz.SecurityFilter;
-import com.czertainly.core.service.TokenProfileService;
+import com.czertainly.core.service.TokenProfileExternalService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
@@ -30,10 +30,10 @@ import java.util.Optional;
 @RestController
 public class TokenProfileControllerImpl implements TokenProfileController {
 
-    private TokenProfileService tokenProfileService;
+    private TokenProfileExternalService tokenProfileService;
 
     @Autowired
-    public void setTokenProfileService(TokenProfileService tokenProfileService) {
+    public void setTokenProfileService(TokenProfileExternalService tokenProfileService) {
         this.tokenProfileService = tokenProfileService;
     }
 

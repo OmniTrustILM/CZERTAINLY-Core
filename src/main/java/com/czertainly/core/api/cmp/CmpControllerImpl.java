@@ -9,7 +9,7 @@ import com.czertainly.api.model.core.logging.enums.Module;
 import com.czertainly.api.model.core.logging.enums.Operation;
 import com.czertainly.core.aop.AuditLogged;
 import com.czertainly.core.logging.LogResource;
-import com.czertainly.core.service.cmp.CmpService;
+import com.czertainly.core.service.cmp.CmpExternalService;
 import org.bouncycastle.asn1.cmp.PKIFailureInfo;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -18,10 +18,10 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 public class CmpControllerImpl implements CmpController {
 
-    private CmpService cmpService;
+    private CmpExternalService cmpService;
 
     @Autowired
-    public void setCmpService(CmpService cmpService) {
+    public void setCmpService(CmpExternalService cmpService) {
         this.cmpService = cmpService;
     }
 

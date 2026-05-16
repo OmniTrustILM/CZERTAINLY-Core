@@ -30,6 +30,7 @@ import com.czertainly.core.dao.repository.*;
 import com.czertainly.core.enums.FilterField;
 import com.czertainly.core.security.authz.SecuredUUID;
 import com.czertainly.core.security.authz.SecurityFilter;
+import com.czertainly.core.service.AttributeExternalService;
 import com.czertainly.core.util.BaseSpringBootTest;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -51,7 +52,7 @@ class VaultInstanceServiceTest extends BaseSpringBootTest {
 
     public static final String TEST_CUSTOM_ATTRIBUTE = "testCustomAttribute";
     @Autowired
-    private VaultInstanceService vaultInstanceService;
+    private VaultInstanceExternalService vaultInstanceService;
     @Autowired
     private VaultInstanceRepository vaultInstanceRepository;
     @Autowired
@@ -61,7 +62,7 @@ class VaultInstanceServiceTest extends BaseSpringBootTest {
     @Autowired
     private ConnectorInterfaceRepository connectorInterfaceRepository;
     @Autowired
-    private AttributeService attributeService;
+    private AttributeExternalService attributeService;
     @Autowired
     private AttributeDefinitionRepository attributeDefinitionRepository;
 

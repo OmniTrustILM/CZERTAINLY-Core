@@ -40,6 +40,7 @@ import com.czertainly.core.dao.repository.workflows.ExecutionRepository;
 import com.czertainly.core.dao.repository.workflows.TriggerRepository;
 import com.czertainly.core.enums.FilterField;
 import com.czertainly.core.service.*;
+import com.czertainly.core.service.AttributeExternalService;
 import com.czertainly.core.util.BaseSpringBootTest;
 import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.client.WireMock;
@@ -78,13 +79,13 @@ class TriggerEvaluatorTest extends BaseSpringBootTest {
     private CertificateRepository certificateRepository;
 
     @Autowired
-    private CertificateService certificateService;
+    private CertificateExternalService certificateService;
 
     @Autowired
-    private AttributeService attributeService;
+    private AttributeExternalService attributeService;
 
     @Autowired
-    private TriggerService triggerService;
+    private TriggerInternalService triggerService;
 
     @Autowired
     private TriggerRepository triggerRepository;
@@ -116,7 +117,7 @@ class TriggerEvaluatorTest extends BaseSpringBootTest {
     private CertificateTriggerEvaluator certificateTriggerEvaluator;
 
     @Autowired
-    private NotificationProfileService notificationProfileService;
+    private NotificationProfileExternalService notificationProfileService;
 
     @Autowired
     private ResourceObjectAssociationService associationService;

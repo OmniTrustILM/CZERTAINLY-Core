@@ -37,6 +37,7 @@ import com.czertainly.core.security.authz.SecurityFilter;
 import com.czertainly.core.tasks.CbomSyncTask;
 import com.czertainly.core.tasks.DiscoveryCertificateTask;
 import com.czertainly.core.tasks.ScheduledJobInfo;
+import com.czertainly.core.service.impl.SchedulerServiceImpl;
 import com.czertainly.core.tasks.SystemScheduledJobs;
 import com.czertainly.core.util.BaseSpringBootTest;
 import com.czertainly.core.util.MetaDefinitions;
@@ -56,7 +57,7 @@ class SchedulerServiceTest extends BaseSpringBootTest {
     private static final int SCHEDULER_PORT = 8080;
 
     @Autowired
-    private SchedulerService schedulerService;
+    private SchedulerServiceImpl schedulerService;
     @Autowired
     private ScheduledJobsRepository scheduledJobsRepository;
     @Autowired
@@ -68,23 +69,23 @@ class SchedulerServiceTest extends BaseSpringBootTest {
     private AttributeEngine attributeEngine;
 
     @Autowired
-    private RuleService ruleService;
+    private RuleExternalService ruleService;
     @Autowired
-    private ActionService actionService;
+    private ActionExternalService actionService;
     @Autowired
-    private TriggerService triggerService;
+    private TriggerExternalService triggerService;
     @Autowired
     private TriggerAssociationRepository triggerAssociationRepository;
 
     @Autowired
-    private CertificateService certificateService;
+    private CertificateExternalService certificateService;
     @Autowired
     private CertificateRepository certificateRepository;
     @Autowired
     private CertificateEventHistoryRepository certificateEventHistoryRepository;
 
     @Autowired
-    private DiscoveryService discoveryService;
+    private DiscoveryExternalService discoveryService;
     @Autowired
     private DiscoveryRepository discoveryRepository;
     @Autowired

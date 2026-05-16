@@ -21,7 +21,7 @@ import com.czertainly.core.aop.AuditLogged;
 import com.czertainly.core.logging.LogResource;
 import com.czertainly.core.security.authz.SecuredUUID;
 import com.czertainly.core.security.authz.SecurityFilter;
-import com.czertainly.core.service.ConnectorService;
+import com.czertainly.core.service.ConnectorExternalService;
 import com.czertainly.core.util.converter.ConnectorStatusConverter;
 import com.czertainly.core.util.converter.FunctionGroupCodeConverter;
 import com.czertainly.core.util.converter.OptionalEnumConverter;
@@ -43,10 +43,10 @@ import java.util.Optional;
 @RestController("connectorControllerV1")
 public class ConnectorControllerImpl implements ConnectorController {
 
-    private ConnectorService connectorService;
+    private ConnectorExternalService connectorService;
 
     @Autowired
-    public void setConnectorService(ConnectorService connectorService) {
+    public void setConnectorService(ConnectorExternalService connectorService) {
         this.connectorService = connectorService;
     }
 

@@ -15,9 +15,9 @@ import com.czertainly.core.messaging.jms.producers.NotificationProducer;
 import com.czertainly.core.messaging.model.ActionMessage;
 import com.czertainly.core.messaging.model.NotificationRecipient;
 import com.czertainly.core.model.auth.ResourceAction;
-import com.czertainly.core.service.ApprovalService;
-import com.czertainly.core.service.SecretService;
-import com.czertainly.core.service.v2.ClientOperationService;
+import com.czertainly.core.service.ApprovalInternalService;
+import com.czertainly.core.service.SecretInternalService;
+import com.czertainly.core.service.v2.ClientOperationInternalService;
 import com.czertainly.core.util.AuthHelper;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -39,11 +39,11 @@ public class ActionsListener implements MessageProcessor<ActionMessage> {
 
     private ApprovalProfileRelationRepository approvalProfileRelationRepository;
 
-    private ApprovalService approvalService;
+    private ApprovalInternalService approvalService;
 
-    private ClientOperationService clientOperationService;
+    private ClientOperationInternalService clientOperationService;
 
-    private SecretService secretService;
+    private SecretInternalService secretService;
 
     private final ObjectMapper mapper = new ObjectMapper();
 
@@ -149,12 +149,12 @@ public class ActionsListener implements MessageProcessor<ActionMessage> {
     }
 
     @Autowired
-    public void setApprovalService(ApprovalService approvalService) {
+    public void setApprovalService(ApprovalInternalService approvalService) {
         this.approvalService = approvalService;
     }
 
     @Autowired
-    public void setClientOperationService(ClientOperationService clientOperationService) {
+    public void setClientOperationService(ClientOperationInternalService clientOperationService) {
         this.clientOperationService = clientOperationService;
     }
 
@@ -174,7 +174,7 @@ public class ActionsListener implements MessageProcessor<ActionMessage> {
     }
 
     @Autowired
-    public void setSecretService(SecretService secretService) {
+    public void setSecretService(SecretInternalService secretService) {
         this.secretService = secretService;
     }
 }

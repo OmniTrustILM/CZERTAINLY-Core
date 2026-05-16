@@ -3,8 +3,8 @@ package com.czertainly.core.tasks;
 import com.czertainly.api.model.scheduler.SchedulerJobExecutionStatus;
 import com.czertainly.core.dao.repository.acme.AcmeNonceRepository;
 import com.czertainly.core.model.ScheduledTaskResult;
-import com.czertainly.core.service.ApprovalService;
-import com.czertainly.core.service.CertificateService;
+import com.czertainly.core.service.ApprovalInternalService;
+import com.czertainly.core.service.CertificateInternalService;
 import jakarta.transaction.Transactional;
 import lombok.NoArgsConstructor;
 import org.slf4j.Logger;
@@ -23,8 +23,8 @@ public class UpdateCertificateStatusTask implements ScheduledJobTask {
     private static final String CRON_EXPRESSION = "0 0 * ? * *";
     private static final Logger logger = LoggerFactory.getLogger(UpdateCertificateStatusTask.class);
 
-    private ApprovalService approvalService;
-    private CertificateService certificateService;
+    private ApprovalInternalService approvalService;
+    private CertificateInternalService certificateService;
     private AcmeNonceRepository acmeNonceRepository;
 
     public String getDefaultJobName() {
@@ -74,12 +74,12 @@ public class UpdateCertificateStatusTask implements ScheduledJobTask {
     // SETTERs
 
     @Autowired
-    public void setCertificateService(CertificateService certificateService) {
+    public void setCertificateService(CertificateInternalService certificateService) {
         this.certificateService = certificateService;
     }
 
     @Autowired
-    public void setApprovalService(ApprovalService approvalService) {
+    public void setApprovalService(ApprovalInternalService approvalService) {
         this.approvalService = approvalService;
     }
 

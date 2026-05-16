@@ -39,7 +39,9 @@ class TokenProfileServiceTest extends BaseSpringBootTest {
     private static final String TOKEN_PROFILE_NAME = "testTokenProfile1";
 
     @Autowired
-    private TokenProfileService tokenProfileService;
+    private TokenProfileExternalService tokenProfileService;
+    @Autowired
+    private TokenProfileInternalService tokenProfileInternalService;
     @Autowired
     private TokenProfileRepository tokenProfileRepository;
     @Autowired
@@ -299,7 +301,7 @@ class TokenProfileServiceTest extends BaseSpringBootTest {
 
     @Test
     void testGetResourceObject() throws NotFoundException {
-        NameAndUuidDto nameAndUuidDto = tokenProfileService.getResourceObjectInternal(tokenProfile.getUuid());
+        NameAndUuidDto nameAndUuidDto = tokenProfileInternalService.getResourceObjectInternal(tokenProfile.getUuid());
         Assertions.assertEquals(tokenProfile.getUuid().toString(), nameAndUuidDto.getUuid());
         Assertions.assertEquals(tokenProfile.getName(), nameAndUuidDto.getName());
 

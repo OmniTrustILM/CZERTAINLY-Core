@@ -14,7 +14,8 @@ import com.czertainly.api.model.core.workflows.ConditionItemRequestDto;
 import com.czertainly.core.dao.entity.*;
 import com.czertainly.core.dao.repository.*;
 import com.czertainly.core.enums.FilterField;
-import com.czertainly.core.service.v2.ComplianceProfileService;
+import com.czertainly.core.service.v2.ComplianceProfileExternalService;
+import com.czertainly.core.service.v2.ComplianceProfileInternalService;
 import com.czertainly.core.util.BaseSpringBootTest;
 import com.czertainly.core.util.MetaDefinitions;
 import com.github.tomakehurst.wiremock.WireMockServer;
@@ -36,7 +37,10 @@ class BaseComplianceTest extends BaseSpringBootTest {
     protected ComplianceProfileRepository complianceProfileRepository;
 
     @Autowired
-    protected ComplianceProfileService complianceProfileService;
+    protected ComplianceProfileExternalService complianceProfileService;
+
+    @Autowired
+    protected ComplianceProfileInternalService complianceProfileInternalService;
 
     @Autowired
     protected ComplianceProfileRuleRepository complianceProfileRuleRepository;

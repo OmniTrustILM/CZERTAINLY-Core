@@ -20,8 +20,8 @@ import com.czertainly.core.auth.AuthEndpoint;
 import com.czertainly.core.logging.LogResource;
 import com.czertainly.core.security.authz.SecuredUUID;
 import com.czertainly.core.security.authz.SecurityFilter;
-import com.czertainly.core.service.AttributeService;
-import com.czertainly.core.service.ResourceService;
+import com.czertainly.core.service.AttributeExternalService;
+import com.czertainly.core.service.ResourceExternalService;
 import com.czertainly.core.util.converter.AttributeContentTypeConverter;
 import com.czertainly.core.util.converter.ResourceCodeConverter;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -38,16 +38,16 @@ import java.util.UUID;
 @RestController
 public class CustomAttributeControllerImpl implements CustomAttributeController {
 
-    private AttributeService attributeService;
-    private ResourceService resourceService;
+    private AttributeExternalService attributeService;
+    private ResourceExternalService resourceService;
 
     @Autowired
-    public void setAttributeService(AttributeService attributeService) {
+    public void setAttributeService(AttributeExternalService attributeService) {
         this.attributeService = attributeService;
     }
 
     @Autowired
-    public void setResourceService(ResourceService resourceService) {
+    public void setResourceService(ResourceExternalService resourceService) {
         this.resourceService = resourceService;
     }
 

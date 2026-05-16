@@ -18,13 +18,16 @@ import com.czertainly.api.exception.CbomRepositoryException;
 import com.czertainly.api.model.scheduler.SchedulerJobExecutionStatus;
 import com.czertainly.core.api.ScheduledJobSkippedException;
 import com.czertainly.core.model.ScheduledTaskResult;
-import com.czertainly.core.service.CbomService;
+import com.czertainly.core.service.CbomExternalService;
+import com.czertainly.core.service.CbomInternalService;
 import com.czertainly.core.util.BaseSpringBootTest;
 
 class CbomSyncTaskTest extends BaseSpringBootTest {
 
     @MockitoBean
-    private CbomService cbomService;
+    private CbomInternalService cbomService;
+    @MockitoBean
+    private CbomExternalService cbomExternalService;
 
     @Autowired
     private CbomSyncTask cbomSyncTask;

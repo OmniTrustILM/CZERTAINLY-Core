@@ -10,7 +10,7 @@ import com.czertainly.core.dao.repository.SettingRepository;
 import com.czertainly.core.security.authn.CzertainlyAnonymousToken;
 import com.czertainly.core.security.authn.CzertainlyAuthenticationException;
 import com.czertainly.core.security.authn.client.AuthenticationInfo;
-import com.czertainly.core.service.SettingService;
+import com.czertainly.core.service.SettingExternalService;
 import com.czertainly.core.util.BaseSpringBootTest;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -45,7 +45,7 @@ class JwtDecoderTest extends BaseSpringBootTest {
     private JwtDecoder jwtDecoder;
 
     @Autowired
-    private SettingService settingService;
+    private SettingExternalService settingService;
 
     @Autowired
     private SettingRepository settingRepository;

@@ -14,8 +14,9 @@ import com.czertainly.core.dao.entity.Setting;
 import com.czertainly.core.dao.repository.SettingRepository;
 import com.czertainly.core.model.auth.ResourceAction;
 import com.czertainly.core.security.authz.ExternalAuthorization;
-import com.czertainly.core.service.SettingService;
-import com.czertainly.core.service.TriggerService;
+import com.czertainly.core.service.SettingExternalService;
+import com.czertainly.core.service.SettingInternalService;
+import com.czertainly.core.service.TriggerExternalService;
 import com.czertainly.core.util.SecretEncodingVersion;
 import com.czertainly.core.util.SecretsUtil;
 import com.czertainly.core.settings.SettingsCache;
@@ -40,7 +41,7 @@ import java.util.concurrent.TimeUnit;
 
 @Service("settingService")
 @Transactional
-public class SettingServiceImpl implements SettingService {
+public class SettingServiceImpl implements SettingExternalService, SettingInternalService {
     public static final String UTILS_SERVICE_URL_NAME = "utilsServiceUrl";
     public static final String CBOM_REPOSITORY_URL_NAME = "cbomRepositoryUrl";
     public static final String CERTIFICATES_VALIDATION_SETTINGS_NAME = "certificatesValidation";
@@ -58,12 +59,12 @@ public class SettingServiceImpl implements SettingService {
     private final SettingsCache settingsCache;
     private final SettingRepository settingRepository;
 
-    private final TriggerService triggerService;
+    private final TriggerExternalService triggerService;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Autowired
-    public SettingServiceImpl(SettingsCache settingsCache, SettingRepository settingRepository, TriggerService triggerService, ObjectMapper mapper) {
+    public SettingServiceImpl(SettingsCache settingsCache, SettingRepository settingRepository, TriggerExternalService triggerService, ObjectMapper mapper) {
         this.mapper = mapper;
         this.settingsCache = settingsCache;
         this.settingRepository = settingRepository;

@@ -13,7 +13,7 @@ import com.czertainly.api.model.core.cmp.ProtectionMethod;
 import com.czertainly.api.model.core.logging.enums.Operation;
 import com.czertainly.core.dao.entity.cmp.CmpTransaction;
 import com.czertainly.core.logging.LoggingHelper;
-import com.czertainly.core.service.CertificateService;
+import com.czertainly.core.service.CertificateExternalService;
 import com.czertainly.core.service.cmp.message.CertificateKeyServiceImpl;
 import com.czertainly.core.service.cmp.configurations.ConfigurationContext;
 import com.czertainly.core.service.cmp.message.CmpTransactionService;
@@ -33,7 +33,7 @@ import com.czertainly.core.dao.entity.RaProfile;
 import com.czertainly.core.dao.entity.cmp.CmpProfile;
 import com.czertainly.core.dao.repository.RaProfileRepository;
 import com.czertainly.core.dao.repository.cmp.CmpProfileRepository;
-import com.czertainly.core.service.cmp.CmpService;
+import com.czertainly.core.service.cmp.CmpExternalService;
 import com.czertainly.core.util.AttributeDefinitionUtils;
 import com.czertainly.core.util.CertificateUtil;
 import org.bouncycastle.asn1.ASN1OctetString;
@@ -59,7 +59,7 @@ import java.util.List;
 
 @Service
 @Transactional
-public class CmpServiceImpl implements CmpService {
+public class CmpServiceImpl implements CmpExternalService {
 
     private static final Logger LOG = LoggerFactory.getLogger(CmpServiceImpl.class.getName());
 
@@ -157,10 +157,10 @@ public class CmpServiceImpl implements CmpService {
 
     // -- OTHERS
     private AttributeEngine attributeEngine;
-    private CertificateService certificateService;
+    private CertificateExternalService certificateService;
 
     @Autowired
-    private void setCertificateService(CertificateService certificateService) {
+    private void setCertificateService(CertificateExternalService certificateService) {
         this.certificateService = certificateService;
     }
 

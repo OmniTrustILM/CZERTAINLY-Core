@@ -50,10 +50,13 @@ class ConnectorServiceTest extends BaseSpringBootTest {
     private static final String CONNECTOR_NAME = "testConnector1";
 
     @Autowired
-    private ConnectorService connectorService;
+    private ConnectorExternalService connectorService;
 
     @Autowired
-    private com.czertainly.core.service.v2.ConnectorService connectorServiceV2;
+    private ConnectorInternalService connectorServiceInternal;
+
+    @Autowired
+    private com.czertainly.core.service.v2.ConnectorExternalService connectorServiceV2;
 
     @Autowired
     private ConnectorRepository connectorRepository;
@@ -618,7 +621,7 @@ class ConnectorServiceTest extends BaseSpringBootTest {
 
     @Test
     void testGetResourceObject() throws NotFoundException {
-        NameAndUuidDto nameAndUuidDto = connectorService.getResourceObjectInternal(connector.getUuid());
+        NameAndUuidDto nameAndUuidDto = connectorServiceInternal.getResourceObjectInternal(connector.getUuid());
         Assertions.assertEquals(connector.getUuid().toString(), nameAndUuidDto.getUuid());
         Assertions.assertEquals(connector.getName(), nameAndUuidDto.getName());
 

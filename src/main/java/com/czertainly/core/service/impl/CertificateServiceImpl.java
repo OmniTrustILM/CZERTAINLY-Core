@@ -69,6 +69,9 @@ import com.czertainly.core.security.authz.SecuredParentUUID;
 import com.czertainly.core.security.authz.SecuredUUID;
 import com.czertainly.core.security.authz.SecurityFilter;
 import com.czertainly.core.service.*;
+import com.czertainly.core.service.ComplianceExternalService;
+import com.czertainly.core.service.ComplianceInternalService;
+import com.czertainly.core.service.LocationExternalService;
 import com.czertainly.core.service.v2.ExtendedAttributeService;
 import com.czertainly.core.settings.SettingsCache;
 import com.czertainly.core.util.*;
@@ -123,7 +126,7 @@ import java.util.stream.Collectors;
 
 @Service(Resource.Codes.CERTIFICATE)
 @Transactional
-public class CertificateServiceImpl implements CertificateService, AttributeResourceService {
+public class CertificateServiceImpl implements CertificateExternalService, CertificateInternalService, AttributeResourceService {
 
     // batch size will prevent bloating size of enqueued message and better utilize parallel processing
     // NOTE: improve handling of large batches vs many produced messages to queue
@@ -142,16 +145,17 @@ public class CertificateServiceImpl implements CertificateService, AttributeReso
     private CertificateRepository certificateRepository;
     private CertificateRequestRepository certificateRequestRepository;
     private RaProfileRepository raProfileRepository;
-    private RaProfileService raProfileService;
+    private RaProfileExternalService raProfileService;
     private GroupRepository groupRepository;
     private GroupAssociationRepository groupAssociationRepository;
     private LocationRepository locationRepository;
     private CertificateContentRepository certificateContentRepository;
     private DiscoveryCertificateRepository discoveryCertificateRepository;
-    private ComplianceService complianceService;
-    private CertificateEventHistoryService certificateEventHistoryService;
-    private LocationService locationService;
-    private CryptographicKeyService cryptographicKeyService;
+    private ComplianceExternalService complianceExternalService;
+    private ComplianceInternalService complianceInternalService;
+    private CertificateEventHistoryInternalService certificateEventHistoryService;
+    private LocationExternalService locationService;
+    private CryptographicKeyInternalService cryptographicKeyService;
     private PermissionEvaluator permissionEvaluator;
     private EventProducer eventProducer;
     private NotificationProducer notificationProducer;
@@ -220,7 +224,7 @@ public class CertificateServiceImpl implements CertificateService, AttributeReso
 
     @Lazy
     @Autowired
-    public void setLocationService(LocationService locationService) {
+    public void setLocationService(LocationExternalService locationService) {
         this.locationService = locationService;
     }
 
@@ -245,7 +249,7 @@ public class CertificateServiceImpl implements CertificateService, AttributeReso
     }
 
     @Autowired
-    public void setRaProfileService(RaProfileService raProfileService) {
+    public void setRaProfileService(RaProfileExternalService raProfileService) {
         this.raProfileService = raProfileService;
     }
 
@@ -270,18 +274,23 @@ public class CertificateServiceImpl implements CertificateService, AttributeReso
     }
 
     @Autowired
-    public void setComplianceService(ComplianceService complianceService) {
-        this.complianceService = complianceService;
+    public void setComplianceExternalService(ComplianceExternalService complianceExternalService) {
+        this.complianceExternalService = complianceExternalService;
     }
 
     @Autowired
-    public void setCertificateEventHistoryService(CertificateEventHistoryService certificateEventHistoryService) {
+    public void setComplianceInternalService(ComplianceInternalService complianceInternalService) {
+        this.complianceInternalService = complianceInternalService;
+    }
+
+    @Autowired
+    public void setCertificateEventHistoryService(CertificateEventHistoryInternalService certificateEventHistoryService) {
         this.certificateEventHistoryService = certificateEventHistoryService;
     }
 
     @Lazy
     @Autowired
-    public void setCryptographicKeyService(CryptographicKeyService cryptographicKeyService) {
+    public void setCryptographicKeyService(CryptographicKeyInternalService cryptographicKeyService) {
         this.cryptographicKeyService = cryptographicKeyService;
     }
 
@@ -408,7 +417,7 @@ public class CertificateServiceImpl implements CertificateService, AttributeReso
         }
 
         if (certificate.getComplianceResult() != null) {
-            ComplianceCheckResultDto complianceCheckResult = complianceService.getComplianceCheckResult(Resource.CERTIFICATE, certificate.getUuid(), certificate.getComplianceResult());
+            ComplianceCheckResultDto complianceCheckResult = complianceInternalService.getComplianceCheckResult(Resource.CERTIFICATE, certificate.getUuid(), certificate.getComplianceResult());
             dto.setNonCompliantRules(complianceCheckResult.getFailedRules().stream().filter(rule -> rule.getConnectorUuid() != null).map(failedRule -> {
                 CertificateComplianceResultDto resultDto = new CertificateComplianceResultDto();
                 resultDto.setConnectorName(failedRule.getConnectorName());
@@ -1339,7 +1348,7 @@ public class CertificateServiceImpl implements CertificateService, AttributeReso
         for (String uuid : request.getCertificateUuids()) {
             try {
                 Certificate certificateEntity = getCertificateEntity(SecuredUUID.fromString(uuid));
-                complianceService.checkResourceObjectCompliance(Resource.CERTIFICATE, certificateEntity.getUuid());
+                complianceExternalService.checkResourceObjectCompliance(Resource.CERTIFICATE, certificateEntity.getUuid());
             } catch (Exception e) {
                 logger.error("Compliance check failed.", e);
             }
@@ -2061,7 +2070,7 @@ public class CertificateServiceImpl implements CertificateService, AttributeReso
     private void certificateComplianceCheck(Certificate certificate) {
         if (certificate.getRaProfile() != null) {
             try {
-                complianceService.checkResourceObjectComplianceAsync(Resource.CERTIFICATE, certificate.getUuid());
+                complianceExternalService.checkResourceObjectComplianceAsync(Resource.CERTIFICATE, certificate.getUuid());
             } catch (Exception e) {
                 logger.debug("Error when checking compliance: {}", e.getMessage());
             }
@@ -2191,7 +2200,7 @@ public class CertificateServiceImpl implements CertificateService, AttributeReso
             attributeEngine.updateMetadataAttributes(response.getMeta(), ObjectAttributeContentInfo.builder(Resource.CERTIFICATE, certificate.getUuid()).connector(connectorUuid).build());
 
             try {
-                complianceService.checkResourceObjectComplianceAsync(Resource.CERTIFICATE, certificate.getUuid());
+                complianceExternalService.checkResourceObjectComplianceAsync(Resource.CERTIFICATE, certificate.getUuid());
             } catch (Exception e) {
                 logger.error("Error when checking compliance:", e);
             }

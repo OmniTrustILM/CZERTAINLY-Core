@@ -17,8 +17,8 @@ import com.czertainly.core.model.ScheduledTaskResult;
 import com.czertainly.core.oid.OidHandler;
 import com.czertainly.core.security.authz.SecuredParentUUID;
 import com.czertainly.core.security.authz.SecuredUUID;
-import com.czertainly.core.service.CertificateService;
-import com.czertainly.core.service.v2.ClientOperationService;
+import com.czertainly.core.service.CertificateInternalService;
+import com.czertainly.core.service.v2.ClientOperationExternalService;
 import com.czertainly.core.util.AuthHelper;
 import com.czertainly.core.util.CzertainlyX500NameStyle;
 import lombok.NoArgsConstructor;
@@ -56,9 +56,9 @@ public class UpdateIntuneRevocationRequestsTask implements ScheduledJobTask {
 
     private ScepProfileRepository scepProfileRepository;
 
-    private CertificateService certificateService;
+    private CertificateInternalService certificateService;
 
-    private ClientOperationService clientOperationService;
+    private ClientOperationExternalService clientOperationService;
 
     private AuthHelper authHelper;
 
@@ -73,12 +73,12 @@ public class UpdateIntuneRevocationRequestsTask implements ScheduledJobTask {
     }
 
     @Autowired
-    public void setCertificateService(CertificateService certificateService) {
+    public void setCertificateService(CertificateInternalService certificateService) {
         this.certificateService = certificateService;
     }
 
     @Autowired
-    public void setClientOperationService(ClientOperationService clientOperationService) {
+    public void setClientOperationService(ClientOperationExternalService clientOperationService) {
         this.clientOperationService = clientOperationService;
     }
 

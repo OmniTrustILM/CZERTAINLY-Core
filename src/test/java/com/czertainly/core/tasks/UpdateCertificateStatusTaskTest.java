@@ -19,8 +19,8 @@ import com.czertainly.core.messaging.jms.listeners.ValidationListener;
 import com.czertainly.core.messaging.jms.producers.ValidationProducer;
 import com.czertainly.core.messaging.model.ValidationMessage;
 import com.czertainly.core.model.ScheduledTaskResult;
-import com.czertainly.core.service.CertificateService;
-import com.czertainly.core.service.SettingService;
+import com.czertainly.core.service.CertificateInternalService;
+import com.czertainly.core.service.SettingExternalService;
 import com.czertainly.core.settings.SettingsCache;
 import com.czertainly.core.util.BaseSpringBootTest;
 import org.junit.jupiter.api.Assertions;
@@ -57,7 +57,7 @@ class UpdateCertificateStatusTaskTest extends BaseSpringBootTest {
     @Autowired
     private SettingsCache settingsCache;
     @Autowired
-    private SettingService settingService;
+    private SettingExternalService settingService;
 
     @MockitoBean
     private ValidationProducer validationProducer;
@@ -69,7 +69,7 @@ class UpdateCertificateStatusTaskTest extends BaseSpringBootTest {
     private ValidationListener validationListener;
 
     @MockitoSpyBean
-    private CertificateService mockedCertificateService;
+    private CertificateInternalService mockedCertificateService;
 
     private ScheduledJobInfo scheduledJobInfo;
 

@@ -6,8 +6,8 @@ import com.czertainly.api.exception.NotFoundException;
 import com.czertainly.api.model.client.attribute.RequestAttribute;
 import com.czertainly.api.model.common.attribute.common.BaseAttribute;
 import com.czertainly.api.model.common.attribute.common.DataAttribute;
-import com.czertainly.core.service.CredentialService;
-import com.czertainly.core.service.ResourceService;
+import com.czertainly.core.service.CredentialExternalService;
+import com.czertainly.core.service.ResourceInternalService;
 import com.czertainly.core.util.AttributeDefinitionUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -19,8 +19,8 @@ import java.util.UUID;
 public class ConnectorRequestAttributesBuilder {
 
     private AttributeEngine attributeEngine;
-    private ResourceService resourceService;
-    private CredentialService credentialService;
+    private ResourceInternalService resourceService;
+    private CredentialExternalService credentialService;
 
     @Autowired
     public void setAttributeEngine(AttributeEngine attributeEngine) {
@@ -28,12 +28,12 @@ public class ConnectorRequestAttributesBuilder {
     }
 
     @Autowired
-    public void setResourceService(ResourceService resourceService) {
+    public void setResourceService(ResourceInternalService resourceService) {
         this.resourceService = resourceService;
     }
 
     @Autowired
-    public void setCredentialService(CredentialService credentialService) {
+    public void setCredentialService(CredentialExternalService credentialService) {
         this.credentialService = credentialService;
     }
 

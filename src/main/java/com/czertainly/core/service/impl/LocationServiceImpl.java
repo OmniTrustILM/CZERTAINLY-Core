@@ -42,11 +42,12 @@ import com.czertainly.core.security.authz.ExternalAuthorization;
 import com.czertainly.core.security.authz.SecuredParentUUID;
 import com.czertainly.core.security.authz.SecuredUUID;
 import com.czertainly.core.security.authz.SecurityFilter;
-import com.czertainly.core.service.CertificateEventHistoryService;
-import com.czertainly.core.service.CertificateService;
-import com.czertainly.core.service.LocationService;
+import com.czertainly.core.service.CertificateEventHistoryInternalService;
+import com.czertainly.core.service.CertificateExternalService;
+import com.czertainly.core.service.LocationExternalService;
+import com.czertainly.core.service.LocationInternalService;
 import com.czertainly.core.service.PermissionEvaluator;
-import com.czertainly.core.service.v2.ClientOperationService;
+import com.czertainly.core.service.v2.ClientOperationExternalService;
 import com.czertainly.core.util.AttributeDefinitionUtils;
 import com.czertainly.core.util.FilterPredicatesBuilder;
 import com.czertainly.core.util.RequestValidatorHelper;
@@ -73,7 +74,7 @@ import java.util.*;
 
 @Service(Resource.Codes.LOCATION)
 @Transactional
-public class LocationServiceImpl implements LocationService {
+public class LocationServiceImpl implements LocationExternalService, LocationInternalService {
 
     private static final Logger logger = LoggerFactory.getLogger(LocationServiceImpl.class);
 
@@ -83,9 +84,9 @@ public class LocationServiceImpl implements LocationService {
     private CertificateRelationRepository certificateRelationRepository;
     private RaProfileRepository raProfileRepository;
     private ConnectorApiFactory connectorApiFactory;
-    private CertificateService certificateService;
-    private ClientOperationService clientOperationService;
-    private CertificateEventHistoryService certificateEventHistoryService;
+    private CertificateExternalService certificateService;
+    private ClientOperationExternalService clientOperationService;
+    private CertificateEventHistoryInternalService certificateEventHistoryService;
     private AttributeEngine attributeEngine;
     private PermissionEvaluator permissionEvaluator;
     private ApplicationEventPublisher applicationEventPublisher;
@@ -121,17 +122,17 @@ public class LocationServiceImpl implements LocationService {
     }
 
     @Autowired
-    public void setCertificateService(CertificateService certificateService) {
+    public void setCertificateService(CertificateExternalService certificateService) {
         this.certificateService = certificateService;
     }
 
     @Autowired
-    public void setClientOperationService(ClientOperationService clientOperationService) {
+    public void setClientOperationService(ClientOperationExternalService clientOperationService) {
         this.clientOperationService = clientOperationService;
     }
 
     @Autowired
-    public void setCertificateEventHistoryService(CertificateEventHistoryService certificateEventHistoryService) {
+    public void setCertificateEventHistoryService(CertificateEventHistoryInternalService certificateEventHistoryService) {
         this.certificateEventHistoryService = certificateEventHistoryService;
     }
 

@@ -29,8 +29,9 @@ import com.czertainly.core.model.auth.ResourceAction;
 import com.czertainly.core.security.authz.ExternalAuthorization;
 import com.czertainly.core.security.authz.SecuredUUID;
 import com.czertainly.core.security.authz.SecurityFilter;
-import com.czertainly.core.service.VaultInstanceService;
-import com.czertainly.core.service.v2.ConnectorService;
+import com.czertainly.core.service.VaultInstanceExternalService;
+import com.czertainly.core.service.VaultInstanceInternalService;
+import com.czertainly.core.service.v2.ConnectorExternalService;
 import com.czertainly.core.util.FilterPredicatesBuilder;
 import com.czertainly.core.util.SearchHelper;
 import jakarta.persistence.criteria.CriteriaBuilder;
@@ -50,7 +51,7 @@ import java.util.UUID;
 
 @Service
 @Transactional
-public class VaultInstanceServiceImpl implements VaultInstanceService {
+public class VaultInstanceServiceImpl implements VaultInstanceExternalService, VaultInstanceInternalService {
 
 
     private VaultProfileRepository vaultProfileRepository;
@@ -58,7 +59,7 @@ public class VaultInstanceServiceImpl implements VaultInstanceService {
 
     private ConnectorApiFactory connectorApiFactory;
 
-    private ConnectorService connectorService;
+    private ConnectorExternalService connectorService;
 
     private AttributeEngine attributeEngine;
     private ConnectorRequestAttributesBuilder connectorRequestAttributesBuilder;
@@ -84,7 +85,7 @@ public class VaultInstanceServiceImpl implements VaultInstanceService {
     }
 
     @Autowired
-    public void setConnectorService(ConnectorService connectorService) {
+    public void setConnectorService(ConnectorExternalService connectorService) {
         this.connectorService = connectorService;
     }
 

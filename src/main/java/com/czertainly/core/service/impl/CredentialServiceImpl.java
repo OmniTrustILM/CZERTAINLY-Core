@@ -30,8 +30,9 @@ import com.czertainly.core.model.auth.ResourceAction;
 import com.czertainly.core.security.authz.ExternalAuthorization;
 import com.czertainly.core.security.authz.SecuredUUID;
 import com.czertainly.core.security.authz.SecurityFilter;
-import com.czertainly.core.service.ConnectorService;
-import com.czertainly.core.service.CredentialService;
+import com.czertainly.core.service.ConnectorExternalService;
+import com.czertainly.core.service.CredentialExternalService;
+import com.czertainly.core.service.CredentialInternalService;
 import com.czertainly.core.util.AttributeDefinitionUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.transaction.Transactional;
@@ -49,12 +50,12 @@ import java.util.stream.Collectors;
 
 @Service(Resource.Codes.CREDENTIAL)
 @Transactional
-public class CredentialServiceImpl implements CredentialService {
+public class CredentialServiceImpl implements CredentialExternalService, CredentialInternalService {
 
     private static final Logger logger = LoggerFactory.getLogger(CredentialServiceImpl.class);
 
     private CredentialRepository credentialRepository;
-    private ConnectorService connectorService;
+    private ConnectorExternalService connectorService;
     private AttributeEngine attributeEngine;
 
     @Autowired
@@ -63,7 +64,7 @@ public class CredentialServiceImpl implements CredentialService {
     }
 
     @Autowired
-    public void setConnectorService(ConnectorService connectorService) {
+    public void setConnectorService(ConnectorExternalService connectorService) {
         this.connectorService = connectorService;
     }
 

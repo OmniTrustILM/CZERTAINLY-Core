@@ -17,6 +17,7 @@ import com.czertainly.core.events.transaction.CertificateValidationEvent;
 import com.czertainly.core.messaging.jms.producers.ValidationProducer;
 import com.czertainly.core.messaging.model.ValidationMessage;
 import com.czertainly.core.service.*;
+import com.czertainly.core.service.ComplianceInternalService;
 import com.czertainly.core.util.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -43,10 +44,10 @@ public class CertificateHandler {
     private AttributeEngine attributeEngine;
     private ValidationProducer validationProducer;
 
-    private ComplianceService complianceService;
-    private CertificateService certificateService;
-    private CertificateEventHistoryService certificateEventHistoryService;
-    private CryptographicKeyService cryptographicKeyService;
+    private ComplianceInternalService complianceService;
+    private CertificateInternalService certificateService;
+    private CertificateEventHistoryInternalService certificateEventHistoryService;
+    private CryptographicKeyInternalService cryptographicKeyService;
 
     private CertificateRepository certificateRepository;
     private DiscoveryRepository discoveryRepository;
@@ -63,17 +64,17 @@ public class CertificateHandler {
     }
 
     @Autowired
-    public void setComplianceService(ComplianceService complianceService) {
+    public void setComplianceService(ComplianceInternalService complianceService) {
         this.complianceService = complianceService;
     }
 
     @Autowired
-    public void setCertificateService(CertificateService certificateService) {
+    public void setCertificateService(CertificateInternalService certificateService) {
         this.certificateService = certificateService;
     }
 
     @Autowired
-    public void setCertificateEventHistoryService(CertificateEventHistoryService certificateEventHistoryService) {
+    public void setCertificateEventHistoryService(CertificateEventHistoryInternalService certificateEventHistoryService) {
         this.certificateEventHistoryService = certificateEventHistoryService;
     }
 
@@ -93,7 +94,7 @@ public class CertificateHandler {
     }
 
     @Autowired
-    public void setCryptographicKeyService(CryptographicKeyService cryptographicKeyService) {
+    public void setCryptographicKeyService(CryptographicKeyInternalService cryptographicKeyService) {
         this.cryptographicKeyService = cryptographicKeyService;
     }
 

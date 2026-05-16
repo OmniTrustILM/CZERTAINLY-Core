@@ -25,7 +25,11 @@ import com.czertainly.core.model.auth.ResourceAction;
 import com.czertainly.core.security.authz.ExternalAuthorization;
 import com.czertainly.core.security.authz.SecuredUUID;
 import com.czertainly.core.security.authz.SecurityFilter;
-import com.czertainly.core.service.*;
+import com.czertainly.core.service.CertificateExternalService;
+import com.czertainly.core.service.RaProfileExternalService;
+import com.czertainly.core.service.RaProfileInternalService;
+import com.czertainly.core.service.ScepProfileExternalService;
+import com.czertainly.core.service.ScepProfileInternalService;
 import com.czertainly.core.service.model.SecuredList;
 import com.czertainly.core.service.v2.ExtendedAttributeService;
 import com.czertainly.core.util.CertificateUtil;
@@ -43,13 +47,14 @@ import java.util.stream.Collectors;
 
 @Service(Resource.Codes.SCEP_PROFILE)
 @Transactional
-public class ScepProfileServiceImpl implements ScepProfileService {
+public class ScepProfileServiceImpl implements ScepProfileExternalService, ScepProfileInternalService {
 
     private static final Logger logger = LoggerFactory.getLogger(ScepProfileServiceImpl.class);
     private final ScepProfileRepository scepProfileRepository;
-    private RaProfileService raProfileService;
+    private RaProfileInternalService raProfileService;
+    private RaProfileExternalService raProfileExternalService;
     private ExtendedAttributeService extendedAttributeService;
-    private CertificateService certificateService;
+    private CertificateExternalService certificateService;
     private AttributeEngine attributeEngine;
     private ProtocolCertificateAssociationsRepository certificateAssociationRepository;
 
@@ -69,8 +74,13 @@ public class ScepProfileServiceImpl implements ScepProfileService {
     }
 
     @Autowired
-    public void setRaProfileService(RaProfileService raProfileRepository) {
+    public void setRaProfileService(RaProfileInternalService raProfileRepository) {
         this.raProfileService = raProfileRepository;
+    }
+
+    @Autowired
+    public void setRaProfileExternalService(RaProfileExternalService raProfileExternalService) {
+        this.raProfileExternalService = raProfileExternalService;
     }
 
     @Autowired
@@ -79,7 +89,7 @@ public class ScepProfileServiceImpl implements ScepProfileService {
     }
 
     @Autowired
-    public void setCertificateService(CertificateService certificateService) {
+    public void setCertificateService(CertificateExternalService certificateService) {
         this.certificateService = certificateService;
     }
 
@@ -397,7 +407,7 @@ public class ScepProfileServiceImpl implements ScepProfileService {
     }
 
     private RaProfile getRaProfile(String uuid) throws NotFoundException {
-        return raProfileService.getRaProfileEntity(SecuredUUID.fromString(uuid));
+        return raProfileExternalService.getRaProfileEntity(SecuredUUID.fromString(uuid));
     }
 
     private ScepProfile getScepProfileEntity(SecuredUUID uuid) throws NotFoundException {

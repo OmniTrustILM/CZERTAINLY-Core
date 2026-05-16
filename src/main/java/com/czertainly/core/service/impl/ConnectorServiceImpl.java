@@ -23,7 +23,8 @@ import com.czertainly.core.model.auth.ResourceAction;
 import com.czertainly.core.security.authz.ExternalAuthorization;
 import com.czertainly.core.security.authz.SecuredUUID;
 import com.czertainly.core.security.authz.SecurityFilter;
-import com.czertainly.core.service.ConnectorService;
+import com.czertainly.core.service.ConnectorExternalService;
+import com.czertainly.core.service.ConnectorInternalService;
 import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -32,17 +33,23 @@ import java.util.*;
 
 @Service("connectorServiceV1")
 @Transactional
-public class ConnectorServiceImpl implements ConnectorService {
+public class ConnectorServiceImpl implements ConnectorExternalService, ConnectorInternalService {
 
-    private com.czertainly.core.service.v2.ConnectorService connectorServiceV2;
+    private com.czertainly.core.service.v2.ConnectorExternalService connectorServiceV2;
+    private com.czertainly.core.service.v2.ConnectorInternalService connectorInternalServiceV2;
 
     private ConnectorRepository connectorRepository;
     private ConnectorApiFactory connectorApiFactory;
     private AttributeEngine attributeEngine;
 
     @Autowired
-    public void setConnectorServiceV2(com.czertainly.core.service.v2.ConnectorService connectorServiceV2) {
+    public void setConnectorServiceV2(com.czertainly.core.service.v2.ConnectorExternalService connectorServiceV2) {
         this.connectorServiceV2 = connectorServiceV2;
+    }
+
+    @Autowired
+    public void setConnectorInternalServiceV2(com.czertainly.core.service.v2.ConnectorInternalService connectorInternalServiceV2) {
+        this.connectorInternalServiceV2 = connectorInternalServiceV2;
     }
 
     @Autowired
@@ -260,7 +267,7 @@ public class ConnectorServiceImpl implements ConnectorService {
 
     @Override
     public NameAndUuidDto getResourceObjectInternal(UUID objectUuid) throws NotFoundException {
-        return connectorServiceV2.getResourceObjectInternal(objectUuid);
+        return connectorInternalServiceV2.getResourceObjectInternal(objectUuid);
     }
 
     @Override

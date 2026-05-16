@@ -8,7 +8,7 @@ import com.czertainly.api.model.core.search.FilterFieldSource;
 import com.czertainly.core.dao.entity.oid.RdnAttributeTypeCustomOidEntry;
 import com.czertainly.core.dao.repository.CustomOidEntryRepository;
 import com.czertainly.core.enums.FilterField;
-import com.czertainly.core.service.CustomOidEntryService;
+import com.czertainly.core.service.CustomOidEntryExternalService;
 import com.czertainly.core.util.BaseSpringBootTest;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -27,7 +27,7 @@ import java.util.List;
 class NativeArrayFilterSearchTest extends BaseSpringBootTest {
 
     @Autowired
-    private CustomOidEntryService customOidEntryService;
+    private CustomOidEntryExternalService customOidEntryService;
 
     @Autowired
     private CustomOidEntryRepository customOidEntryRepository;

@@ -19,7 +19,7 @@ import com.czertainly.core.logging.LogResource;
 import com.czertainly.core.security.authz.SecuredParentUUID;
 import com.czertainly.core.security.authz.SecuredUUID;
 import com.czertainly.core.security.authz.SecurityFilter;
-import com.czertainly.core.service.CryptographicKeyService;
+import com.czertainly.core.service.CryptographicKeyExternalService;
 import com.czertainly.core.util.converter.KeyRequestTypeConverter;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.WebDataBinder;
@@ -33,10 +33,10 @@ import java.util.UUID;
 @RestController
 public class CryptographicKeyControllerImpl implements CryptographicKeyController {
 
-    private CryptographicKeyService cryptographicKeyService;
+    private CryptographicKeyExternalService cryptographicKeyService;
 
     @Autowired
-    public void setCryptographicKeyService(CryptographicKeyService cryptographicKeyService) {
+    public void setCryptographicKeyService(CryptographicKeyExternalService cryptographicKeyService) {
         this.cryptographicKeyService = cryptographicKeyService;
     }
 

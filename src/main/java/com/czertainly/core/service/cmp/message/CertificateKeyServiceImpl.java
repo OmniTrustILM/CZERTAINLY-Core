@@ -6,7 +6,7 @@ import com.czertainly.core.client.ConnectorApiFactory;
 import com.czertainly.core.dao.entity.*;
 import com.czertainly.core.provider.CzertainlyProvider;
 import com.czertainly.core.provider.key.CzertainlyPrivateKey;
-import com.czertainly.core.service.CryptographicKeyService;
+import com.czertainly.core.service.CryptographicKeyInternalService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -20,10 +20,10 @@ public class CertificateKeyServiceImpl implements CertificateKeyService {
         this.connectorApiFactory = connectorApiFactory;
     }
 
-    private CryptographicKeyService cryptographicKeyService;
+    private CryptographicKeyInternalService cryptographicKeyService;
 
     @Autowired
-    public void setCryptographicKeyService(CryptographicKeyService cryptographicKeyService) {
+    public void setCryptographicKeyService(CryptographicKeyInternalService cryptographicKeyService) {
         this.cryptographicKeyService = cryptographicKeyService;
     }
 

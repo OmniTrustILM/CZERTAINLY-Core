@@ -25,10 +25,10 @@ import com.czertainly.core.dao.repository.notifications.NotificationProfileVersi
 import com.czertainly.core.model.auth.ResourceAction;
 import com.czertainly.core.security.authz.ExternalAuthorization;
 import com.czertainly.core.security.authz.SecuredUUID;
-import com.czertainly.core.service.ConnectorService;
-import com.czertainly.core.service.CredentialService;
-import com.czertainly.core.service.NotificationInstanceService;
-import com.czertainly.core.service.ResourceService;
+import com.czertainly.core.service.ConnectorExternalService;
+import com.czertainly.core.service.CredentialExternalService;
+import com.czertainly.core.service.NotificationInstanceExternalService;
+import com.czertainly.core.service.ResourceInternalService;
 import com.czertainly.core.util.AttributeDefinitionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -42,22 +42,22 @@ import java.util.UUID;
 
 @Service
 @Transactional
-public class NotificationInstanceServiceImpl implements NotificationInstanceService {
+public class NotificationInstanceServiceImpl implements NotificationInstanceExternalService {
     private static final Logger logger = LoggerFactory.getLogger(NotificationInstanceServiceImpl.class);
 
     private NotificationInstanceReferenceRepository notificationInstanceReferenceRepository;
     private NotificationInstanceMappedAttributeRepository notificationInstanceMappedAttributeRepository;
     private NotificationProfileVersionRepository notificationProfileVersionRepository;
 
-    private ConnectorService connectorService;
-    private CredentialService credentialService;
+    private ConnectorExternalService connectorService;
+    private CredentialExternalService credentialService;
     private ConnectorApiFactory connectorApiFactory;
     private AttributeEngine attributeEngine;
 
-    private ResourceService resourceService;
+    private ResourceInternalService resourceService;
 
     @Autowired
-    public void setResourceService(ResourceService resourceService) {
+    public void setResourceService(ResourceInternalService resourceService) {
         this.resourceService = resourceService;
     }
 
@@ -82,12 +82,12 @@ public class NotificationInstanceServiceImpl implements NotificationInstanceServ
     }
 
     @Autowired
-    public void setConnectorService(ConnectorService connectorService) {
+    public void setConnectorService(ConnectorExternalService connectorService) {
         this.connectorService = connectorService;
     }
 
     @Autowired
-    public void setCredentialService(CredentialService credentialService) {
+    public void setCredentialService(CredentialExternalService credentialService) {
         this.credentialService = credentialService;
     }
 

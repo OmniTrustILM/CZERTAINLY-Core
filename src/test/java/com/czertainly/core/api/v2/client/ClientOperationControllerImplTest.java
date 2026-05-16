@@ -5,7 +5,7 @@ import com.czertainly.api.model.client.certificate.UploadCertificateRequestDto;
 import com.czertainly.api.model.core.certificate.CertificateDetailDto;
 import com.czertainly.core.security.authz.SecuredParentUUID;
 import com.czertainly.core.security.authz.SecuredUUID;
-import com.czertainly.core.service.v2.ClientOperationService;
+import com.czertainly.core.service.v2.ClientOperationExternalService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -24,7 +24,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class ClientOperationControllerImplTest {
 
-    private ClientOperationService service;
+    private ClientOperationExternalService service;
     private ClientOperationControllerImpl controller;
 
     private final String authorityUuid = UUID.randomUUID().toString();
@@ -33,7 +33,7 @@ class ClientOperationControllerImplTest {
 
     @BeforeEach
     void setUp() {
-        service = Mockito.mock(ClientOperationService.class);
+        service = Mockito.mock(ClientOperationExternalService.class);
         controller = new ClientOperationControllerImpl();
         controller.setClientOperationService(service);
     }

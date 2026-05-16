@@ -20,7 +20,7 @@ import com.czertainly.core.service.cmp.configurations.ConfigurationContext;
 import com.czertainly.core.service.cmp.message.CmpTransactionService;
 import com.czertainly.core.service.cmp.message.PkiMessageDumper;
 import com.czertainly.core.service.cmp.message.builder.PkiMessageBuilder;
-import com.czertainly.core.service.v2.ClientOperationService;
+import com.czertainly.core.service.v2.ClientOperationExternalService;
 import org.bouncycastle.asn1.ASN1Enumerated;
 import org.bouncycastle.asn1.ASN1Integer;
 import org.bouncycastle.asn1.ASN1OctetString;
@@ -75,10 +75,10 @@ public class RevocationMessageHandler implements MessageHandler<PKIMessage> {
 
     private static final Logger LOG = LoggerFactory.getLogger(RevocationMessageHandler.class.getName());
 
-    private ClientOperationService clientOperationService;
+    private ClientOperationExternalService clientOperationService;
 
     @Autowired
-    public void setClientOperationService(ClientOperationService clientOperationService) {
+    public void setClientOperationService(ClientOperationExternalService clientOperationService) {
         this.clientOperationService = clientOperationService;
     }
 

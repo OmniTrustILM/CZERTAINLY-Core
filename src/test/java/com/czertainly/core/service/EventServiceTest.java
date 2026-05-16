@@ -34,16 +34,19 @@ import java.util.UUID;
 class EventServiceTest extends BaseSpringBootTest {
 
     @Autowired
-    private EventService eventService;
+    private EventExternalService eventService;
 
     @Autowired
-    private TriggerService triggerService;
+    private TriggerExternalService triggerService;
 
     @Autowired
-    private ActionService actionService;
+    private TriggerInternalService triggerInternalService;
 
     @Autowired
-    private NotificationProfileService notificationProfileService;
+    private ActionExternalService actionService;
+
+    @Autowired
+    private NotificationProfileExternalService notificationProfileService;
 
     @Autowired
     private CertificateRepository certificateRepository;
@@ -323,7 +326,7 @@ class EventServiceTest extends BaseSpringBootTest {
 
     private TriggerHistory saveTriggerHistory(UUID triggerUuid, UUID objectUuid, EventHistory eventHistory,
                                                boolean conditionsMatched, boolean actionsPerformed) {
-        TriggerHistory th = triggerService.createTriggerHistory(triggerUuid, null, objectUuid, null, eventHistory, Resource.CERTIFICATE);
+        TriggerHistory th = triggerInternalService.createTriggerHistory(triggerUuid, null, objectUuid, null, eventHistory, Resource.CERTIFICATE);
         th.setEvent(ResourceEvent.CERTIFICATE_DISCOVERED);
         th.setConditionsMatched(conditionsMatched);
         th.setActionsPerformed(actionsPerformed);

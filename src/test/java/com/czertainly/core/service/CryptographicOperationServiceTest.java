@@ -43,10 +43,12 @@ import java.util.*;
 class CryptographicOperationServiceTest extends BaseSpringBootTest {
 
     @Autowired
-    private CryptographicOperationService cryptographicOperationService;
+    private CryptographicOperationExternalService cryptographicOperationService;
+    @Autowired
+    private CryptographicOperationInternalService cryptographicOperationInternalService;
 
     @Autowired
-    private TokenInstanceService tokenInstanceService;
+    private TokenInstanceInternalService tokenInstanceService;
 
     @Autowired
     private TokenInstanceReferenceRepository tokenInstanceReferenceRepository;
@@ -819,7 +821,7 @@ class CryptographicOperationServiceTest extends BaseSpringBootTest {
                         }
                         """)));
 
-        String csr = cryptographicOperationService.generateCsr(defaultKey.getUuid(), tokenProfile.getUuid(), new X500Principal("CN=alt"),
+        String csr = cryptographicOperationInternalService.generateCsr(defaultKey.getUuid(), tokenProfile.getUuid(), new X500Principal("CN=alt"),
                 rsaSignatureAttributes, altKey.getUuid(), tokenProfile.getUuid(), new ArrayList<>());
         CertificateRequest certificateRequest = CertificateRequestUtils.createCertificateRequest(csr, CertificateRequestFormat.PKCS10);
         Assertions.assertNotNull(certificateRequest.getAltSignatureAlgorithm());

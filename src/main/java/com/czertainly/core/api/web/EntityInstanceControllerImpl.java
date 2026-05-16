@@ -22,7 +22,7 @@ import com.czertainly.core.auth.AuthEndpoint;
 import com.czertainly.core.logging.LogResource;
 import com.czertainly.core.security.authz.SecuredUUID;
 import com.czertainly.core.security.authz.SecurityFilter;
-import com.czertainly.core.service.EntityInstanceService;
+import com.czertainly.core.service.EntityInstanceExternalService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
@@ -35,11 +35,11 @@ import java.util.List;
 public class EntityInstanceControllerImpl implements EntityInstanceController {
 
     @Autowired
-    public void setEntityInstanceService(EntityInstanceService entityInstanceService) {
+    public void setEntityInstanceService(EntityInstanceExternalService entityInstanceService) {
         this.entityInstanceService = entityInstanceService;
     }
 
-    private EntityInstanceService entityInstanceService;
+    private EntityInstanceExternalService entityInstanceService;
 
     @Override
     @AuthEndpoint(resourceName = Resource.ENTITY)

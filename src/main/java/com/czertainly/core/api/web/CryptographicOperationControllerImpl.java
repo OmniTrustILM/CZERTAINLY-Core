@@ -13,7 +13,7 @@ import com.czertainly.core.aop.AuditLogged;
 import com.czertainly.core.logging.LogResource;
 import com.czertainly.core.security.authz.SecuredParentUUID;
 import com.czertainly.core.security.authz.SecuredUUID;
-import com.czertainly.core.service.CryptographicOperationService;
+import com.czertainly.core.service.CryptographicOperationExternalService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -23,10 +23,10 @@ import java.util.UUID;
 @RestController
 public class CryptographicOperationControllerImpl implements CryptographicOperationsController {
 
-    private CryptographicOperationService cryptographicOperationService;
+    private CryptographicOperationExternalService cryptographicOperationService;
 
     @Autowired
-    public void setCryptographicOperationService(CryptographicOperationService cryptographicOperationService) {
+    public void setCryptographicOperationService(CryptographicOperationExternalService cryptographicOperationService) {
         this.cryptographicOperationService = cryptographicOperationService;
     }
 

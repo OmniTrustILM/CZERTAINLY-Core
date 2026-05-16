@@ -17,7 +17,7 @@ import com.czertainly.core.logging.LoggingHelper;
 import com.czertainly.core.security.authz.SecuredParentUUID;
 import com.czertainly.core.service.cmp.configurations.ConfigurationContext;
 import com.czertainly.core.service.cmp.message.PkiMessageDumper;
-import com.czertainly.core.service.v2.ClientOperationService;
+import com.czertainly.core.service.v2.ClientOperationExternalService;
 import com.czertainly.core.util.CertificateUtil;
 import org.bouncycastle.asn1.ASN1OctetString;
 import org.bouncycastle.asn1.cmp.*;
@@ -58,10 +58,10 @@ public class CrmfKurMessageHandler implements MessageHandler<ClientCertificateDa
         this.certificateRepository = certificateRepository;
     }
 
-    private ClientOperationService clientOperationService;
+    private ClientOperationExternalService clientOperationService;
 
     @Autowired
-    public void setClientOperationService(ClientOperationService clientOperationService) {
+    public void setClientOperationService(ClientOperationExternalService clientOperationService) {
         this.clientOperationService = clientOperationService;
     }
 

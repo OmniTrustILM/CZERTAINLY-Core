@@ -20,7 +20,7 @@ import com.czertainly.core.auth.AuthEndpoint;
 import com.czertainly.core.logging.LogResource;
 import com.czertainly.core.security.authz.SecuredUUID;
 import com.czertainly.core.security.authz.SecurityFilter;
-import com.czertainly.core.service.TimeQualityConfigurationService;
+import com.czertainly.core.service.TimeQualityConfigurationExternalService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -30,10 +30,10 @@ import java.util.UUID;
 @RestController
 public class TimeQualityConfigurationControllerImpl implements TimeQualityConfigurationController {
 
-    private final TimeQualityConfigurationService timeQualityConfigurationService;
+    private final TimeQualityConfigurationExternalService timeQualityConfigurationService;
 
     @Autowired
-    public TimeQualityConfigurationControllerImpl(TimeQualityConfigurationService timeQualityConfigurationService) {
+    public TimeQualityConfigurationControllerImpl(TimeQualityConfigurationExternalService timeQualityConfigurationService) {
         this.timeQualityConfigurationService = timeQualityConfigurationService;
     }
 

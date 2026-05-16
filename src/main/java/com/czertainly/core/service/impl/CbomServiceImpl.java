@@ -65,7 +65,8 @@ import com.czertainly.core.model.cbom.BomSearchRequestDto;
 import com.czertainly.core.security.authz.ExternalAuthorization;
 import com.czertainly.core.security.authz.SecuredUUID;
 import com.czertainly.core.security.authz.SecurityFilter;
-import com.czertainly.core.service.CbomService;
+import com.czertainly.core.service.CbomExternalService;
+import com.czertainly.core.service.CbomInternalService;
 import com.czertainly.core.tasks.CbomSyncTask;
 import com.czertainly.core.util.CbomUtil;
 import com.czertainly.core.util.FilterPredicatesBuilder;
@@ -79,7 +80,7 @@ import jakarta.persistence.criteria.Root;
 
 @Service(Resource.Codes.CBOM)
 @Transactional
-public class CbomServiceImpl implements CbomService {
+public class CbomServiceImpl implements CbomExternalService, CbomInternalService {
 
     private static final LoggerWrapper logger = new LoggerWrapper(CbomServiceImpl.class, Module.CORE, Resource.CBOM);
 

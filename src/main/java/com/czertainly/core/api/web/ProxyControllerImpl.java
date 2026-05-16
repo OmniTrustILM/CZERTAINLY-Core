@@ -18,7 +18,7 @@ import com.czertainly.core.auth.AuthEndpoint;
 import com.czertainly.core.logging.LogResource;
 import com.czertainly.core.security.authz.SecuredUUID;
 import com.czertainly.core.security.authz.SecurityFilter;
-import com.czertainly.core.service.ProxyService;
+import com.czertainly.core.service.ProxyExternalService;
 import com.czertainly.core.util.converter.ProxyStatusConverter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -37,7 +37,7 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class ProxyControllerImpl implements ProxyController {
 
-    private final ProxyService proxyService;
+    private final ProxyExternalService proxyService;
 
     @InitBinder
     public void initBinder(final WebDataBinder webdataBinder) {

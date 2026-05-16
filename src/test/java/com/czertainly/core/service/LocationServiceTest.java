@@ -31,7 +31,8 @@ import com.czertainly.core.dao.repository.*;
 import com.czertainly.core.security.authz.SecuredParentUUID;
 import com.czertainly.core.security.authz.SecuredUUID;
 import com.czertainly.core.security.authz.SecurityFilter;
-import com.czertainly.core.service.v2.ClientOperationService;
+import com.czertainly.core.service.v2.ClientOperationExternalService;
+import com.czertainly.core.service.v2.ClientOperationInternalService;
 import com.czertainly.core.util.BaseSpringBootTest;
 import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.client.WireMock;
@@ -58,7 +59,9 @@ class LocationServiceTest extends BaseSpringBootTest {
     private static final String LOCATION_NAME_NOKEYMANAGEMENT = "testLocation-noKeyManagement";
 
     @Autowired
-    private LocationService locationService;
+    private LocationExternalService locationService;
+    @Autowired
+    private LocationInternalService locationInternalService;
     @Autowired
     private LocationRepository locationRepository;
     @Autowired
@@ -76,7 +79,9 @@ class LocationServiceTest extends BaseSpringBootTest {
     @Autowired
     private CertificateLocationRepository certificateLocationRepository;
     @MockitoBean
-    private ClientOperationService clientOperationService;
+    private ClientOperationExternalService clientOperationService;
+    @MockitoBean
+    private ClientOperationInternalService clientOperationInternalService;
 
     private DataAttributeV2 testAttribute;
     private DataAttributeV2 testAttribute2;
@@ -691,7 +696,7 @@ class LocationServiceTest extends BaseSpringBootTest {
 
     @Test
     void testGetResourceObject() throws NotFoundException {
-        NameAndUuidDto nameAndUuidDto = locationService.getResourceObjectInternal(location.getUuid());
+        NameAndUuidDto nameAndUuidDto = locationInternalService.getResourceObjectInternal(location.getUuid());
         Assertions.assertEquals(location.getUuid().toString(), nameAndUuidDto.getUuid());
         Assertions.assertEquals(location.getName(), nameAndUuidDto.getName());
 

@@ -32,10 +32,11 @@ import com.czertainly.core.model.auth.ResourceAction;
 import com.czertainly.core.security.authz.ExternalAuthorization;
 import com.czertainly.core.security.authz.SecuredUUID;
 import com.czertainly.core.security.authz.SecurityFilter;
-import com.czertainly.core.service.ConnectorService;
-import com.czertainly.core.service.CredentialService;
-import com.czertainly.core.service.EntityInstanceService;
-import com.czertainly.core.service.ResourceService;
+import com.czertainly.core.service.ConnectorExternalService;
+import com.czertainly.core.service.CredentialExternalService;
+import com.czertainly.core.service.EntityInstanceExternalService;
+import com.czertainly.core.service.EntityInstanceInternalService;
+import com.czertainly.core.service.ResourceInternalService;
 import com.czertainly.core.util.AttributeDefinitionUtils;
 import com.czertainly.core.util.FilterPredicatesBuilder;
 import com.czertainly.core.util.RequestValidatorHelper;
@@ -59,18 +60,18 @@ import java.util.UUID;
 
 @Service(Resource.Codes.ENTITY)
 @Transactional
-public class EntityInstanceServiceImpl implements EntityInstanceService {
+public class EntityInstanceServiceImpl implements EntityInstanceExternalService, EntityInstanceInternalService {
 
     private static final Logger logger = LoggerFactory.getLogger(EntityInstanceServiceImpl.class);
     private EntityInstanceReferenceRepository entityInstanceReferenceRepository;
-    private ConnectorService connectorService;
-    private CredentialService credentialService;
+    private ConnectorExternalService connectorService;
+    private CredentialExternalService credentialService;
     private ConnectorApiFactory connectorApiFactory;
     private AttributeEngine attributeEngine;
-    private ResourceService resourceService;
+    private ResourceInternalService resourceService;
 
     @Autowired
-    public void setResourceService(ResourceService resourceService) {
+    public void setResourceService(ResourceInternalService resourceService) {
         this.resourceService = resourceService;
     }
 
@@ -85,12 +86,12 @@ public class EntityInstanceServiceImpl implements EntityInstanceService {
     }
 
     @Autowired
-    public void setConnectorService(ConnectorService connectorService) {
+    public void setConnectorService(ConnectorExternalService connectorService) {
         this.connectorService = connectorService;
     }
 
     @Autowired
-    public void setCredentialService(CredentialService credentialService) {
+    public void setCredentialService(CredentialExternalService credentialService) {
         this.credentialService = credentialService;
     }
 

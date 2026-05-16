@@ -46,10 +46,13 @@ class ScepProfileServiceTest extends BaseSpringBootTest {
     private AttributeEngine attributeEngine;
 
     @Autowired
-    private CertificateService certificateService;
+    private CertificateExternalService certificateService;
 
     @Autowired
-    private ScepProfileService scepProfileService;
+    private ScepProfileExternalService scepProfileService;
+
+    @Autowired
+    private ScepProfileInternalService scepProfileInternalService;
 
     @Autowired
     private ScepProfileRepository scepProfileRepository;
@@ -369,7 +372,7 @@ class ScepProfileServiceTest extends BaseSpringBootTest {
 
     @Test
     void testGetResourceObject() throws NotFoundException {
-        NameAndUuidDto nameAndUuidDto = scepProfileService.getResourceObjectInternal(scepProfile.getUuid());
+        NameAndUuidDto nameAndUuidDto = scepProfileInternalService.getResourceObjectInternal(scepProfile.getUuid());
         Assertions.assertEquals(scepProfile.getUuid().toString(), nameAndUuidDto.getUuid());
         Assertions.assertEquals(scepProfile.getName(), nameAndUuidDto.getName());
 

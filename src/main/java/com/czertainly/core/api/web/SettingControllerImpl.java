@@ -13,7 +13,7 @@ import com.czertainly.api.model.core.settings.authentication.OAuth2ProviderSetti
 import com.czertainly.api.model.core.settings.logging.LoggingSettingsDto;
 import com.czertainly.core.aop.AuditLogged;
 import com.czertainly.core.logging.LogResource;
-import com.czertainly.core.service.SettingService;
+import com.czertainly.core.service.SettingExternalService;
 import com.czertainly.core.util.converter.SettingsSectionCodeConverter;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.WebDataBinder;
@@ -23,10 +23,10 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 public class SettingControllerImpl implements SettingController {
 
-    private SettingService settingService;
+    private SettingExternalService settingService;
 
     @Autowired
-    public void setSettingService(SettingService settingService) {
+    public void setSettingService(SettingExternalService settingService) {
         this.settingService = settingService;
     }
 
