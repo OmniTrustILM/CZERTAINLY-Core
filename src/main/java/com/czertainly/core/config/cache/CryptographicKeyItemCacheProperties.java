@@ -10,6 +10,6 @@ public record CryptographicKeyItemCacheProperties(
 
     public CryptographicKeyItemCacheProperties {
         if (ttlMinutes <= 0) ttlMinutes = 5;
-        if (maxSize <= 0) maxSize = 500;
+        if (maxSize <= 0) maxSize = 10000;
     }
 }
