@@ -11,7 +11,6 @@ import com.czertainly.api.model.common.attribute.v2.content.FileAttributeContent
 import com.czertainly.api.model.common.attribute.v2.content.StringAttributeContentV2;
 import com.czertainly.api.model.core.connector.AuthType;
 import com.czertainly.core.util.BaseSpringBootTest;
-import com.czertainly.core.service.ConnectorAuthExternalService;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -37,6 +36,9 @@ class ConnectorAuthServiceTest extends BaseSpringBootTest {
     @Autowired
     private ConnectorAuthExternalService connectorAuthService;
 
+    @Autowired
+    private ConnectorAuthInternalService connectorAuthInternalService;
+
     @Test
     void testGetAuthenticationTypes() {
         Set<AuthType> types = connectorAuthService.getAuthenticationTypes();
@@ -46,10 +48,10 @@ class ConnectorAuthServiceTest extends BaseSpringBootTest {
 
     @Test
     void testGetAuthAttributes() {
-        Assertions.assertDoesNotThrow(() -> connectorAuthService.getAuthAttributes(AuthType.BASIC));
-        Assertions.assertDoesNotThrow(() -> connectorAuthService.getAuthAttributes(AuthType.CERTIFICATE));
-        Assertions.assertDoesNotThrow(() -> connectorAuthService.getAuthAttributes(AuthType.API_KEY));
-        Assertions.assertThrows(ValidationException.class, () -> connectorAuthService.getAuthAttributes(AuthType.JWT));
+        Assertions.assertDoesNotThrow(() -> connectorAuthInternalService.getAuthAttributes(AuthType.BASIC));
+        Assertions.assertDoesNotThrow(() -> connectorAuthInternalService.getAuthAttributes(AuthType.CERTIFICATE));
+        Assertions.assertDoesNotThrow(() -> connectorAuthInternalService.getAuthAttributes(AuthType.API_KEY));
+        Assertions.assertThrows(ValidationException.class, () -> connectorAuthInternalService.getAuthAttributes(AuthType.JWT));
     }
 
 
@@ -69,7 +71,7 @@ class ConnectorAuthServiceTest extends BaseSpringBootTest {
         boolean result = connectorAuthService.validateBasicAuthAttributes(attrs);
         Assertions.assertTrue(result);
 
-        result = connectorAuthService.validateAuthAttributes(AuthType.BASIC, attrs);
+        result = connectorAuthInternalService.validateAuthAttributes(AuthType.BASIC, attrs);
         Assertions.assertTrue(result);
     }
 
@@ -94,7 +96,7 @@ class ConnectorAuthServiceTest extends BaseSpringBootTest {
         boolean result = connectorAuthService.validateCertificateAttributes(attrs);
         Assertions.assertTrue(result);
 
-        result = connectorAuthService.validateAuthAttributes(AuthType.CERTIFICATE, attrs);
+        result = connectorAuthInternalService.validateAuthAttributes(AuthType.CERTIFICATE, attrs);
         Assertions.assertTrue(result);
     }
 
@@ -120,7 +122,7 @@ class ConnectorAuthServiceTest extends BaseSpringBootTest {
         boolean result = connectorAuthService.validateApiKeyAuthAttributes(attrs);
         Assertions.assertTrue(result);
 
-        result = connectorAuthService.validateAuthAttributes(AuthType.API_KEY, attrs);
+        result = connectorAuthInternalService.validateAuthAttributes(AuthType.API_KEY, attrs);
         Assertions.assertTrue(result);
     }
 
@@ -133,7 +135,7 @@ class ConnectorAuthServiceTest extends BaseSpringBootTest {
     void testValidateJWTAuthAttributes() {
         List<RequestAttribute> attributes = List.of();
         Assertions.assertThrows(ValidationException.class, () -> connectorAuthService.validateBasicAuthAttributes(attributes));
-        Assertions.assertThrows(ValidationException.class, () -> connectorAuthService.validateAuthAttributes(AuthType.JWT, attributes));
+        Assertions.assertThrows(ValidationException.class, () -> connectorAuthInternalService.validateAuthAttributes(AuthType.JWT, attributes));
     }
 
     private static List<RequestAttributeV2> createAttributes(String name, List<BaseAttributeContentV2<?>> content) {

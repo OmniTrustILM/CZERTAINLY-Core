@@ -15,7 +15,7 @@ import org.springframework.stereotype.Component;
  *
  * <p>Registration messages are fire-and-forget: the proxy sends the request
  * and does not wait for a response. This handler converts the message to
- * a ConnectorRequestDto and delegates to ConnectorRegistrationService.</p>
+ * a ConnectorRequestDto and delegates to ConnectorRegistrationExternalService.</p>
  */
 @Slf4j
 @Component

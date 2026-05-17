@@ -13,11 +13,10 @@ import com.czertainly.api.model.common.attribute.v2.DataAttributeV2;
 import com.czertainly.api.model.common.attribute.v2.content.BaseAttributeContentV2;
 import com.czertainly.api.model.common.attribute.v2.content.FileAttributeContentV2;
 import com.czertainly.api.model.common.attribute.v2.content.StringAttributeContentV2;
-import com.czertainly.api.model.core.auth.Resource;
 import com.czertainly.api.model.core.connector.AuthType;
-import com.czertainly.core.model.auth.ResourceAction;
 import com.czertainly.core.security.authz.ExternalAuthorizationMissing;
 import com.czertainly.core.service.ConnectorAuthExternalService;
+import com.czertainly.core.service.ConnectorAuthInternalService;
 import com.czertainly.core.util.AttributeDefinitionUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
@@ -33,7 +32,7 @@ import static com.czertainly.api.clients.BaseApiClient.*;
 
 @Service
 @Transactional
-public class ConnectorAuthServiceImpl implements ConnectorAuthExternalService {
+public class ConnectorAuthServiceImpl implements ConnectorAuthExternalService, ConnectorAuthInternalService {
     private static final Logger logger = LoggerFactory.getLogger(ConnectorAuthServiceImpl.class);
 
     private static final ArrayList<String> SUPPORTED_KEY_STORE_TYPES = new ArrayList<>(List.of("PKCS12", "JKS"));
@@ -46,7 +45,6 @@ public class ConnectorAuthServiceImpl implements ConnectorAuthExternalService {
     }
 
     @Override
-    @ExternalAuthorizationMissing
     public List<DataAttribute> getAuthAttributes(AuthType authenticationType) {
         return switch (authenticationType) {
             case NONE -> List.of();
@@ -58,7 +56,6 @@ public class ConnectorAuthServiceImpl implements ConnectorAuthExternalService {
     }
 
     @Override
-    @ExternalAuthorizationMissing
     public boolean validateAuthAttributes(AuthType authenticationType, List<RequestAttribute> attributes) {
         return switch (authenticationType) {
             case NONE -> true;
@@ -70,7 +67,6 @@ public class ConnectorAuthServiceImpl implements ConnectorAuthExternalService {
     }
 
     @Override
-    @ExternalAuthorizationMissing
     public List<BaseAttribute> mergeAndValidateAuthAttributes(AuthType authenticationType, List<ResponseAttribute> attributes) {
         if (authenticationType == null || attributes == null) {
             return List.of();
