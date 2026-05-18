@@ -523,7 +523,7 @@ class CertificateServiceTest extends BaseSpringBootTest {
         UploadCertificateRequestDto request = new UploadCertificateRequestDto();
         request.setCertificate(Base64.getEncoder().encodeToString(x509Cert.getEncoded()));
 
-        Assertions.assertDoesNotThrow(() -> certificateService.upload(request, null));
+        Assertions.assertDoesNotThrow(() -> certificateService.upload(request));
     }
 
     @Test

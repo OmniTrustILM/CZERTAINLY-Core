@@ -1204,11 +1204,19 @@ public class CertificateServiceImpl implements CertificateService, AttributeReso
         return certificateContent;
     }
 
-    @ExternalAuthorization(resource = Resource.CERTIFICATE, action = ResourceAction.CREATE)
+
     @Override
+    public void upload(UploadCertificateRequestDto request) throws CertificateException, AlreadyExistException {
+        upload(request.getCertificate(), request.getCustomAttributes(), null);
+    }
+
+
+
+    @ExternalAuthorization(resource = Resource.CERTIFICATE, action = ResourceAction.CREATE)
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
-    public void upload(UploadCertificateRequestDto request, UUID userUuid) throws CertificateException, AlreadyExistException {
-        X509Certificate certificate = CertificateUtil.parseUploadedCertificateContent(request.getCertificate());
+    @Override
+    public void upload(String certificateData, List<RequestAttribute> customAttributes, UUID userUuid) throws CertificateException, AlreadyExistException {
+        X509Certificate certificate = CertificateUtil.parseUploadedCertificateContent(certificateData;
         String fingerprint;
         try {
             fingerprint = CertificateUtil.getThumbprint(certificate);
@@ -1219,18 +1227,20 @@ public class CertificateServiceImpl implements CertificateService, AttributeReso
             throw new AlreadyExistException("Certificate already exists with fingerprint " + fingerprint);
         }
 
-        if (request.getCustomAttributes() != null && !request.getCustomAttributes().isEmpty()) {
-            attributeEngine.validateCustomAttributesContent(Resource.CERTIFICATE, request.getCustomAttributes());
+        if (customAttributes != null && customAttributes.isEmpty()) {
+            attributeEngine.validateCustomAttributesContent(Resource.CERTIFICATE, customAttributes);
         }
 
         CertificateUploadEventMessageData eventMessageData = CertificateUploadEventMessageData.builder()
-            .customAttributes(request.getCustomAttributes())
+            .customAttributes(customAttributes)
             .userUuid(userUuid)
-            .certificateContent(request.getCertificate())
+            .certificateContent(certificateData)
             .fingerprint(fingerprint)
             .build();
         eventProducer.produceMessage(CertificateUploadedEventHandler.constructEventMessage(eventMessageData));
     }
+
+
 
     @Override
     public Certificate checkCreateCertificate(String certificate) throws AlreadyExistException, CertificateException, NoSuchAlgorithmException {
