@@ -1,4 +1,4 @@
-package com.czertainly.core.config;
+package com.czertainly.core.config.cache;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
@@ -7,9 +7,4 @@ public record AuthCacheProperties(
         int ttlMinutes,
         int maxSize
 ) {
-
-    public AuthCacheProperties {
-        if (ttlMinutes <= 0) ttlMinutes = 5;
-        if (maxSize <= 0) maxSize = 500;
-    }
 }
