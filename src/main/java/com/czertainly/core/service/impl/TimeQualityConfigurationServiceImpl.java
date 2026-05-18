@@ -69,7 +69,6 @@ public class TimeQualityConfigurationServiceImpl implements TimeQualityConfigura
     private SigningProfileService signingProfileService;
     private TimeQualityConfigurationRepository timeQualityConfigurationRepository;
     private TimeQualityConfigurationServiceImpl self;
-    private ApplicationEventPublisher applicationEventPublisher;
 
     @Override
     @ExternalAuthorization(resource = Resource.TIME_QUALITY_CONFIGURATION, action = ResourceAction.LIST)
@@ -281,10 +280,5 @@ public class TimeQualityConfigurationServiceImpl implements TimeQualityConfigura
     @Autowired
     public void setSigningProfileService(SigningProfileService signingProfileService) {
         this.signingProfileService = signingProfileService;
-    }
-
-    @Autowired
-    public void setApplicationEventPublisher(ApplicationEventPublisher applicationEventPublisher) {
-        this.applicationEventPublisher = applicationEventPublisher;
     }
 }
