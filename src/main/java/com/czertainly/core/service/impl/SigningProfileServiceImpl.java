@@ -299,10 +299,11 @@ public class SigningProfileServiceImpl implements SigningProfileService {
         profile.setName(request.getName());
         profile.setDescription(request.getDescription());
 
-        SigningProfileVersion version;
-        version = new SigningProfileVersion();
+        int nextVersion = profile.getLatestVersion() + 1;
+        profile.setLatestVersion(nextVersion);
+        SigningProfileVersion version = new SigningProfileVersion();
         version.setSigningProfile(profile);
-        version.setVersion(profile.getLatestVersion());
+        version.setVersion(nextVersion);
 
         applyWorkflow(profile, version, request.getWorkflow());
         applyScheme(profile, version, request.getSigningScheme());
