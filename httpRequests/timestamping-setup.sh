@@ -25,7 +25,7 @@ set -euo pipefail
 
 # --- Defaults -----------------------------------------------------------------
 ILM_HOST="http://localhost:8080"
-CLIENT_CERT_PEM="/home/lukas/dev/work/3key/czertainly/CZERTAINLY-Core/dev/client_cert.pem"
+CLIENT_CERT_PEM=""
 
 CONNECTOR_HOST="localhost"
 PORT_CRED_PROVIDER="8200"
@@ -33,10 +33,10 @@ PORT_EJBCA="8210"
 PORT_CRYPTO_PROVIDER="8230"
 PORT_FORMATTER="8270"
 
-PKCS12_BUNDLE="/home/lukas/dev/work/3key/czertainly/CZERTAINLY-Core/dev/ejbca.3key.company - Ivo Raisr - 00000000.p12"
+PKCS12_BUNDLE=""
 PKCS12_PASSWORD="00000000"
 TOKEN_PASSWORD=""          # defaults to PKCS12_PASSWORD when empty
-CERTIFICATE_DN="lukas-dev-tsa-31"
+CERTIFICATE_DN=""          # used as prefix; -non-qualified / -qualified are appended
 
 EJBCA_URL="https://ejbca.3key.company/ejbca/ejbcaws/ejbcaws?wsdl"
 EJBCA_EE_PROFILE="DemoTSAEndEntityProfile"
