@@ -131,9 +131,12 @@ public class SessionConfig implements BeanClassLoaderAware {
                 }
             }
 
-            /** Uses a servlet path (context-path-agnostic) to correctly match TSP requests under any context path. */
+            /**
+             * Uses a servlet path (context-path-agnostic) to correctly match TSP requests under any context path.
+             */
             private boolean isTspRequest(HttpServletRequest request) {
-                return request.getServletPath().startsWith("/v1/protocols/tsp");
+                String servletPath = request.getServletPath();
+                return "/v1/protocols/tsp".equals(servletPath) || servletPath.startsWith("/v1/protocols/tsp/");
             }
         };
     }

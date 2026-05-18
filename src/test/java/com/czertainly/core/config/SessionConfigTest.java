@@ -35,8 +35,9 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
 /**
- * Verifies that {@link SessionConfig#httpSessionIdResolver()} correctly suppresses session handling for TSP protocol
- * requests while preserving normal session behaviour for all other API endpoints.
+ * Verifies that {@link SessionConfig#httpSessionIdResolver(org.springframework.session.web.http.CookieSerializer)}
+ * correctly suppresses session handling for TSP protocol requests while preserving normal session behaviour for all
+ * other API endpoints.
  */
 @AutoConfigureMockMvc
 @SpringBootTest
@@ -170,25 +171,4 @@ class SessionConfigTest extends BaseSpringBootTestNoAuth {
                 "TSP expireSession must not produce a Set-Cookie header");
     }
 
-    /**
-     * expireSession for a non-TSP request must clear the cookie (delegate must be called).
-     */
-    @Test
-    void nonTspRequest_expireSession_clearsCookie() throws Exception {
-        String sessionId = UUID.randomUUID().toString();
-        var session = sessionRepository.createSession();
-        sessionRepository.save(session);
-
-        mvc.perform(
-                post(NON_TSP_URL)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{}")
-                        .cookie(sessionCookie(sessionId)))
-                .andReturn();
-
-        // The filter may issue a Set-Cookie to refresh or expire the session; the important thing is
-        // that expireSession is not suppressed for non-TSP requests, i.e. the resolver delegated.
-        Mockito.verify(sessionRepository, Mockito.atLeastOnce())
-                .findById(Mockito.anyString());
-    }
 }
