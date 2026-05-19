@@ -1,7 +1,6 @@
 package com.czertainly.core.service.impl;
 
 import com.czertainly.api.clients.ApiClientConnectorInfo;
-import com.czertainly.api.interfaces.client.v1.EndEntityProfileSyncApiClient;
 import com.czertainly.core.client.ConnectorApiFactory;
 import com.czertainly.api.exception.*;
 import com.czertainly.api.model.client.attribute.RequestAttribute;

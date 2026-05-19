@@ -8,7 +8,6 @@ import com.czertainly.core.dao.entity.*;
 import com.czertainly.core.provider.CzertainlyProvider;
 import com.czertainly.core.provider.key.CzertainlyPrivateKey;
 import com.czertainly.core.service.CryptographicKeyService;
-import com.czertainly.core.service.v2.ConnectorService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -29,13 +28,6 @@ public class CertificateKeyServiceImpl implements CertificateKeyService {
     @Autowired
     public void setCryptographicKeyService(CryptographicKeyService cryptographicKeyService) {
         this.cryptographicKeyService = cryptographicKeyService;
-    }
-
-    private ConnectorService connectorService;
-
-    @Autowired
-    public void setConnectorService(ConnectorService connectorService) {
-        this.connectorService = connectorService;
     }
 
     @Override

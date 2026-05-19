@@ -13,7 +13,7 @@ import com.czertainly.core.util.AttributeDefinitionUtils;
 import java.util.List;
 
 /**
- * Immutable, deeply-final snapshot of the connector fields required to route an API client call.
+ * Immutable snapshot (shallow) of the connector fields required to route an API client call.
  * The cache returns shared instances, so this type must not expose setters — any mutation of a
  * cached value would silently affect every other caller in the JVM.
  */

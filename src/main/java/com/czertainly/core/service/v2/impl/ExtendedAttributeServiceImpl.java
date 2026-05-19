@@ -22,12 +22,26 @@ import java.util.List;
 @Service("extendedAcmeServiceImpl")
 public class ExtendedAttributeServiceImpl implements ExtendedAttributeService {
 
-    @Autowired
     private ConnectorApiFactory connectorApiFactory;
+
     @Autowired
+    public void setConnectorApiFactory(ConnectorApiFactory connectorApiFactory) {
+        this.connectorApiFactory = connectorApiFactory;
+    }
+
     private ConnectorRepository connectorRepository;
+
     @Autowired
+    public void setConnectorRepository(ConnectorRepository connectorRepository) {
+        this.connectorRepository = connectorRepository;
+    }
+
     private ConnectorService connectorService;
+
+    @Autowired
+    public void setConnectorService(ConnectorService connectorService) {
+        this.connectorService = connectorService;
+    }
 
     private AttributeEngine attributeEngine;
 
