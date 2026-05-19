@@ -60,7 +60,7 @@ POLICY_ID_QUALIFIED="1.2.3.4.5.7"
 
 # Time Quality configuration (used by the qualified signing profile)
 TIME_QUALITY_CONFIG_NAME="time-quality"
-TIME_QUALITY_NTP_SERVERS="localhost"       # comma-separated list, e.g. "pool.ntp.org,time.cloudflare.com"
+TIME_QUALITY_NTP_SERVERS="ntp"       # comma-separated list, e.g. "pool.ntp.org,time.cloudflare.com"
 TIME_QUALITY_ACCURACY="PT1S"
 TIME_QUALITY_NTP_CHECK_INTERVAL="PT0.5S"
 TIME_QUALITY_NTP_CHECK_TIMEOUT="PT0.3S"
@@ -154,7 +154,7 @@ Certificate polling:
 
 Time Quality configuration (used by the qualified signing profile):
   --time-quality-name NAME                    (default: time-quality)
-  --time-quality-ntp-servers SERVERS          Comma-separated NTP server list (default: localhost)
+  --time-quality-ntp-servers SERVERS          Comma-separated NTP server list (default: ntp)
   --time-quality-accuracy DURATION            ISO-8601 duration (default: PT1S)
   --time-quality-ntp-check-interval DURATION  ISO-8601 duration (default: PT10S)
   --time-quality-ntp-check-timeout DURATION   ISO-8601 duration (default: PT5S)
