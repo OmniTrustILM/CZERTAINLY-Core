@@ -34,7 +34,6 @@ import com.czertainly.api.model.client.signing.timequality.TimeQualityConfigurat
 import com.czertainly.api.model.core.oid.SystemOid;
 import com.czertainly.api.model.common.BulkActionMessageDto;
 import com.czertainly.api.model.common.PaginationResponseDto;
-import com.czertainly.api.model.common.attribute.common.AttributeVersion;
 import com.czertainly.api.model.common.attribute.common.content.AttributeContentType;
 import com.czertainly.api.model.common.attribute.common.AttributeType;
 import com.czertainly.api.model.common.attribute.common.properties.CustomAttributeProperties;
@@ -102,10 +101,25 @@ import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.client.WireMock;
 import org.bouncycastle.operator.OperatorCreationException;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInstance;
+import org.junit.jupiter.api.function.Executable;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.Arguments;
 import org.springframework.beans.factory.annotation.Autowired;
+
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 import java.io.IOException;
 import java.security.NoSuchAlgorithmException;
@@ -115,11 +129,14 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Stream;
 
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class SigningProfileServiceImplTest extends BaseSpringBootTest {
 
     private static final String CUSTOM_ATTR_UUID = "a1b2c3d4-0001-0002-0003-000000000003";
     private static final String CUSTOM_ATTR_NAME = "signingProfileTestAttribute";
+    private static final String MISSING_UUID = "00000000-0000-0000-0000-000000000001";
 
     @Autowired
     private SigningProfileService signingProfileService;
@@ -172,6 +189,63 @@ class SigningProfileServiceImplTest extends BaseSpringBootTest {
     @Autowired
     private ConnectorInterfaceRepository connectorInterfaceRepository;
 
+    @Nested
+    @TestInstance(TestInstance.Lifecycle.PER_CLASS)
+    class NotFound {
+
+        Stream<Arguments> notFoundOperations() {
+            SecuredUUID missing = SecuredUUID.fromString(MISSING_UUID);
+            return Stream.of(
+                    Arguments.of(
+                            (Executable) () -> signingProfileService.getSigningProfile(missing, null),
+                            "getSigningProfile(missingUuid)"
+                    ),
+                    Arguments.of(
+                            (Executable) () -> signingProfileService.updateSigningProfile(
+                                    missing, buildDelegatedRawRequest("x")),
+                            "updateSigningProfile(missingUuid)"
+                    ),
+                    Arguments.of(
+                            (Executable) () -> signingProfileService.deleteSigningProfile(missing),
+                            "deleteSigningProfile(missingUuid)"
+                    ),
+                    Arguments.of(
+                            (Executable) () -> signingProfileService.enableSigningProfile(missing),
+                            "enableSigningProfile(missingUuid)"
+                    ),
+                    Arguments.of(
+                            (Executable) () -> signingProfileService.disableSigningProfile(missing),
+                            "disableSigningProfile(missingUuid)"
+                    ),
+                    Arguments.of(
+                            (Executable) () -> {
+                                TspProfile tsp = new TspProfile();
+                                tsp.setName("tsp-for-notfound-test");
+                                tsp = tspRepository.save(tsp);
+                                signingProfileService.activateTsp(missing, tsp.getSecuredUuid());
+                            },
+                            "activateTsp(missingProfile)"
+                    ),
+                    Arguments.of(
+                            (Executable) () -> signingProfileService.deactivateTsp(missing),
+                            "deactivateTsp(missingUuid)"
+                    ),
+                    Arguments.of(
+                            (Executable) () -> signingProfileService.getManagedTimestampingProfileModel("no-such-profile"),
+                            "getManagedTimestampingProfileModel(nonExistentName)"
+                    )
+            );
+        }
+
+        @ParameterizedTest(name = "[{index}] {1}")
+        @MethodSource("notFoundOperations")
+        void operation_missingProfile_throwsNotFoundException(Executable op, String displayName) {
+            // given: a profile UUID that does not exist in the database
+            // when/then: calling any service operation with that UUID raises NotFoundException
+            assertThrows(NotFoundException.class, op);
+        }
+    }
+
     /**
      * A signing profile saved directly via repository, used as pre-existing data in tests.
      */
@@ -220,7 +294,9 @@ class SigningProfileServiceImplTest extends BaseSpringBootTest {
      */
     private Connector formatterConnector;
 
-    /** WireMock server that backs every formatter connector URL created via {@link #createFormatterConnector}. */
+    /**
+     * WireMock server that backs every formatter connector URL created via {@link #createFormatterConnector}.
+     */
     private WireMockServer mockServer;
 
     @BeforeEach
@@ -373,1280 +449,1268 @@ class SigningProfileServiceImplTest extends BaseSpringBootTest {
         mockServer.stop();
     }
 
-    // ──────────────────────────────────────────────────────────────────────────
-    // List
-    // ──────────────────────────────────────────────────────────────────────────
+    @Nested
+    class ListTests {
 
-    @Test
-    void testListSigningProfiles_returnsExistingEntries() {
-        SearchRequestDto request = new SearchRequestDto();
-        PaginationResponseDto<SigningProfileListDto> response = signingProfileService.listSigningProfiles(request, SecurityFilter.create());
+        @Test
+        void returnsExistingEntries() {
+            // given: one profile in the database (savedProfile from setUp)
+            SearchRequestDto request = new SearchRequestDto();
 
-        Assertions.assertNotNull(response);
-        Assertions.assertEquals(1, response.getTotalItems());
-        SigningProfileListDto listed = response.getItems().getFirst();
-        Assertions.assertEquals(savedProfile.getUuid().toString(), listed.getUuid());
-        Assertions.assertEquals(savedProfile.getName(), listed.getName());
-        Assertions.assertEquals(savedProfile.getDescription(), listed.getDescription());
-        Assertions.assertEquals(SigningWorkflowType.RAW_SIGNING, listed.getSigningWorkflowType());
-        Assertions.assertFalse(listed.isEnabled());
-    }
+            // when
+            PaginationResponseDto<SigningProfileListDto> response =
+                    signingProfileService.listSigningProfiles(request, SecurityFilter.create());
 
-    @Test
-    void testListSigningProfiles_emptyWhenNoneExist() {
-        signingProfileService.bulkDeleteSigningProfiles(List.of(savedProfile.getSecuredUuid()));
+            // then
+            assertNotNull(response);
+            assertEquals(1, response.getTotalItems());
+            SigningProfileListDto listed = response.getItems().getFirst();
+            assertEquals(savedProfile.getUuid().toString(), listed.getUuid());
+            assertEquals(savedProfile.getName(), listed.getName());
+            assertEquals(savedProfile.getDescription(), listed.getDescription());
+            assertEquals(SigningWorkflowType.RAW_SIGNING, listed.getSigningWorkflowType());
+            assertFalse(listed.isEnabled());
+        }
 
-        SearchRequestDto request = new SearchRequestDto();
-        PaginationResponseDto<SigningProfileListDto> response = signingProfileService.listSigningProfiles(request, SecurityFilter.create());
+        @Test
+        void emptyWhenNoneExist() {
+            // given: no profiles (delete the one from setUp)
+            signingProfileService.bulkDeleteSigningProfiles(List.of(savedProfile.getSecuredUuid()));
 
-        Assertions.assertNotNull(response);
-        Assertions.assertEquals(0, response.getTotalItems());
-        Assertions.assertTrue(response.getItems().isEmpty());
-    }
+            // when
+            PaginationResponseDto<SigningProfileListDto> response =
+                    signingProfileService.listSigningProfiles(new SearchRequestDto(), SecurityFilter.create());
 
-    @Test
-    void testListSigningProfiles_multipleProfilesWithDifferentWorkflowTypes()
-            throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
-        // Create additional profiles with different workflow types
-        signingProfileService.createSigningProfile(buildDelegatedContentRequest("content-profile"));
-        signingProfileService.createSigningProfile(buildDelegatedTimestampingRequest("timestamping-profile"));
+            // then
+            assertNotNull(response);
+            assertEquals(0, response.getTotalItems());
+            assertTrue(response.getItems().isEmpty());
+        }
 
-        SearchRequestDto request = new SearchRequestDto();
-        PaginationResponseDto<SigningProfileListDto> response = signingProfileService.listSigningProfiles(request, SecurityFilter.create());
+        @Test
+        void multipleProfilesWithDifferentWorkflowTypes()
+                throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
+            // given: 3 profiles with different workflow types
+            signingProfileService.createSigningProfile(buildDelegatedContentRequest("content-profile"));
+            signingProfileService.createSigningProfile(buildDelegatedTimestampingRequest("timestamping-profile"));
 
-        Assertions.assertNotNull(response);
-        Assertions.assertEquals(3, response.getTotalItems());
+            // when
+            PaginationResponseDto<SigningProfileListDto> response =
+                    signingProfileService.listSigningProfiles(new SearchRequestDto(), SecurityFilter.create());
 
-        List<SigningWorkflowType> returnedTypes = response.getItems().stream()
-                .map(SigningProfileListDto::getSigningWorkflowType)
-                .toList();
-        Assertions.assertTrue(returnedTypes.contains(SigningWorkflowType.RAW_SIGNING));
-        Assertions.assertTrue(returnedTypes.contains(SigningWorkflowType.CONTENT_SIGNING));
-        Assertions.assertTrue(returnedTypes.contains(SigningWorkflowType.TIMESTAMPING));
-    }
-
-    // ──────────────────────────────────────────────────────────────────────────
-    // Get
-    // ──────────────────────────────────────────────────────────────────────────
-
-    @Test
-    void testGetSigningProfile_returnsCorrectDto() throws NotFoundException {
-        SigningProfileDto dto = signingProfileService.getSigningProfile(savedProfile.getSecuredUuid(), null);
-
-        Assertions.assertNotNull(dto);
-        Assertions.assertEquals(savedProfile.getUuid().toString(), dto.getUuid());
-        Assertions.assertEquals(savedProfile.getName(), dto.getName());
-        Assertions.assertEquals(savedProfile.getDescription(), dto.getDescription());
-        Assertions.assertFalse(dto.isEnabled());
-        Assertions.assertEquals(1, dto.getVersion());
-    }
-
-    @Test
-    void testGetSigningProfile_notFound() {
-        Assertions.assertThrows(NotFoundException.class,
-                () -> signingProfileService.getSigningProfile(
-                        SecuredUUID.fromString("00000000-0000-0000-0000-000000000001"), null));
-    }
-
-    @Test
-    void testGetSigningProfile_specificVersion_returnsSnapshotData() throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
-        // Create a profile via service — this creates the version 1 snapshot
-        SigningProfileDto created = signingProfileService.createSigningProfile(buildDelegatedRawRequest("profile-for-version-get"));
-        SecuredUUID profileUuid = SecuredUUID.fromString(created.getUuid());
-
-        // Get with explicit version=1
-        SigningProfileDto dto = signingProfileService.getSigningProfile(profileUuid, 1);
-
-        Assertions.assertNotNull(dto);
-        Assertions.assertEquals(1, dto.getVersion());
-        Assertions.assertNotNull(dto.getSigningScheme());
-        Assertions.assertEquals(SigningScheme.DELEGATED, dto.getSigningScheme().getSigningScheme());
-        Assertions.assertNotNull(dto.getWorkflow());
-        Assertions.assertEquals(SigningWorkflowType.RAW_SIGNING, dto.getWorkflow().getType());
-    }
-
-    @Test
-    void testGetSigningProfile_nonExistentVersion_throwsNotFoundException() throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
-        SigningProfileDto created = signingProfileService.createSigningProfile(buildDelegatedRawRequest("profile-missing-version"));
-        SecuredUUID profileUuid = SecuredUUID.fromString(created.getUuid());
-
-        // Version 99 does not exist
-        Assertions.assertThrows(NotFoundException.class,
-                () -> signingProfileService.getSigningProfile(profileUuid, 99));
-    }
-
-    @Test
-    void testGetSigningProfile_afterVersionBump_oldVersionPreservesOriginalWorkflowType()
-            throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
-        // Create with DELEGATED + RAW_SIGNING (version 1)
-        SigningProfileDto created = signingProfileService.createSigningProfile(buildDelegatedRawRequest("profile-history"));
-        SecuredUUID profileUuid = SecuredUUID.fromString(created.getUuid());
-        SigningProfile entity = signingProfileRepository.findById(UUID.fromString(created.getUuid())).orElseThrow();
-
-        // Add a signing record so that the next update triggers a version bump
-        createSigningRecordFor(entity, 1);
-
-        // Update to DELEGATED + CONTENT_SIGNING → should bump to version 2
-        signingProfileService.updateSigningProfile(profileUuid, buildDelegatedContentRequest("profile-history"));
-
-        // Version 1 snapshot must still report RAW_SIGNING
-        SigningProfileDto v1 = signingProfileService.getSigningProfile(profileUuid, 1);
-        Assertions.assertEquals(1, v1.getVersion());
-        Assertions.assertEquals(SigningWorkflowType.RAW_SIGNING, v1.getWorkflow().getType());
-
-        // Latest (version 2) must report CONTENT_SIGNING
-        SigningProfileDto latest = signingProfileService.getSigningProfile(profileUuid, null);
-        Assertions.assertEquals(2, latest.getVersion());
-        Assertions.assertEquals(SigningWorkflowType.CONTENT_SIGNING, latest.getWorkflow().getType());
-    }
-
-    @Test
-    void testGetSigningProfile_noProtocolsLinked_enabledProtocolsIsEmpty() throws NotFoundException {
-        // savedProfile has no TSP linked
-        SigningProfileDto dto = signingProfileService.getSigningProfile(savedProfile.getSecuredUuid(), null);
-
-        Assertions.assertNotNull(dto.getEnabledProtocols());
-        Assertions.assertTrue(dto.getEnabledProtocols().isEmpty(),
-                "No protocols should be enabled when none are linked");
-    }
-
-    @Test
-    void testGetSigningProfile_withTspLinked_enabledProtocolsContainsTsp() throws NotFoundException {
-        TspProfile tspProfile = new TspProfile();
-        tspProfile.setName("tsp-for-dto-test");
-        tspProfile = tspRepository.save(tspProfile);
-
-        savedProfile.setTspProfile(tspProfile);
-        signingProfileRepository.save(savedProfile);
-
-        SigningProfileDto dto = signingProfileService.getSigningProfile(savedProfile.getSecuredUuid(), null);
-
-        Assertions.assertNotNull(dto.getEnabledProtocols());
-        Assertions.assertTrue(dto.getEnabledProtocols().contains(SigningProtocol.TSP),
-                "TSP should appear in enabledProtocols");
-    }
-
-    // ──────────────────────────────────────────────────────────────────────────
-    // Create
-    // ──────────────────────────────────────────────────────────────────────────
-
-    @Test
-    void testCreateSigningProfile_delegatedRawSigning_assertDtoAndDbEntity() throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
-        SigningProfileRequestDto request = buildDelegatedRawRequest("new-delegated-profile");
-
-        SigningProfileDto dto = signingProfileService.createSigningProfile(request);
-
-        // Assert returned DTO
-        Assertions.assertNotNull(dto);
-        Assertions.assertNotNull(dto.getUuid());
-        Assertions.assertEquals("new-delegated-profile", dto.getName());
-        Assertions.assertEquals("Test description for new-delegated-profile", dto.getDescription());
-        Assertions.assertFalse(dto.isEnabled());
-        Assertions.assertEquals(1, dto.getVersion());
-        Assertions.assertNotNull(dto.getSigningScheme());
-        Assertions.assertNotNull(dto.getWorkflow());
-
-        // Assert entity reloaded from the database
-        Optional<SigningProfile> fromDb = signingProfileRepository.findById(UUID.fromString(dto.getUuid()));
-        Assertions.assertTrue(fromDb.isPresent());
-        SigningProfile entity = fromDb.get();
-        Assertions.assertEquals("new-delegated-profile", entity.getName());
-        Assertions.assertEquals("Test description for new-delegated-profile", entity.getDescription());
-        Assertions.assertFalse(entity.getEnabled());
-        Assertions.assertEquals(SigningScheme.DELEGATED, entity.getSigningScheme());
-        Assertions.assertEquals(SigningWorkflowType.RAW_SIGNING, entity.getWorkflowType());
-        Assertions.assertEquals(1, entity.getLatestVersion());
-
-        SigningProfileVersion currentVersion = signingProfileVersionRepository
-                .findBySigningProfileUuidAndVersion(entity.getUuid(), entity.getLatestVersion()).orElseThrow();
-        // For delegated scheme without connector UUID in request, it should be null
-        Assertions.assertNull(currentVersion.getDelegatedSignerConnectorUuid());
-        // Version snapshot must carry scheme and workflow type
-        Assertions.assertNotNull(currentVersion.getSigningScheme());
-        Assertions.assertNotNull(currentVersion.getWorkflowType());
-    }
-
-    // ──────────────────────────────────────────────────────────────────────────
-    // Create – Signing scheme variations
-    // ──────────────────────────────────────────────────────────────────────────
-
-    @Test
-    void testCreateSigningProfile_staticKeyManaged_assertSchemeAndEntityFields()
-            throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
-        SigningProfileRequestDto request = buildManagedStaticKeyRawRequest("static-key-profile");
-
-        SigningProfileDto dto = signingProfileService.createSigningProfile(request);
-
-        // Assert scheme type in DTO
-        Assertions.assertNotNull(dto.getSigningScheme());
-        Assertions.assertEquals(SigningScheme.MANAGED, dto.getSigningScheme().getSigningScheme());
-
-        // Assert entity fields
-        Optional<SigningProfile> fromDb = signingProfileRepository.findById(UUID.fromString(dto.getUuid()));
-        Assertions.assertTrue(fromDb.isPresent());
-        SigningProfile entity = fromDb.get();
-        Assertions.assertEquals(SigningScheme.MANAGED, entity.getSigningScheme());
-
-        SigningProfileVersion currentVersion = signingProfileVersionRepository
-                .findBySigningProfileUuidAndVersion(entity.getUuid(), entity.getLatestVersion()).orElseThrow();
-        Assertions.assertEquals(ManagedSigningType.STATIC_KEY, currentVersion.getManagedSigningType());
-        // No delegated connector when using the managed signing scheme
-        Assertions.assertNull(currentVersion.getDelegatedSignerConnectorUuid());
-        // No RA profile / CSR template for the static key managed signing scheme
-        Assertions.assertNull(currentVersion.getRaProfileUuid());
-        Assertions.assertNull(currentVersion.getCsrTemplateUuid());
-    }
-
-    @Test
-    void testCreateSigningProfile_staticKeyManaged_incompleteChain_throwsValidationException()
-            throws CertificateException, NoSuchAlgorithmException, OperatorCreationException {
-        Certificate incompleteChainCert = buildIncompleteChainCertificate();
-
-        StaticKeyManagedSigningRequestDto scheme = new StaticKeyManagedSigningRequestDto();
-        scheme.setCertificateUuid(incompleteChainCert.getUuid());
-        SigningProfileRequestDto request = new SigningProfileRequestDto();
-        request.setName("incomplete-chain-profile");
-        request.setSigningScheme(scheme);
-        request.setWorkflow(new RawSigningWorkflowRequestDto());
-
-        Assertions.assertThrows(ValidationException.class,
-                () -> signingProfileService.createSigningProfile(request),
-                "createSigningProfile must reject a certificate whose chain is incomplete");
-    }
-
-    @Test
-    void testCreateSigningProfile_oneTimeKeyManaged_assertSchemeAndEntityFields()
-            throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
-        SigningProfileRequestDto request = buildManagedOneTimeKeyRawRequest("one-time-key-profile");
-        SigningProfileDto dto = signingProfileService.createSigningProfile(request);
-
-        // Assert scheme type in DTO
-        Assertions.assertNotNull(dto.getSigningScheme());
-        Assertions.assertEquals(SigningScheme.MANAGED, dto.getSigningScheme().getSigningScheme());
-
-        // Assert entity fields
-        Optional<SigningProfile> fromDb = signingProfileRepository.findById(UUID.fromString(dto.getUuid()));
-        Assertions.assertTrue(fromDb.isPresent());
-        SigningProfile entity = fromDb.get();
-        Assertions.assertEquals(SigningScheme.MANAGED, entity.getSigningScheme());
-
-        SigningProfileVersion currentVersion = signingProfileVersionRepository
-                .findBySigningProfileUuidAndVersion(entity.getUuid(), entity.getLatestVersion()).orElseThrow();
-        Assertions.assertEquals(ManagedSigningType.ONE_TIME_KEY, currentVersion.getManagedSigningType());
-        // No delegated connector when using managed scheme
-        Assertions.assertNull(currentVersion.getDelegatedSignerConnectorUuid());
-        // Certificate UUID is not set for one-time key type
-        Assertions.assertNull(currentVersion.getCertificateUuid());
-    }
-
-    @Test
-    void testCreateSigningProfile_managedSchemeTypes_allCreateVersionSnapshot()
-            throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
-        // DELEGATED is intentionally excluded here — its snapshot creation is verified in
-        // testCreateSigningProfile_delegatedRawSigning_assertDtoAndDbEntity.
-        SigningProfileDto staticKeyDto = signingProfileService.createSigningProfile(buildManagedStaticKeyRawRequest("snapshot-static"));
-        SigningProfileDto oneTimeKeyDto = signingProfileService.createSigningProfile(buildManagedOneTimeKeyRawRequest("snapshot-onetime"));
-
-        for (String uuidStr : List.of(staticKeyDto.getUuid(), oneTimeKeyDto.getUuid())) {
-            UUID profileUuid = UUID.fromString(uuidStr);
-            Optional<SigningProfileVersion> snapshot = signingProfileVersionRepository.findBySigningProfileUuidAndVersion(profileUuid, 1);
-            Assertions.assertTrue(snapshot.isPresent(),
-                    "Version 1 should exist for profile " + uuidStr);
-            Assertions.assertNotNull(snapshot.get().getSigningScheme());
-            Assertions.assertNotNull(snapshot.get().getWorkflowType());
+            // then
+            assertEquals(3, response.getTotalItems());
+            List<SigningWorkflowType> returnedTypes = response.getItems().stream()
+                    .map(SigningProfileListDto::getSigningWorkflowType).toList();
+            assertTrue(returnedTypes.contains(SigningWorkflowType.RAW_SIGNING));
+            assertTrue(returnedTypes.contains(SigningWorkflowType.CONTENT_SIGNING));
+            assertTrue(returnedTypes.contains(SigningWorkflowType.TIMESTAMPING));
         }
     }
 
-    // ──────────────────────────────────────────────────────────────────────────
-    // Create – Workflow type variations
-    // ──────────────────────────────────────────────────────────────────────────
+    @Nested
+    class GetTests {
 
-    @Test
-    void testCreateSigningProfile_contentSigningWorkflow_assertWorkflowTypeAndEntity()
-            throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
-        SigningProfileRequestDto request = buildDelegatedContentRequest("content-signing-profile");
-        SigningProfileDto dto = signingProfileService.createSigningProfile(request);
+        @Test
+        void returnsCorrectDto() throws NotFoundException {
+            // given: savedProfile from setUp
+            // when
+            SigningProfileDto dto = signingProfileService.getSigningProfile(savedProfile.getSecuredUuid(), null);
 
-        Assertions.assertNotNull(dto.getWorkflow());
-        Assertions.assertEquals(SigningWorkflowType.CONTENT_SIGNING, dto.getWorkflow().getType());
+            // then
+            assertNotNull(dto);
+            assertEquals(savedProfile.getUuid().toString(), dto.getUuid());
+            assertEquals(savedProfile.getName(), dto.getName());
+            assertEquals(savedProfile.getDescription(), dto.getDescription());
+            assertFalse(dto.isEnabled());
+            assertEquals(1, dto.getVersion());
+        }
 
-        Optional<SigningProfile> fromDb = signingProfileRepository.findById(UUID.fromString(dto.getUuid()));
-        Assertions.assertTrue(fromDb.isPresent());
-        Assertions.assertEquals(SigningWorkflowType.CONTENT_SIGNING, fromDb.get().getWorkflowType());
+        @Test
+        void specificVersion_returnsSnapshotData()
+                throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
+            // given: a profile created via service (creates version 1 snapshot)
+            SigningProfileDto created = signingProfileService.createSigningProfile(
+                    buildDelegatedRawRequest("profile-for-version-get"));
+            SecuredUUID profileUuid = SecuredUUID.fromString(created.getUuid());
+
+            // when: get with explicit version=1
+            SigningProfileDto dto = signingProfileService.getSigningProfile(profileUuid, 1);
+
+            // then
+            assertNotNull(dto);
+            assertEquals(1, dto.getVersion());
+            assertNotNull(dto.getSigningScheme());
+            assertEquals(SigningScheme.DELEGATED, dto.getSigningScheme().getSigningScheme());
+            assertNotNull(dto.getWorkflow());
+            assertEquals(SigningWorkflowType.RAW_SIGNING, dto.getWorkflow().getType());
+        }
+
+        @Test
+        void afterVersionBump_oldVersionPreservesOriginalWorkflowType()
+                throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
+            // given: profile at v1 (RAW_SIGNING), then bumped to v2 (CONTENT_SIGNING)
+            SigningProfileDto created = signingProfileService.createSigningProfile(
+                    buildDelegatedRawRequest("profile-history"));
+            SecuredUUID profileUuid = SecuredUUID.fromString(created.getUuid());
+            createSigningRecordFor(reloadProfile(UUID.fromString(created.getUuid())), 1);
+            signingProfileService.updateSigningProfile(profileUuid, buildDelegatedContentRequest("profile-history"));
+
+            // when: fetch version 1 and latest
+            SigningProfileDto v1 = signingProfileService.getSigningProfile(profileUuid, 1);
+            SigningProfileDto latest = signingProfileService.getSigningProfile(profileUuid, null);
+
+            // then
+            assertEquals(1, v1.getVersion());
+            assertEquals(SigningWorkflowType.RAW_SIGNING, v1.getWorkflow().getType());
+            assertEquals(2, latest.getVersion());
+            assertEquals(SigningWorkflowType.CONTENT_SIGNING, latest.getWorkflow().getType());
+        }
+
+        @Test
+        void noProtocolsLinked_enabledProtocolsIsEmpty() throws NotFoundException {
+            // given: savedProfile has no TSP linked
+            // when
+            SigningProfileDto dto = signingProfileService.getSigningProfile(savedProfile.getSecuredUuid(), null);
+
+            // then
+            assertNotNull(dto.getEnabledProtocols());
+            assertTrue(dto.getEnabledProtocols().isEmpty());
+        }
+
+        @Test
+        void withTspLinked_enabledProtocolsContainsTsp() throws NotFoundException {
+            // given: link a TSP profile
+            TspProfile tspProfile = new TspProfile();
+            tspProfile.setName("tsp-for-dto-test");
+            tspProfile = tspRepository.save(tspProfile);
+            savedProfile.setTspProfile(tspProfile);
+            signingProfileRepository.save(savedProfile);
+
+            // when
+            SigningProfileDto dto = signingProfileService.getSigningProfile(savedProfile.getSecuredUuid(), null);
+
+            // then
+            assertNotNull(dto.getEnabledProtocols());
+            assertTrue(dto.getEnabledProtocols().contains(SigningProtocol.TSP));
+        }
+
+        @Test
+        void nonExistentVersion_throwsNotFoundException()
+                throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
+            // given: a valid profile created via service
+            SigningProfileDto created = signingProfileService.createSigningProfile(
+                    buildDelegatedRawRequest("profile-for-version-notfound"));
+            SecuredUUID profileUuid = SecuredUUID.fromString(created.getUuid());
+
+            // when/then: requesting a non-existent version throws NotFoundException
+            assertThrows(NotFoundException.class,
+                    () -> signingProfileService.getSigningProfile(profileUuid, 99));
+        }
     }
 
-    @Test
-    void testCreateSigningProfile_timestampingWorkflow_assertWorkflowTypeAndEntity()
-            throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
-        SigningProfileRequestDto request = buildDelegatedTimestampingRequest("timestamping-profile");
-        SigningProfileDto dto = signingProfileService.createSigningProfile(request);
+    @Nested
+    class CreateScheme {
 
-        Assertions.assertNotNull(dto.getWorkflow());
-        Assertions.assertEquals(SigningWorkflowType.TIMESTAMPING, dto.getWorkflow().getType());
+        @Test
+        void delegatedRawSigning_assertDtoAndDbEntity()
+                throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
+            // given
+            SigningProfileRequestDto request = buildDelegatedRawRequest("new-delegated-profile");
 
-        Optional<SigningProfile> fromDb = signingProfileRepository.findById(UUID.fromString(dto.getUuid()));
-        Assertions.assertTrue(fromDb.isPresent());
-        Assertions.assertEquals(SigningWorkflowType.TIMESTAMPING, fromDb.get().getWorkflowType());
+            // when
+            SigningProfileDto dto = signingProfileService.createSigningProfile(request);
+
+            // then: DTO fields
+            assertNotNull(dto);
+            assertNotNull(dto.getUuid());
+            assertEquals("new-delegated-profile", dto.getName());
+            assertFalse(dto.isEnabled());
+            assertEquals(1, dto.getVersion());
+            assertNotNull(dto.getSigningScheme());
+            assertNotNull(dto.getWorkflow());
+
+            // then: DB entity
+            SigningProfile entity = reloadProfile(UUID.fromString(dto.getUuid()));
+            assertEquals(SigningScheme.DELEGATED, entity.getSigningScheme());
+            assertEquals(SigningWorkflowType.RAW_SIGNING, entity.getWorkflowType());
+            assertEquals(1, entity.getLatestVersion());
+
+            SigningProfileVersion snapshot = loadVersionSnapshot(entity.getUuid(), 1);
+            assertNull(snapshot.getDelegatedSignerConnectorUuid());
+            assertNotNull(snapshot.getSigningScheme());
+            assertNotNull(snapshot.getWorkflowType());
+        }
+
+        @Test
+        void staticKeyManaged_assertSchemeAndEntityFields()
+                throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
+            // given
+            SigningProfileRequestDto request = buildManagedStaticKeyRawRequest("static-key-profile");
+
+            // when
+            SigningProfileDto dto = signingProfileService.createSigningProfile(request);
+
+            // then
+            assertEquals(SigningScheme.MANAGED, dto.getSigningScheme().getSigningScheme());
+            SigningProfile entity = reloadProfile(UUID.fromString(dto.getUuid()));
+            assertEquals(SigningScheme.MANAGED, entity.getSigningScheme());
+            SigningProfileVersion snapshot = loadVersionSnapshot(entity.getUuid(), 1);
+            assertEquals(ManagedSigningType.STATIC_KEY, snapshot.getManagedSigningType());
+            assertNull(snapshot.getDelegatedSignerConnectorUuid());
+            assertNull(snapshot.getRaProfileUuid());
+            assertNull(snapshot.getCsrTemplateUuid());
+        }
+
+        @Test
+        void oneTimeKeyManaged_assertSchemeAndEntityFields()
+                throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
+            // given
+            SigningProfileRequestDto request = buildManagedOneTimeKeyRawRequest("one-time-key-profile");
+
+            // when
+            SigningProfileDto dto = signingProfileService.createSigningProfile(request);
+
+            // then
+            assertEquals(SigningScheme.MANAGED, dto.getSigningScheme().getSigningScheme());
+            SigningProfile entity = reloadProfile(UUID.fromString(dto.getUuid()));
+            assertEquals(SigningScheme.MANAGED, entity.getSigningScheme());
+            SigningProfileVersion snapshot = loadVersionSnapshot(entity.getUuid(), 1);
+            assertEquals(ManagedSigningType.ONE_TIME_KEY, snapshot.getManagedSigningType());
+            assertNull(snapshot.getDelegatedSignerConnectorUuid());
+            assertNull(snapshot.getCertificateUuid());
+        }
+
+        @Test
+        void staticKeyManaged_incompleteChain_throwsValidationException()
+                throws CertificateException, NoSuchAlgorithmException, OperatorCreationException {
+            // given: a certificate whose chain cannot be verified
+            Certificate incompleteChainCert = buildIncompleteChainCertificate();
+            StaticKeyManagedSigningRequestDto scheme = new StaticKeyManagedSigningRequestDto();
+            scheme.setCertificateUuid(incompleteChainCert.getUuid());
+            SigningProfileRequestDto request = new SigningProfileRequestDto();
+            request.setName("incomplete-chain-profile");
+            request.setSigningScheme(scheme);
+            request.setWorkflow(new RawSigningWorkflowRequestDto());
+
+            // when/then
+            assertThrows(ValidationException.class,
+                    () -> signingProfileService.createSigningProfile(request),
+                    "createSigningProfile must reject a certificate whose chain is incomplete");
+        }
     }
 
-    @Test
-    void testCreateSigningProfile_timestampingWorkflowWithPoliciesAndAlgorithms_assertEntityFields()
-            throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
-        TimestampingWorkflowRequestDto timestampingWorkflow = new TimestampingWorkflowRequestDto();
-        timestampingWorkflow.setSignatureFormatterConnectorUuid(formatterConnector.getUuid());
-        timestampingWorkflow.setDefaultPolicyId("1.2.3.4.5");
-        timestampingWorkflow.setAllowedPolicyIds(List.of("1.2.3.4.5", "1.2.3.4.6"));
-        timestampingWorkflow.setAllowedDigestAlgorithms(List.of(DigestAlgorithm.SHA_256, DigestAlgorithm.SHA_384));
-        timestampingWorkflow.setQualifiedTimestamp(false);
-        timestampingWorkflow.setValidateTokenSignature(true);
+    @Nested
+    @TestInstance(TestInstance.Lifecycle.PER_CLASS)
+    class CreateWorkflow {
 
-        SigningProfileRequestDto request = new SigningProfileRequestDto();
-        request.setName("timestamping-with-policies");
-        request.setDescription("Timestamping profile with policies");
-        request.setSigningScheme(new DelegatedSigningRequestDto());
-        request.setWorkflow(timestampingWorkflow);
+        Stream<Arguments> basicWorkflowTypes() {
+            return Stream.of(
+                    Arguments.of(SigningWorkflowType.CONTENT_SIGNING),
+                    Arguments.of(SigningWorkflowType.TIMESTAMPING)
+            );
+        }
 
-        SigningProfileDto dto = signingProfileService.createSigningProfile(request);
+        @ParameterizedTest(name = "[{index}] {0}")
+        @MethodSource("basicWorkflowTypes")
+        void workflowType_persistedInDtoAndEntity(SigningWorkflowType expectedType)
+                throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
+            // given: build the request after setUp has initialised formatterConnector
+            SigningProfileRequestDto request = expectedType == SigningWorkflowType.CONTENT_SIGNING
+                    ? buildDelegatedContentRequest("content-signing-profile")
+                    : buildDelegatedTimestampingRequest("timestamping-profile");
 
-        // Assert workflow fields in DTO
-        Assertions.assertNotNull(dto.getWorkflow());
-        Assertions.assertEquals(SigningWorkflowType.TIMESTAMPING, dto.getWorkflow().getType());
-        TimestampingWorkflowDto tsDto = (TimestampingWorkflowDto) dto.getWorkflow();
-        Assertions.assertEquals("1.2.3.4.5", tsDto.getDefaultPolicyId());
-        Assertions.assertEquals(List.of("1.2.3.4.5", "1.2.3.4.6"), tsDto.getAllowedPolicyIds());
-        Assertions.assertTrue(tsDto.getAllowedDigestAlgorithms().contains(DigestAlgorithm.SHA_256));
-        Assertions.assertTrue(tsDto.getAllowedDigestAlgorithms().contains(DigestAlgorithm.SHA_384));
-        Assertions.assertFalse(tsDto.getQualifiedTimestamp());
-        Assertions.assertTrue(tsDto.getValidateTokenSignature());
+            // when
+            SigningProfileDto dto = signingProfileService.createSigningProfile(request);
 
-        // Assert entity fields in the database
-        Optional<SigningProfile> fromDb = signingProfileRepository.findById(UUID.fromString(dto.getUuid()));
-        Assertions.assertTrue(fromDb.isPresent());
-        SigningProfile entity = fromDb.get();
-        Assertions.assertEquals(SigningWorkflowType.TIMESTAMPING, entity.getWorkflowType());
+            // then
+            assertNotNull(dto.getWorkflow());
+            assertEquals(expectedType, dto.getWorkflow().getType());
+            SigningProfile entity = reloadProfile(UUID.fromString(dto.getUuid()));
+            assertEquals(expectedType, entity.getWorkflowType());
+        }
 
-        SigningProfileVersion currentVersion = signingProfileVersionRepository
-                .findBySigningProfileUuidAndVersion(entity.getUuid(), entity.getLatestVersion()).orElseThrow();
-        Assertions.assertEquals("1.2.3.4.5", currentVersion.getDefaultPolicyId());
-        Assertions.assertEquals(List.of("1.2.3.4.5", "1.2.3.4.6"), currentVersion.getAllowedPolicyIds());
-        Assertions.assertEquals(
-                List.of(DigestAlgorithm.SHA_256.getCode(), DigestAlgorithm.SHA_384.getCode()),
-                currentVersion.getAllowedDigestAlgorithms()
-        );
-        Assertions.assertFalse(currentVersion.getQualifiedTimestamp());
-        Assertions.assertTrue(currentVersion.getValidateTokenSignature());
+        @Test
+        void timestampingWorkflowWithPoliciesAndAlgorithms_assertEntityFields()
+                throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
+            // given
+            TimestampingWorkflowRequestDto timestampingWorkflow = new TimestampingWorkflowRequestDto();
+            timestampingWorkflow.setSignatureFormatterConnectorUuid(formatterConnector.getUuid());
+            timestampingWorkflow.setDefaultPolicyId("1.2.3.4.5");
+            timestampingWorkflow.setAllowedPolicyIds(List.of("1.2.3.4.5", "1.2.3.4.6"));
+            timestampingWorkflow.setAllowedDigestAlgorithms(List.of(DigestAlgorithm.SHA_256, DigestAlgorithm.SHA_384));
+            timestampingWorkflow.setQualifiedTimestamp(false);
+            timestampingWorkflow.setValidateTokenSignature(true);
+
+            SigningProfileRequestDto request = new SigningProfileRequestDto();
+            request.setName("timestamping-with-policies");
+            request.setDescription("Timestamping profile with policies");
+            request.setSigningScheme(new DelegatedSigningRequestDto());
+            request.setWorkflow(timestampingWorkflow);
+
+            // when
+            SigningProfileDto dto = signingProfileService.createSigningProfile(request);
+
+            // then: DTO
+            assertEquals(SigningWorkflowType.TIMESTAMPING, dto.getWorkflow().getType());
+            TimestampingWorkflowDto tsDto = (TimestampingWorkflowDto) dto.getWorkflow();
+            assertEquals("1.2.3.4.5", tsDto.getDefaultPolicyId());
+            assertEquals(List.of("1.2.3.4.5", "1.2.3.4.6"), tsDto.getAllowedPolicyIds());
+            assertTrue(tsDto.getAllowedDigestAlgorithms().contains(DigestAlgorithm.SHA_256));
+            assertTrue(tsDto.getAllowedDigestAlgorithms().contains(DigestAlgorithm.SHA_384));
+            assertFalse(tsDto.getQualifiedTimestamp());
+            assertTrue(tsDto.getValidateTokenSignature());
+
+            // then: DB
+            SigningProfile entity = reloadProfile(UUID.fromString(dto.getUuid()));
+            assertEquals(SigningWorkflowType.TIMESTAMPING, entity.getWorkflowType());
+            SigningProfileVersion snapshot = loadVersionSnapshot(entity.getUuid(), 1);
+            assertEquals("1.2.3.4.5", snapshot.getDefaultPolicyId());
+            assertEquals(List.of("1.2.3.4.5", "1.2.3.4.6"), snapshot.getAllowedPolicyIds());
+            assertEquals(List.of(DigestAlgorithm.SHA_256.getCode(), DigestAlgorithm.SHA_384.getCode()),
+                    snapshot.getAllowedDigestAlgorithms());
+            assertFalse(snapshot.getQualifiedTimestamp());
+            assertTrue(snapshot.getValidateTokenSignature());
+        }
+
+        @Test
+        void managedStaticKey_withContentSigningWorkflow_assertBothFields()
+                throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
+            // given
+            StaticKeyManagedSigningRequestDto managedContentScheme = new StaticKeyManagedSigningRequestDto();
+            managedContentScheme.setCertificateUuid(certificate.getUuid());
+            ContentSigningWorkflowRequestDto managedContentWorkflow = new ContentSigningWorkflowRequestDto();
+            managedContentWorkflow.setSignatureFormatterConnectorUuid(formatterConnector.getUuid());
+
+            SigningProfileRequestDto request = new SigningProfileRequestDto();
+            request.setName("managed-content-profile");
+            request.setDescription("Managed static-key profile with content signing workflow");
+            request.setSigningScheme(managedContentScheme);
+            request.setWorkflow(managedContentWorkflow);
+
+            // when
+            SigningProfileDto dto = signingProfileService.createSigningProfile(request);
+
+            // then
+            assertEquals(SigningScheme.MANAGED, dto.getSigningScheme().getSigningScheme());
+            assertEquals(SigningWorkflowType.CONTENT_SIGNING, dto.getWorkflow().getType());
+            assertFalse(dto.isEnabled());
+
+            SigningProfile entity = reloadProfile(UUID.fromString(dto.getUuid()));
+            assertEquals(SigningScheme.MANAGED, entity.getSigningScheme());
+            assertEquals(SigningWorkflowType.CONTENT_SIGNING, entity.getWorkflowType());
+            SigningProfileVersion snapshot = loadVersionSnapshot(entity.getUuid(), 1);
+            assertEquals(ManagedSigningType.STATIC_KEY, snapshot.getManagedSigningType());
+        }
     }
 
-    @Test
-    void testCreateSigningProfile_managedStaticKey_withContentSigningWorkflow_assertBothFields()
-            throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
-        SigningProfileRequestDto request = new SigningProfileRequestDto();
-        request.setName("managed-content-profile");
-        request.setDescription("Managed static-key profile with content signing workflow");
-        StaticKeyManagedSigningRequestDto managedContentScheme = new StaticKeyManagedSigningRequestDto();
-        managedContentScheme.setCertificateUuid(certificate.getUuid());
-        request.setSigningScheme(managedContentScheme);
-        ContentSigningWorkflowRequestDto managedContentWorkflow = new ContentSigningWorkflowRequestDto();
-        managedContentWorkflow.setSignatureFormatterConnectorUuid(formatterConnector.getUuid());
-        request.setWorkflow(managedContentWorkflow);
+    @Nested
+    class UpdateTests {
 
-        SigningProfileDto dto = signingProfileService.createSigningProfile(request);
+        @Test
+        void assertDtoAndDbEntity()
+                throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
+            // given
+            SigningProfileRequestDto request = buildDelegatedRawRequest("updated-profile");
+            request.setDescription("Updated description");
 
-        Assertions.assertEquals(SigningScheme.MANAGED, dto.getSigningScheme().getSigningScheme());
-        Assertions.assertEquals(SigningWorkflowType.CONTENT_SIGNING, dto.getWorkflow().getType());
-        Assertions.assertFalse(dto.isEnabled());
+            // when
+            SigningProfileDto dto = signingProfileService.updateSigningProfile(
+                    savedProfile.getSecuredUuid(), request);
 
-        Optional<SigningProfile> fromDb = signingProfileRepository.findById(UUID.fromString(dto.getUuid()));
-        Assertions.assertTrue(fromDb.isPresent());
-        SigningProfile entity = fromDb.get();
-        Assertions.assertEquals(SigningScheme.MANAGED, entity.getSigningScheme());
-        Assertions.assertEquals(SigningWorkflowType.CONTENT_SIGNING, entity.getWorkflowType());
+            // then: DTO
+            assertNotNull(dto);
+            assertEquals(savedProfile.getUuid().toString(), dto.getUuid());
+            assertEquals("updated-profile", dto.getName());
+            assertEquals("Updated description", dto.getDescription());
+            assertFalse(dto.isEnabled());
+            assertEquals(1, dto.getVersion()); // no bump — no signing records
 
-        SigningProfileVersion currentVersion = signingProfileVersionRepository
-                .findBySigningProfileUuidAndVersion(entity.getUuid(), entity.getLatestVersion()).orElseThrow();
-        Assertions.assertEquals(ManagedSigningType.STATIC_KEY, currentVersion.getManagedSigningType());
+            // then: DB
+            SigningProfile entity = reloadProfile(savedProfile.getUuid());
+            assertEquals("updated-profile", entity.getName());
+            assertEquals("Updated description", entity.getDescription());
+            assertFalse(entity.getEnabled());
+            assertEquals(1, entity.getLatestVersion());
+            assertEquals(SigningScheme.DELEGATED, entity.getSigningScheme());
+            assertEquals(SigningWorkflowType.RAW_SIGNING, entity.getWorkflowType());
+        }
+
+        @Test
+        void withSigningRecordsOnCurrentVersion_bumpsVersion()
+                throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
+            // given: a signing record linked to version 1
+            createSigningRecordFor(savedProfile, 1);
+            SigningProfileRequestDto request = buildDelegatedRawRequest("profile-with-bump");
+
+            // when
+            SigningProfileDto dto = signingProfileService.updateSigningProfile(
+                    savedProfile.getSecuredUuid(), request);
+
+            // then
+            assertEquals(2, dto.getVersion());
+            assertEquals(2, reloadProfile(savedProfile.getUuid()).getLatestVersion());
+            assertTrue(
+                    signingProfileVersionRepository.findBySigningProfileUuidAndVersion(savedProfile.getUuid(), 2).isPresent(),
+                    "Version 2 snapshot should be created after bump");
+        }
+
+        @Test
+        void versionBump_oldVersionAttributesPreservedInEngine()
+                throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
+            // given: STATIC_KEY profile (v1) with PKCS1-v1_5/SHA-256 signing-op attributes
+            StaticKeyManagedSigningRequestDto schemeV1 = new StaticKeyManagedSigningRequestDto();
+            schemeV1.setCertificateUuid(rsaCertificate.getUuid());
+            schemeV1.setSigningOperationAttributes(List.of(
+                    buildRsaSchemeAttribute(RsaSignatureScheme.PKCS1_v1_5),
+                    buildDigestAttribute(DigestAlgorithm.SHA_256)));
+            SigningProfileRequestDto createRequest = new SigningProfileRequestDto();
+            createRequest.setName("versioned-sign-attrs-preserved");
+            createRequest.setSigningScheme(schemeV1);
+            createRequest.setWorkflow(new RawSigningWorkflowRequestDto());
+            SigningProfileDto created = signingProfileService.createSigningProfile(createRequest);
+            UUID profileUuid = UUID.fromString(created.getUuid());
+
+            List<ResponseAttribute> v1Attrs = attributeEngine.getObjectDataAttributesContent(
+                    ObjectAttributeContentInfo.builder(Resource.SIGNING_PROFILE, profileUuid)
+                            .operation(AttributeOperation.SIGN).version(1).build());
+            assertFalse(v1Attrs.isEmpty(), "Version 1 signing-op attributes should be stored");
+
+            // given: version bump — add signing record for v1, update with PSS/SHA-512
+            createSigningRecordFor(reloadProfile(profileUuid), 1);
+            StaticKeyManagedSigningRequestDto schemeV2 = new StaticKeyManagedSigningRequestDto();
+            schemeV2.setCertificateUuid(rsaCertificate.getUuid());
+            schemeV2.setSigningOperationAttributes(List.of(
+                    buildRsaSchemeAttribute(RsaSignatureScheme.PSS),
+                    buildDigestAttribute(DigestAlgorithm.SHA_512)));
+            SigningProfileRequestDto updateRequest = new SigningProfileRequestDto();
+            updateRequest.setName("versioned-sign-attrs-preserved");
+            updateRequest.setSigningScheme(schemeV2);
+            updateRequest.setWorkflow(new RawSigningWorkflowRequestDto());
+            SigningProfileDto updated = signingProfileService.updateSigningProfile(
+                    SecuredUUID.fromUUID(profileUuid), updateRequest);
+
+            // then
+            assertEquals(2, updated.getVersion());
+            List<ResponseAttribute> v1AttrAfterBump = attributeEngine.getObjectDataAttributesContent(
+                    ObjectAttributeContentInfo.builder(Resource.SIGNING_PROFILE, profileUuid)
+                            .operation(AttributeOperation.SIGN).version(1).build());
+            assertFalse(v1AttrAfterBump.isEmpty(),
+                    "Version 1 signing-op attributes must be preserved after a version bump");
+            List<ResponseAttribute> v2Attrs = attributeEngine.getObjectDataAttributesContent(
+                    ObjectAttributeContentInfo.builder(Resource.SIGNING_PROFILE, profileUuid)
+                            .operation(AttributeOperation.SIGN).version(2).build());
+            assertFalse(v2Attrs.isEmpty(), "Version 2 signing-op attributes should be stored after bump");
+        }
+
+        @Test
+        void versionBump_oldFormatterAttributesPreservedInEngine()
+                throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
+            // given: CONTENT_SIGNING profile (v1) with formatter attributes
+            Connector formatter = createFormatterConnector("formatter-bump-preserve");
+            FormatterAttr attr = registerFormatterAttribute(formatter, "Bump Preserve Attribute");
+
+            ContentSigningWorkflowRequestDto wfV1 = new ContentSigningWorkflowRequestDto();
+            wfV1.setSignatureFormatterConnectorUuid(formatter.getUuid());
+            wfV1.setSignatureFormatterConnectorAttributes(
+                    List.of(buildFormatterAttribute(attr.uuid(), attr.name(), "v1-value")));
+            SigningProfileRequestDto createRequest = new SigningProfileRequestDto();
+            createRequest.setName("formatter-attrs-bump-preserve");
+            createRequest.setSigningScheme(new DelegatedSigningRequestDto());
+            createRequest.setWorkflow(wfV1);
+            SigningProfileDto created = signingProfileService.createSigningProfile(createRequest);
+            UUID profileUuid = UUID.fromString(created.getUuid());
+
+            List<ResponseAttribute> v1AttrsBefore = attributeEngine.getObjectDataAttributesContent(
+                    ObjectAttributeContentInfo.builder(Resource.SIGNING_PROFILE, profileUuid)
+                            .connector(formatter.getUuid())
+                            .operation(AttributeOperation.WORKFLOW_FORMATTER).version(1).build());
+            assertFalse(v1AttrsBefore.isEmpty(), "Version 1 formatter attributes should be stored after create");
+
+            // given: version bump
+            createSigningRecordFor(reloadProfile(profileUuid), 1);
+            ContentSigningWorkflowRequestDto wfV2 = new ContentSigningWorkflowRequestDto();
+            wfV2.setSignatureFormatterConnectorUuid(formatter.getUuid());
+            wfV2.setSignatureFormatterConnectorAttributes(
+                    List.of(buildFormatterAttribute(attr.uuid(), attr.name(), "v2-value")));
+            SigningProfileRequestDto updateRequest = new SigningProfileRequestDto();
+            updateRequest.setName("formatter-attrs-bump-preserve");
+            updateRequest.setSigningScheme(new DelegatedSigningRequestDto());
+            updateRequest.setWorkflow(wfV2);
+            SigningProfileDto updated = signingProfileService.updateSigningProfile(
+                    SecuredUUID.fromUUID(profileUuid), updateRequest);
+
+            // then
+            assertEquals(2, updated.getVersion(), "Version must be bumped to 2");
+            List<ResponseAttribute> v1AttrsAfterBump = attributeEngine.getObjectDataAttributesContent(
+                    ObjectAttributeContentInfo.builder(Resource.SIGNING_PROFILE, profileUuid)
+                            .connector(formatter.getUuid())
+                            .operation(AttributeOperation.WORKFLOW_FORMATTER).version(1).build());
+            assertFalse(v1AttrsAfterBump.isEmpty(),
+                    "Version 1 formatter attributes must be preserved after a version bump");
+            List<ResponseAttribute> v2Attrs = attributeEngine.getObjectDataAttributesContent(
+                    ObjectAttributeContentInfo.builder(Resource.SIGNING_PROFILE, profileUuid)
+                            .connector(formatter.getUuid())
+                            .operation(AttributeOperation.WORKFLOW_FORMATTER).version(2).build());
+            assertFalse(v2Attrs.isEmpty(), "Version 2 formatter attributes should be stored after bump");
+        }
+
+        @Test
+        void changeSchemeFromDelegatedToStaticKeyManaged()
+                throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
+            // given: savedProfile uses DELEGATED scheme
+            assertEquals(SigningScheme.DELEGATED, savedProfile.getSigningScheme());
+
+            // when: update to MANAGED/STATIC_KEY
+            signingProfileService.updateSigningProfile(
+                    savedProfile.getSecuredUuid(), buildManagedStaticKeyRawRequest("scheme-switched"));
+
+            // then
+            SigningProfile entity = reloadProfile(savedProfile.getUuid());
+            assertEquals(SigningScheme.MANAGED, entity.getSigningScheme());
+            SigningProfileVersion snapshot = loadVersionSnapshot(entity.getUuid(), entity.getLatestVersion());
+            assertEquals(ManagedSigningType.STATIC_KEY, snapshot.getManagedSigningType());
+            assertNull(snapshot.getDelegatedSignerConnectorUuid());
+        }
+
+        @Test
+        void staticKeyManaged_incompleteChain_throwsValidationException()
+                throws CertificateException, NoSuchAlgorithmException, OperatorCreationException {
+            // given
+            Certificate incompleteChainCert = buildIncompleteChainCertificate();
+            StaticKeyManagedSigningRequestDto scheme = new StaticKeyManagedSigningRequestDto();
+            scheme.setCertificateUuid(incompleteChainCert.getUuid());
+            SigningProfileRequestDto request = new SigningProfileRequestDto();
+            request.setName("incomplete-chain-update");
+            request.setSigningScheme(scheme);
+            request.setWorkflow(new RawSigningWorkflowRequestDto());
+
+            // when/then
+            assertThrows(ValidationException.class,
+                    () -> signingProfileService.updateSigningProfile(savedProfile.getSecuredUuid(), request),
+                    "updateSigningProfile must reject a certificate whose chain is incomplete");
+        }
+
+        @Test
+        void changeSchemeFromStaticKeyManagedToDelegated()
+                throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
+            // given: create a MANAGED/STATIC_KEY profile
+            SigningProfileDto created = signingProfileService.createSigningProfile(
+                    buildManagedStaticKeyRawRequest("managed-to-delegated"));
+            SecuredUUID profileUuid = SecuredUUID.fromString(created.getUuid());
+
+            // when: switch to DELEGATED
+            signingProfileService.updateSigningProfile(profileUuid, buildDelegatedRawRequest("managed-to-delegated"));
+
+            // then
+            SigningProfile entity = reloadProfile(UUID.fromString(created.getUuid()));
+            assertEquals(SigningScheme.DELEGATED, entity.getSigningScheme());
+            SigningProfileVersion snapshot = loadVersionSnapshot(entity.getUuid(), entity.getLatestVersion());
+            assertNull(snapshot.getManagedSigningType());
+            assertNull(snapshot.getCertificateUuid());
+        }
+
+        @Test
+        void changeWorkflowFromRawToTimestamping()
+                throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
+            // given: savedProfile uses RAW_SIGNING
+            TimestampingWorkflowRequestDto timestampingWorkflow = new TimestampingWorkflowRequestDto();
+            timestampingWorkflow.setSignatureFormatterConnectorUuid(formatterConnector.getUuid());
+            timestampingWorkflow.setDefaultPolicyId("1.2.3.4.5");
+            timestampingWorkflow.setAllowedPolicyIds(List.of("1.2.3.4.5"));
+            timestampingWorkflow.setQualifiedTimestamp(false);
+            timestampingWorkflow.setValidateTokenSignature(false);
+
+            SigningProfileRequestDto request = new SigningProfileRequestDto();
+            request.setName("workflow-changed");
+            request.setDescription("Changed to timestamping");
+            request.setSigningScheme(new DelegatedSigningRequestDto());
+            request.setWorkflow(timestampingWorkflow);
+
+            // when
+            SigningProfileDto dto = signingProfileService.updateSigningProfile(
+                    savedProfile.getSecuredUuid(), request);
+
+            // then
+            assertEquals(SigningWorkflowType.TIMESTAMPING, dto.getWorkflow().getType());
+            SigningProfile entity = reloadProfile(savedProfile.getUuid());
+            assertEquals(SigningWorkflowType.TIMESTAMPING, entity.getWorkflowType());
+            SigningProfileVersion snapshot = loadVersionSnapshot(entity.getUuid(), entity.getLatestVersion());
+            assertEquals("1.2.3.4.5", snapshot.getDefaultPolicyId());
+            assertFalse(snapshot.getQualifiedTimestamp());
+            assertFalse(snapshot.getValidateTokenSignature());
+        }
+
+        @Test
+        void noVersionBump_overwritesExistingSnapshot()
+                throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
+            // given: profile created via service (proper v1 snapshot), no signing records
+            SigningProfileDto created = signingProfileService.createSigningProfile(
+                    buildDelegatedRawRequest("overwrite-snapshot-profile"));
+            SecuredUUID profileUuid = SecuredUUID.fromString(created.getUuid());
+            UUID profileUuidRaw = UUID.fromString(created.getUuid());
+
+            // when: update without signing records
+            signingProfileService.updateSigningProfile(profileUuid,
+                    buildDelegatedContentRequest("overwrite-snapshot-profile"));
+
+            // then: still only v1 snapshot (overwritten)
+            assertTrue(signingProfileVersionRepository.findBySigningProfileUuidAndVersion(profileUuidRaw, 1).isPresent());
+            assertFalse(signingProfileVersionRepository.findBySigningProfileUuidAndVersion(profileUuidRaw, 2).isPresent(),
+                    "No version 2 snapshot should exist when version was not bumped");
+            SigningProfileDto v1 = signingProfileService.getSigningProfile(profileUuid, 1);
+            assertEquals(SigningWorkflowType.CONTENT_SIGNING, v1.getWorkflow().getType(),
+                    "Overwritten v1 snapshot should reflect the new workflow type");
+        }
+
+        @Test
+        void multipleBumps_versionsAccumulate()
+                throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
+            // given: profile at v1 (RAW_SIGNING)
+            SigningProfileDto created = signingProfileService.createSigningProfile(
+                    buildDelegatedRawRequest("multi-bump-profile"));
+            SecuredUUID profileUuid = SecuredUUID.fromString(created.getUuid());
+            UUID profileUuidRaw = UUID.fromString(created.getUuid());
+
+            // when: bump to v2 (CONTENT_SIGNING)
+            createSigningRecordFor(reloadProfile(profileUuidRaw), 1);
+            signingProfileService.updateSigningProfile(profileUuid, buildDelegatedContentRequest("multi-bump-profile"));
+
+            // when: bump to v3 (TIMESTAMPING)
+            createSigningRecordFor(reloadProfile(profileUuidRaw), 2);
+            signingProfileService.updateSigningProfile(profileUuid, buildDelegatedTimestampingRequest("multi-bump-profile"));
+
+            // then: 3 snapshots
+            assertTrue(signingProfileVersionRepository.findBySigningProfileUuidAndVersion(profileUuidRaw, 1).isPresent());
+            assertTrue(signingProfileVersionRepository.findBySigningProfileUuidAndVersion(profileUuidRaw, 2).isPresent());
+            assertTrue(signingProfileVersionRepository.findBySigningProfileUuidAndVersion(profileUuidRaw, 3).isPresent());
+
+            assertEquals(3, signingProfileService.getSigningProfile(profileUuid, null).getVersion());
+            assertEquals(SigningWorkflowType.TIMESTAMPING,
+                    signingProfileService.getSigningProfile(profileUuid, null).getWorkflow().getType());
+            assertEquals(SigningWorkflowType.RAW_SIGNING,
+                    signingProfileService.getSigningProfile(profileUuid, 1).getWorkflow().getType());
+            assertEquals(SigningWorkflowType.CONTENT_SIGNING,
+                    signingProfileService.getSigningProfile(profileUuid, 2).getWorkflow().getType());
+        }
     }
 
-    // ──────────────────────────────────────────────────────────────────────────
-    // Update
-    // ──────────────────────────────────────────────────────────────────────────
+    @Nested
+    @TestInstance(TestInstance.Lifecycle.PER_CLASS)
+    class DeleteTests {
 
-    @Test
-    void testUpdateSigningProfile_assertDtoAndDbEntity() throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
-        SigningProfileRequestDto request = buildDelegatedRawRequest("updated-profile");
-        request.setDescription("Updated description");
+        @Test
+        void removesEntityFromDatabase() throws NotFoundException {
+            // given: savedProfile has no dependents
+            // when
+            signingProfileService.deleteSigningProfile(savedProfile.getSecuredUuid());
 
-        SigningProfileDto dto = signingProfileService.updateSigningProfile(savedProfile.getSecuredUuid(), request);
+            // then
+            assertFalse(signingProfileRepository.findById(savedProfile.getUuid()).isPresent());
+            assertThrows(NotFoundException.class,
+                    () -> signingProfileService.getSigningProfile(savedProfile.getSecuredUuid(), null));
+        }
 
-        // Assert returned DTO
-        Assertions.assertNotNull(dto);
-        Assertions.assertEquals(savedProfile.getUuid().toString(), dto.getUuid());
-        Assertions.assertEquals("updated-profile", dto.getName());
-        Assertions.assertEquals("Updated description", dto.getDescription());
-        Assertions.assertFalse(dto.isEnabled());
-        Assertions.assertEquals(1, dto.getVersion()); // no bump — no signing records exist
+        Stream<Arguments> blockedDeleteScenarios() {
+            return Stream.of(
+                    Arguments.of(
+                            (Executable) () -> createSigningRecordFor(savedProfile, 1),
+                            "blocked by signing records",
+                            "signing records"
+                    ),
+                    Arguments.of(
+                            (Executable) () -> {
+                                TspProfile tsp = new TspProfile();
+                                tsp.setName("expected-tsp-name");
+                                tsp.setDefaultSigningProfile(savedProfile);
+                                tspRepository.save(tsp);
+                            },
+                            "blocked by TSP profile as default",
+                            "expected-tsp-name"
+                    )
+            );
+        }
 
-        // Assert entity reloaded from the database
-        Optional<SigningProfile> fromDb = signingProfileRepository.findById(savedProfile.getUuid());
-        Assertions.assertTrue(fromDb.isPresent());
-        SigningProfile entity = fromDb.get();
-        Assertions.assertEquals("updated-profile", entity.getName());
-        Assertions.assertEquals("Updated description", entity.getDescription());
-        Assertions.assertFalse(entity.getEnabled());
-        Assertions.assertEquals(1, entity.getLatestVersion());
-        Assertions.assertEquals(SigningScheme.DELEGATED, entity.getSigningScheme());
-        Assertions.assertEquals(SigningWorkflowType.RAW_SIGNING, entity.getWorkflowType());
+        @ParameterizedTest(name = "[{index}] {1}")
+        @MethodSource("blockedDeleteScenarios")
+        void blockedBy_throwsValidationExceptionWithMessage(
+                Executable setup, String displayName, String expectedMessageFragment)
+                throws Throwable {
+            // given: set up the blocking dependency
+            setup.execute();
+
+            // when
+            ValidationException ex = assertThrows(ValidationException.class,
+                    () -> signingProfileService.deleteSigningProfile(savedProfile.getSecuredUuid()));
+
+            // then: profile still exists; error message mentions the blocker
+            assertTrue(signingProfileRepository.findById(savedProfile.getUuid()).isPresent());
+            String message = ex.getErrors().stream()
+                    .map(ValidationError::getErrorDescription)
+                    .findFirst().orElse("");
+            assertTrue(message.contains(expectedMessageFragment),
+                    "Error message should contain '" + expectedMessageFragment + "', got: " + message);
+        }
     }
 
-    @Test
-    void testUpdateSigningProfile_withSigningRecordsOnCurrentVersion_bumpsVersion()
-            throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
-        // Create a signing record linked to version 1 of the profile
-        createSigningRecordFor(savedProfile, 1);
+    @Nested
+    class BulkDelete {
 
-        SigningProfileRequestDto request = buildDelegatedRawRequest("profile-with-bump");
-        SigningProfileDto dto = signingProfileService.updateSigningProfile(savedProfile.getSecuredUuid(), request);
+        @Test
+        void removesAllEntities()
+                throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
+            // given: a second profile
+            SigningProfileDto second = signingProfileService.createSigningProfile(
+                    buildDelegatedRawRequest("second-profile"));
 
-        // The version in the DTO should be bumped to 2
-        Assertions.assertEquals(2, dto.getVersion());
+            // when
+            List<BulkActionMessageDto> messages = signingProfileService.bulkDeleteSigningProfiles(
+                    List.of(savedProfile.getSecuredUuid(), SecuredUUID.fromString(second.getUuid())));
 
-        // The entity in the database should reflect version 2
-        Optional<SigningProfile> fromDb = signingProfileRepository.findById(savedProfile.getUuid());
-        Assertions.assertTrue(fromDb.isPresent());
-        Assertions.assertEquals(2, fromDb.get().getLatestVersion(),
-                "Version should be bumped when signing records exist for the current version");
+            // then
+            assertTrue(messages.isEmpty(), "Expected no errors but got: " + messages);
+            assertFalse(signingProfileRepository.findById(savedProfile.getUuid()).isPresent());
+            assertFalse(signingProfileRepository.findById(UUID.fromString(second.getUuid())).isPresent());
+        }
 
-        // A new snapshot for version 2 should have been created
-        Optional<SigningProfileVersion> v2snapshot = signingProfileVersionRepository.findBySigningProfileUuidAndVersion(savedProfile.getUuid(), 2);
-        Assertions.assertTrue(v2snapshot.isPresent(), "Version 2 snapshot should be created after bump");
+        @Test
+        void withSigningRecords_returnsErrorAndLeavesBlockedProfileIntact()
+                throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
+            // given: savedProfile has signing record; second has none
+            createSigningRecordFor(savedProfile, 1);
+            SigningProfileDto second = signingProfileService.createSigningProfile(
+                    buildDelegatedRawRequest("second-profile-no-deps"));
+
+            // when
+            List<BulkActionMessageDto> messages = signingProfileService.bulkDeleteSigningProfiles(
+                    List.of(savedProfile.getSecuredUuid(), SecuredUUID.fromString(second.getUuid())));
+
+            // then: savedProfile blocked, second deleted
+            assertFalse(messages.isEmpty());
+            assertTrue(messages.stream().anyMatch(m -> savedProfile.getUuid().toString().equals(m.getUuid())));
+            assertTrue(signingProfileRepository.findById(savedProfile.getUuid()).isPresent());
+            assertFalse(signingProfileRepository.findById(UUID.fromString(second.getUuid())).isPresent());
+        }
+
+        @Test
+        void withTspProfileDependency_returnsErrorAndLeavesBlockedProfileIntact()
+                throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
+            // given: savedProfile is default in a TSP profile; second has none
+            TspProfile tspProfile = new TspProfile();
+            tspProfile.setName("blocking-tsp");
+            tspProfile.setDefaultSigningProfile(savedProfile);
+            tspRepository.save(tspProfile);
+            SigningProfileDto second = signingProfileService.createSigningProfile(
+                    buildDelegatedRawRequest("unblocked-profile"));
+
+            // when
+            List<BulkActionMessageDto> messages = signingProfileService.bulkDeleteSigningProfiles(
+                    List.of(savedProfile.getSecuredUuid(), SecuredUUID.fromString(second.getUuid())));
+
+            // then
+            assertFalse(messages.isEmpty());
+            assertTrue(messages.stream().anyMatch(m -> savedProfile.getUuid().toString().equals(m.getUuid())));
+            assertTrue(signingProfileRepository.findById(savedProfile.getUuid()).isPresent());
+            assertFalse(signingProfileRepository.findById(UUID.fromString(second.getUuid())).isPresent());
+        }
+
+        @Test
+        void emptyList_returnsEmptyMessages() {
+            // given: an empty list of UUIDs
+            // when
+            List<BulkActionMessageDto> messages = signingProfileService.bulkDeleteSigningProfiles(List.of());
+
+            // then
+            assertNotNull(messages);
+            assertTrue(messages.isEmpty());
+        }
+
+        @Test
+        void withNonExistentUuid_silentlyIgnoresUnknown() {
+            // given: one unknown UUID + one known
+            SecuredUUID unknownUuid = SecuredUUID.fromString("00000000-0000-0000-0000-000000000099");
+
+            // when
+            List<BulkActionMessageDto> messages = signingProfileService.bulkDeleteSigningProfiles(
+                    List.of(unknownUuid, savedProfile.getSecuredUuid()));
+
+            // then: error returned for unknown, known profile deleted
+            assertFalse(messages.isEmpty());
+            assertTrue(messages.stream().anyMatch(m -> "00000000-0000-0000-0000-000000000099".equals(m.getUuid())));
+            assertFalse(signingProfileRepository.findById(savedProfile.getUuid()).isPresent());
+        }
     }
 
-    @Test
-    void testUpdateSigningProfile_versionBump_oldVersionAttributesPreservedInEngine()
-            throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
-        // Create a STATIC_KEY profile (version 1) with known signing-op attributes
-        StaticKeyManagedSigningRequestDto schemeV1 = new StaticKeyManagedSigningRequestDto();
-        schemeV1.setCertificateUuid(rsaCertificate.getUuid());
-        schemeV1.setSigningOperationAttributes(List.of(
-                buildRsaSchemeAttribute(RsaSignatureScheme.PKCS1_v1_5),
-                buildDigestAttribute(DigestAlgorithm.SHA_256)));
-        SigningProfileRequestDto createRequest = new SigningProfileRequestDto();
-        createRequest.setName("versioned-sign-attrs-preserved");
-        createRequest.setSigningScheme(schemeV1);
-        createRequest.setWorkflow(new RawSigningWorkflowRequestDto());
-        SigningProfileDto created = signingProfileService.createSigningProfile(createRequest);
-        UUID profileUuid = UUID.fromString(created.getUuid());
+    @Nested
+    class EnableDisable {
 
-        // Verify v1 signing-op attributes are readable with version=1
-        List<ResponseAttribute> v1Attrs = attributeEngine.getObjectDataAttributesContent(
-                ObjectAttributeContentInfo.builder(Resource.SIGNING_PROFILE, profileUuid)
-                        .operation(AttributeOperation.SIGN).version(1).build());
-        Assertions.assertFalse(v1Attrs.isEmpty(), "Version 1 signing-op attributes should be stored");
+        @Test
+        void enableSigningProfile() throws NotFoundException {
+            // given: profile is disabled (from setUp)
+            assertFalse(savedProfile.getEnabled());
 
-        // Trigger version bump: create a signing record for v1, then update with different signing attrs
-        SigningProfile profileEntity = signingProfileRepository.findById(profileUuid).orElseThrow();
-        createSigningRecordFor(profileEntity, 1);
+            // when
+            signingProfileService.enableSigningProfile(savedProfile.getSecuredUuid());
 
-        StaticKeyManagedSigningRequestDto schemeV2 = new StaticKeyManagedSigningRequestDto();
-        schemeV2.setCertificateUuid(rsaCertificate.getUuid());
-        schemeV2.setSigningOperationAttributes(List.of(
-                buildRsaSchemeAttribute(RsaSignatureScheme.PSS),
-                buildDigestAttribute(DigestAlgorithm.SHA_512)));
-        SigningProfileRequestDto updateRequest = new SigningProfileRequestDto();
-        updateRequest.setName("versioned-sign-attrs-preserved");
-        updateRequest.setSigningScheme(schemeV2);
-        updateRequest.setWorkflow(new RawSigningWorkflowRequestDto());
-        SigningProfileDto updated = signingProfileService.updateSigningProfile(SecuredUUID.fromUUID(profileUuid), updateRequest);
-        Assertions.assertEquals(2, updated.getVersion());
+            // then
+            assertTrue(signingProfileService.getSigningProfile(savedProfile.getSecuredUuid(), null).isEnabled());
+            assertTrue(reloadProfile(savedProfile.getUuid()).getEnabled());
+        }
 
-        // Version 1 attributes must still be readable (historical record preserved)
-        List<ResponseAttribute> v1AttrAfterBump = attributeEngine.getObjectDataAttributesContent(
-                ObjectAttributeContentInfo.builder(Resource.SIGNING_PROFILE, profileUuid)
-                        .operation(AttributeOperation.SIGN).version(1).build());
-        Assertions.assertFalse(v1AttrAfterBump.isEmpty(),
-                "Version 1 signing-op attributes must be preserved after a version bump");
+        @Test
+        void enableSigningProfile_alreadyEnabled_remainsEnabled() throws NotFoundException {
+            // given
+            savedProfile.setEnabled(true);
+            signingProfileRepository.save(savedProfile);
 
-        // Version 2 must have the new attributes
-        List<ResponseAttribute> v2Attrs = attributeEngine.getObjectDataAttributesContent(
-                ObjectAttributeContentInfo.builder(Resource.SIGNING_PROFILE, profileUuid)
-                        .operation(AttributeOperation.SIGN).version(2).build());
-        Assertions.assertFalse(v2Attrs.isEmpty(),
-                "Version 2 signing-op attributes should be stored after bump");
+            // when: enable again — should be idempotent
+            signingProfileService.enableSigningProfile(savedProfile.getSecuredUuid());
+
+            // then
+            assertTrue(reloadProfile(savedProfile.getUuid()).getEnabled());
+        }
+
+        @Test
+        void enableSigningProfile_afterCreate_persistsEnabledState()
+                throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
+            // given
+            SigningProfileDto dto = signingProfileService.createSigningProfile(
+                    buildDelegatedRawRequest("enabled-profile"));
+            assertFalse(dto.isEnabled(), "Profiles must be created in a disabled state");
+
+            // when
+            signingProfileService.enableSigningProfile(SecuredUUID.fromString(dto.getUuid()));
+
+            // then
+            assertTrue(reloadProfile(UUID.fromString(dto.getUuid())).getEnabled());
+        }
+
+        @Test
+        void disableSigningProfile() throws NotFoundException {
+            // given: profile is enabled
+            savedProfile.setEnabled(true);
+            signingProfileRepository.save(savedProfile);
+
+            // when
+            signingProfileService.disableSigningProfile(savedProfile.getSecuredUuid());
+
+            // then
+            assertFalse(signingProfileService.getSigningProfile(savedProfile.getSecuredUuid(), null).isEnabled());
+            assertFalse(reloadProfile(savedProfile.getUuid()).getEnabled());
+        }
+
+        @Test
+        void disableSigningProfile_alreadyDisabled_remainsDisabled() throws NotFoundException {
+            // given: savedProfile is already disabled from setUp
+            // when
+            signingProfileService.disableSigningProfile(savedProfile.getSecuredUuid());
+
+            // then
+            assertFalse(reloadProfile(savedProfile.getUuid()).getEnabled());
+        }
+
+        @Test
+        void bulkEnableSigningProfiles_multipleProfiles()
+                throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
+            // given
+            SigningProfileDto second = signingProfileService.createSigningProfile(
+                    buildDelegatedRawRequest("second-for-bulk-enable"));
+            SigningProfileDto third = signingProfileService.createSigningProfile(
+                    buildDelegatedContentRequest("third-for-bulk-enable"));
+
+            // when
+            signingProfileService.bulkEnableSigningProfiles(List.of(
+                    savedProfile.getSecuredUuid(),
+                    SecuredUUID.fromString(second.getUuid()),
+                    SecuredUUID.fromString(third.getUuid())));
+
+            // then
+            assertTrue(reloadProfile(savedProfile.getUuid()).getEnabled());
+            assertTrue(reloadProfile(UUID.fromString(second.getUuid())).getEnabled());
+            assertTrue(reloadProfile(UUID.fromString(third.getUuid())).getEnabled());
+        }
+
+        @Test
+        void bulkDisableSigningProfiles_multipleProfiles()
+                throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
+            // given: two additional enabled profiles
+            SigningProfileDto second = signingProfileService.createSigningProfile(
+                    buildDelegatedRawRequest("second-for-bulk-disable"));
+            signingProfileService.enableSigningProfile(SecuredUUID.fromString(second.getUuid()));
+            SigningProfileDto third = signingProfileService.createSigningProfile(
+                    buildDelegatedContentRequest("third-for-bulk-disable"));
+            signingProfileService.enableSigningProfile(SecuredUUID.fromString(third.getUuid()));
+
+            // when
+            signingProfileService.bulkDisableSigningProfiles(List.of(
+                    SecuredUUID.fromString(second.getUuid()),
+                    SecuredUUID.fromString(third.getUuid())));
+
+            // then
+            assertFalse(reloadProfile(UUID.fromString(second.getUuid())).getEnabled());
+            assertFalse(reloadProfile(UUID.fromString(third.getUuid())).getEnabled());
+        }
+
+        @Test
+        void bulkEnableSigningProfiles_withNonExistentUuid_silentlyIgnores() {
+            // given
+            SecuredUUID unknownUuid = SecuredUUID.fromString("00000000-0000-0000-0000-000000000099");
+
+            // when
+            List<BulkActionMessageDto> messages = signingProfileService.bulkEnableSigningProfiles(
+                    List.of(unknownUuid, savedProfile.getSecuredUuid()));
+
+            // then: error for unknown UUID, known profile enabled
+            assertFalse(messages.isEmpty());
+            assertTrue(messages.stream().anyMatch(m -> "00000000-0000-0000-0000-000000000099".equals(m.getUuid())));
+            assertTrue(reloadProfile(savedProfile.getUuid()).getEnabled());
+        }
+
+        @Test
+        void bulkDisableSigningProfiles_withNonExistentUuid_silentlyIgnores() {
+            // given
+            savedProfile.setEnabled(true);
+            signingProfileRepository.save(savedProfile);
+            SecuredUUID unknownUuid = SecuredUUID.fromString("00000000-0000-0000-0000-000000000099");
+
+            // when
+            List<BulkActionMessageDto> messages = signingProfileService.bulkDisableSigningProfiles(
+                    List.of(unknownUuid, savedProfile.getSecuredUuid()));
+
+            // then: error for unknown UUID, known profile disabled
+            assertFalse(messages.isEmpty());
+            assertTrue(messages.stream().anyMatch(m -> "00000000-0000-0000-0000-000000000099".equals(m.getUuid())));
+            assertFalse(reloadProfile(savedProfile.getUuid()).getEnabled());
+        }
     }
 
-    @Test
-    void testUpdateSigningProfile_versionBump_oldFormatterAttributesPreservedInEngine()
-            throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
-        Connector formatter = createFormatterConnector("formatter-bump-preserve");
+    @Nested
+    @TestInstance(TestInstance.Lifecycle.PER_CLASS)
+    class TspProtocol {
 
-        UUID attrUuid = UUID.randomUUID();
-        String attrName = "data_bumpPreserveAttr";
-        DataAttributeV2 attrDef = new DataAttributeV2();
-        attrDef.setUuid(attrUuid.toString());
-        attrDef.setName(attrName);
-        attrDef.setContentType(AttributeContentType.STRING);
-        DataAttributeProperties props = new DataAttributeProperties();
-        props.setLabel("Bump Preserve Attribute");
-        attrDef.setProperties(props);
-        attributeEngine.updateDataAttributeDefinitions(formatter.getUuid(), AttributeOperation.WORKFLOW_FORMATTER, List.of(attrDef));
+        @Test
+        void activateTsp_setsLinkOnSigningProfile()
+                throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
+            // given
+            SigningProfileDto profileDto = signingProfileService.createSigningProfile(
+                    buildDelegatedTimestampingRequest("timestamping-for-tsp-activate"));
+            SecuredUUID profileUuid = SecuredUUID.fromString(profileDto.getUuid());
+            TspProfile tspProfile = new TspProfile();
+            tspProfile.setName("test-tsp-profile");
+            tspProfile = tspRepository.save(tspProfile);
 
-        // Create a CONTENT_SIGNING profile (version 1) with formatter attributes
-        ContentSigningWorkflowRequestDto wfV1 = new ContentSigningWorkflowRequestDto();
-        wfV1.setSignatureFormatterConnectorUuid(formatter.getUuid());
-        wfV1.setSignatureFormatterConnectorAttributes(List.of(buildFormatterAttribute(attrUuid, attrName, "v1-value")));
+            // when
+            var activationDto = signingProfileService.activateTsp(profileUuid, tspProfile.getSecuredUuid());
 
-        SigningProfileRequestDto createRequest = new SigningProfileRequestDto();
-        createRequest.setName("formatter-attrs-bump-preserve");
-        createRequest.setSigningScheme(new DelegatedSigningRequestDto());
-        createRequest.setWorkflow(wfV1);
-        SigningProfileDto created = signingProfileService.createSigningProfile(createRequest);
-        UUID profileUuid = UUID.fromString(created.getUuid());
+            // then
+            assertTrue(activationDto.isAvailable());
+            assertNotNull(activationDto.getSigningUrl());
+            assertEquals(tspProfile.getUuid(),
+                    reloadProfile(UUID.fromString(profileDto.getUuid())).getTspProfileUuid());
+        }
 
-        // Verify v1 formatter attributes are stored
-        List<ResponseAttribute> v1AttrsBefore = attributeEngine.getObjectDataAttributesContent(
-                ObjectAttributeContentInfo.builder(Resource.SIGNING_PROFILE, profileUuid)
-                        .connector(formatter.getUuid())
-                        .operation(AttributeOperation.WORKFLOW_FORMATTER).version(1).build());
-        Assertions.assertFalse(v1AttrsBefore.isEmpty(), "Version 1 formatter attributes should be stored after create");
+        @Test
+        void activateTsp_tspProfileNotFound_throwsNotFoundException()
+                throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
+            // given: a valid signing profile but a missing TSP UUID
+            SigningProfileDto profileDto = signingProfileService.createSigningProfile(
+                    buildDelegatedTimestampingRequest("timestamping-for-tsp-not-found"));
+            SecuredUUID profileUuid = SecuredUUID.fromString(profileDto.getUuid());
 
-        // Trigger version bump: create a signing record for v1, then update
-        SigningProfile profileEntity = signingProfileRepository.findById(profileUuid).orElseThrow();
-        createSigningRecordFor(profileEntity, 1);
+            // when/then
+            assertThrows(NotFoundException.class,
+                    () -> signingProfileService.activateTsp(
+                            profileUuid, SecuredUUID.fromString("00000000-0000-0000-0000-000000000002")));
+        }
 
-        ContentSigningWorkflowRequestDto wfV2 = new ContentSigningWorkflowRequestDto();
-        wfV2.setSignatureFormatterConnectorUuid(formatter.getUuid());
-        wfV2.setSignatureFormatterConnectorAttributes(List.of(buildFormatterAttribute(attrUuid, attrName, "v2-value")));
+        @Test
+        void activateTsp_replacesExistingLink()
+                throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
+            // given
+            SigningProfileDto profileDto = signingProfileService.createSigningProfile(
+                    buildDelegatedTimestampingRequest("timestamping-for-tsp-replace"));
+            SecuredUUID profileUuid = SecuredUUID.fromString(profileDto.getUuid());
+            TspProfile tspProfile1 = new TspProfile();
+            tspProfile1.setName("tsp-profile-1");
+            tspProfile1 = tspRepository.save(tspProfile1);
+            TspProfile tspProfile2 = new TspProfile();
+            tspProfile2.setName("tsp-profile-2");
+            tspProfile2 = tspRepository.save(tspProfile2);
 
-        SigningProfileRequestDto updateRequest = new SigningProfileRequestDto();
-        updateRequest.setName("formatter-attrs-bump-preserve");
-        updateRequest.setSigningScheme(new DelegatedSigningRequestDto());
-        updateRequest.setWorkflow(wfV2);
-        SigningProfileDto updated = signingProfileService.updateSigningProfile(SecuredUUID.fromUUID(profileUuid), updateRequest);
-        Assertions.assertEquals(2, updated.getVersion(), "Version must be bumped to 2");
+            // when: link first, then replace with second
+            signingProfileService.activateTsp(profileUuid, tspProfile1.getSecuredUuid());
+            signingProfileService.activateTsp(profileUuid, tspProfile2.getSecuredUuid());
 
-        // Version 1 formatter attributes must still be readable (historical record preserved)
-        List<ResponseAttribute> v1AttrsAfterBump = attributeEngine.getObjectDataAttributesContent(
-                ObjectAttributeContentInfo.builder(Resource.SIGNING_PROFILE, profileUuid)
-                        .connector(formatter.getUuid())
-                        .operation(AttributeOperation.WORKFLOW_FORMATTER).version(1).build());
-        Assertions.assertFalse(v1AttrsAfterBump.isEmpty(),
-                "Version 1 formatter attributes must be preserved after a version bump");
+            // then
+            assertEquals(tspProfile2.getUuid(),
+                    reloadProfile(UUID.fromString(profileDto.getUuid())).getTspProfileUuid());
+        }
 
-        // Version 2 must have its own formatter attributes
-        List<ResponseAttribute> v2Attrs = attributeEngine.getObjectDataAttributesContent(
-                ObjectAttributeContentInfo.builder(Resource.SIGNING_PROFILE, profileUuid)
-                        .connector(formatter.getUuid())
-                        .operation(AttributeOperation.WORKFLOW_FORMATTER).version(2).build());
-        Assertions.assertFalse(v2Attrs.isEmpty(),
-                "Version 2 formatter attributes should be stored after bump");
+        // @MethodSource runs during test discovery (before @BeforeEach), so formatterConnector
+        // is not yet initialized. Pass only a workflow type and build the profile lazily inside the test.
+        Stream<Arguments> unsupportedWorkflowTypes() {
+            return Stream.of(
+                    Arguments.of(SigningWorkflowType.RAW_SIGNING, "RAW_SIGNING"),
+                    Arguments.of(SigningWorkflowType.CONTENT_SIGNING, "CONTENT_SIGNING")
+            );
+        }
+
+        @ParameterizedTest(name = "[{index}] {1}")
+        @MethodSource("unsupportedWorkflowTypes")
+        void activateTsp_unsupportedWorkflow_throwsValidationException(
+                SigningWorkflowType workflowType, String displayName)
+                throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
+            // given: a signing profile with an unsupported workflow type
+            SecuredUUID profileUuid;
+            if (workflowType == SigningWorkflowType.RAW_SIGNING) {
+                profileUuid = savedProfile.getSecuredUuid();
+            } else {
+                profileUuid = SecuredUUID.fromString(
+                        signingProfileService.createSigningProfile(
+                                buildDelegatedContentRequest("content-for-tsp-unsupported-" + displayName)).getUuid());
+            }
+            TspProfile tspProfile = new TspProfile();
+            tspProfile.setName("tsp-unsupported-" + displayName.hashCode());
+            tspProfile = tspRepository.save(tspProfile);
+            final SecuredUUID tspUuid = tspProfile.getSecuredUuid();
+
+            // when/then
+            assertThrows(ValidationException.class,
+                    () -> signingProfileService.activateTsp(profileUuid, tspUuid));
+        }
+
+        @Test
+        void deactivateTsp_removesFromEnabledProtocols() throws NotFoundException {
+            // given: savedProfile linked to a TSP
+            TspProfile tspProfile = new TspProfile();
+            tspProfile.setName("tsp-to-deactivate");
+            tspProfile = tspRepository.save(tspProfile);
+            savedProfile.setTspProfile(tspProfile);
+            signingProfileRepository.save(savedProfile);
+            assertTrue(signingProfileService.getSigningProfile(savedProfile.getSecuredUuid(), null)
+                    .getEnabledProtocols().contains(SigningProtocol.TSP));
+
+            // when
+            signingProfileService.deactivateTsp(savedProfile.getSecuredUuid());
+
+            // then
+            assertNull(reloadProfile(savedProfile.getUuid()).getTspProfileUuid());
+            assertFalse(signingProfileService.getSigningProfile(savedProfile.getSecuredUuid(), null)
+                    .getEnabledProtocols().contains(SigningProtocol.TSP));
+        }
+
+        @Test
+        void deactivateTsp_noLinkExists_isIdempotent() {
+            // given: savedProfile has no TSP link (setUp leaves it null)
+            assertNull(savedProfile.getTspProfileUuid());
+
+            // when/then: no exception
+            assertDoesNotThrow(() -> signingProfileService.deactivateTsp(savedProfile.getSecuredUuid()));
+            assertNull(reloadProfile(savedProfile.getUuid()).getTspProfileUuid());
+        }
     }
 
-    @Test
-    void testGetSigningProfile_specificVersion_returnsVersionedSigningOperationAttributes()
-            throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
-        // Create a STATIC_KEY profile (version 1) with PSS signing attributes
-        StaticKeyManagedSigningRequestDto schemeV1 = new StaticKeyManagedSigningRequestDto();
-        schemeV1.setCertificateUuid(rsaCertificate.getUuid());
-        schemeV1.setSigningOperationAttributes(List.of(
-                buildRsaSchemeAttribute(RsaSignatureScheme.PSS),
-                buildDigestAttribute(DigestAlgorithm.SHA_256)));
-        SigningProfileRequestDto createRequest = new SigningProfileRequestDto();
-        createRequest.setName("versioned-get-sign-attrs");
-        createRequest.setSigningScheme(schemeV1);
-        createRequest.setWorkflow(new RawSigningWorkflowRequestDto());
-        SigningProfileDto created = signingProfileService.createSigningProfile(createRequest);
-        SecuredUUID profileUuid = SecuredUUID.fromString(created.getUuid());
+    @Nested
+    class SigningOperationAttributes {
 
-        // Trigger version bump: add signing record, then update to PKCS1_v1_5
-        SigningProfile profileEntity = signingProfileRepository.findById(UUID.fromString(created.getUuid())).orElseThrow();
-        createSigningRecordFor(profileEntity, 1);
+        @Test
+        void specificVersion_returnsVersionedSigningOperationAttributes()
+                throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
+            // given: v1 with PSS, v2 with PKCS1-v1_5
+            StaticKeyManagedSigningRequestDto schemeV1 = new StaticKeyManagedSigningRequestDto();
+            schemeV1.setCertificateUuid(rsaCertificate.getUuid());
+            schemeV1.setSigningOperationAttributes(List.of(
+                    buildRsaSchemeAttribute(RsaSignatureScheme.PSS),
+                    buildDigestAttribute(DigestAlgorithm.SHA_256)));
+            SigningProfileRequestDto createRequest = new SigningProfileRequestDto();
+            createRequest.setName("versioned-get-sign-attrs");
+            createRequest.setSigningScheme(schemeV1);
+            createRequest.setWorkflow(new RawSigningWorkflowRequestDto());
+            SigningProfileDto created = signingProfileService.createSigningProfile(createRequest);
+            SecuredUUID profileUuid = SecuredUUID.fromString(created.getUuid());
 
-        StaticKeyManagedSigningRequestDto schemeV2 = new StaticKeyManagedSigningRequestDto();
-        schemeV2.setCertificateUuid(rsaCertificate.getUuid());
-        schemeV2.setSigningOperationAttributes(List.of(
-                buildRsaSchemeAttribute(RsaSignatureScheme.PKCS1_v1_5),
-                buildDigestAttribute(DigestAlgorithm.SHA_256)));
-        SigningProfileRequestDto updateRequest = new SigningProfileRequestDto();
-        updateRequest.setName("versioned-get-sign-attrs");
-        updateRequest.setSigningScheme(schemeV2);
-        updateRequest.setWorkflow(new RawSigningWorkflowRequestDto());
-        signingProfileService.updateSigningProfile(profileUuid, updateRequest);
+            createSigningRecordFor(reloadProfile(UUID.fromString(created.getUuid())), 1);
+            StaticKeyManagedSigningRequestDto schemeV2 = new StaticKeyManagedSigningRequestDto();
+            schemeV2.setCertificateUuid(rsaCertificate.getUuid());
+            schemeV2.setSigningOperationAttributes(List.of(
+                    buildRsaSchemeAttribute(RsaSignatureScheme.PKCS1_v1_5),
+                    buildDigestAttribute(DigestAlgorithm.SHA_256)));
+            SigningProfileRequestDto updateRequest = new SigningProfileRequestDto();
+            updateRequest.setName("versioned-get-sign-attrs");
+            updateRequest.setSigningScheme(schemeV2);
+            updateRequest.setWorkflow(new RawSigningWorkflowRequestDto());
+            signingProfileService.updateSigningProfile(profileUuid, updateRequest);
 
-        // getSigningProfile with version=1 must return PSS attributes
-        SigningProfileDto v1Dto = signingProfileService.getSigningProfile(profileUuid, 1);
-        Assertions.assertInstanceOf(StaticKeyManagedSigningDto.class, v1Dto.getSigningScheme());
-        StaticKeyManagedSigningDto v1SchemeDto = (StaticKeyManagedSigningDto) v1Dto.getSigningScheme();
-        Assertions.assertFalse(v1SchemeDto.getSigningOperationAttributes().isEmpty(),
-                "Version 1 DTO must include signing-op attributes");
-        Assertions.assertTrue(
-                v1SchemeDto.getSigningOperationAttributes().stream()
-                        .anyMatch(a -> RsaSignatureAttributes.ATTRIBUTE_DATA_RSA_SIG_SCHEME.equals(a.getName())),
-                "Version 1 must contain RSA signature scheme attribute");
+            // when: get v1 — must show PSS; get v2 — must show PKCS1-v1_5 (attribute names are version-agnostic)
+            SigningProfileDto v1Dto = signingProfileService.getSigningProfile(profileUuid, 1);
+            assertInstanceOf(StaticKeyManagedSigningDto.class, v1Dto.getSigningScheme());
+            StaticKeyManagedSigningDto v1Scheme = (StaticKeyManagedSigningDto) v1Dto.getSigningScheme();
+            assertFalse(v1Scheme.getSigningOperationAttributes().isEmpty());
+            assertTrue(v1Scheme.getSigningOperationAttributes().stream()
+                    .anyMatch(a -> RsaSignatureAttributes.ATTRIBUTE_DATA_RSA_SIG_SCHEME.equals(a.getName())));
 
-        // getSigningProfile with version=2 (latest) must return PKCS1_v1_5 attributes
-        SigningProfileDto v2Dto = signingProfileService.getSigningProfile(profileUuid, 2);
-        Assertions.assertInstanceOf(StaticKeyManagedSigningDto.class, v2Dto.getSigningScheme());
-        StaticKeyManagedSigningDto v2SchemeDto = (StaticKeyManagedSigningDto) v2Dto.getSigningScheme();
-        Assertions.assertFalse(v2SchemeDto.getSigningOperationAttributes().isEmpty(),
-                "Version 2 DTO must include signing-op attributes");
-        Assertions.assertTrue(
-                v2SchemeDto.getSigningOperationAttributes().stream()
-                        .anyMatch(a -> RsaSignatureAttributes.ATTRIBUTE_DATA_RSA_SIG_SCHEME.equals(a.getName())),
-                "Version 2 must contain RSA signature scheme attribute");
+            SigningProfileDto v2Dto = signingProfileService.getSigningProfile(profileUuid, 2);
+            assertInstanceOf(StaticKeyManagedSigningDto.class, v2Dto.getSigningScheme());
+            assertFalse(((StaticKeyManagedSigningDto) v2Dto.getSigningScheme()).getSigningOperationAttributes().isEmpty());
 
-        // The content stored for v1 (PSS) and v2 (PKCS1_v1_5) must differ in the engine
-        List<ResponseAttribute> v1SignAttrs = attributeEngine.getObjectDataAttributesContent(
-                ObjectAttributeContentInfo.builder(Resource.SIGNING_PROFILE, UUID.fromString(created.getUuid()))
-                        .operation(AttributeOperation.SIGN).version(1).build());
-        List<ResponseAttribute> v2SignAttrs = attributeEngine.getObjectDataAttributesContent(
-                ObjectAttributeContentInfo.builder(Resource.SIGNING_PROFILE, UUID.fromString(created.getUuid()))
-                        .operation(AttributeOperation.SIGN).version(2).build());
-        Assertions.assertFalse(v1SignAttrs.isEmpty(), "Engine must hold v1 sign attrs");
-        Assertions.assertFalse(v2SignAttrs.isEmpty(), "Engine must hold v2 sign attrs");
+            // then: engine holds distinct content for each version
+            List<ResponseAttribute> v1Engine = attributeEngine.getObjectDataAttributesContent(
+                    ObjectAttributeContentInfo.builder(Resource.SIGNING_PROFILE, UUID.fromString(created.getUuid()))
+                            .operation(AttributeOperation.SIGN).version(1).build());
+            List<ResponseAttribute> v2Engine = attributeEngine.getObjectDataAttributesContent(
+                    ObjectAttributeContentInfo.builder(Resource.SIGNING_PROFILE, UUID.fromString(created.getUuid()))
+                            .operation(AttributeOperation.SIGN).version(2).build());
+            assertFalse(v1Engine.isEmpty());
+            assertFalse(v2Engine.isEmpty());
+        }
+
+        @Test
+        void create_persistedAndReturnedInDto()
+                throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
+            // given
+            StaticKeyManagedSigningRequestDto scheme = new StaticKeyManagedSigningRequestDto();
+            scheme.setCertificateUuid(rsaCertificate.getUuid());
+            scheme.setSigningOperationAttributes(List.of(
+                    buildRsaSchemeAttribute(RsaSignatureScheme.PKCS1_v1_5),
+                    buildDigestAttribute(DigestAlgorithm.SHA_256)));
+            SigningProfileRequestDto request = new SigningProfileRequestDto();
+            request.setName("static-key-with-sign-attrs");
+            request.setSigningScheme(scheme);
+            request.setWorkflow(new RawSigningWorkflowRequestDto());
+
+            // when
+            SigningProfileDto dto = signingProfileService.createSigningProfile(request);
+
+            // then
+            assertInstanceOf(StaticKeyManagedSigningDto.class, dto.getSigningScheme());
+            StaticKeyManagedSigningDto schemeDto = (StaticKeyManagedSigningDto) dto.getSigningScheme();
+            assertFalse(schemeDto.getSigningOperationAttributes().isEmpty());
+            assertTrue(schemeDto.getSigningOperationAttributes().stream()
+                    .anyMatch(a -> RsaSignatureAttributes.ATTRIBUTE_DATA_RSA_SIG_SCHEME.equals(a.getName())));
+        }
+
+        @Test
+        void get_loadedFromEngine()
+                throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
+            // given: create then re-fetch
+            StaticKeyManagedSigningRequestDto scheme = new StaticKeyManagedSigningRequestDto();
+            scheme.setCertificateUuid(rsaCertificate.getUuid());
+            scheme.setSigningOperationAttributes(List.of(
+                    buildRsaSchemeAttribute(RsaSignatureScheme.PSS),
+                    buildDigestAttribute(DigestAlgorithm.SHA_256)));
+            SigningProfileRequestDto request = new SigningProfileRequestDto();
+            request.setName("static-key-get-sign-attrs");
+            request.setSigningScheme(scheme);
+            request.setWorkflow(new RawSigningWorkflowRequestDto());
+            SigningProfileDto created = signingProfileService.createSigningProfile(request);
+
+            // when
+            SigningProfileDto fetched = signingProfileService.getSigningProfile(
+                    SecuredUUID.fromString(created.getUuid()), null);
+
+            // then: attributes survive create→get round-trip
+            assertInstanceOf(StaticKeyManagedSigningDto.class, fetched.getSigningScheme());
+            assertFalse(((StaticKeyManagedSigningDto) fetched.getSigningScheme())
+                    .getSigningOperationAttributes().isEmpty());
+        }
+
+        @Test
+        void update_replacesAttributes()
+                throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
+            // given: create with PKCS1-v1_5
+            StaticKeyManagedSigningRequestDto schemeV1 = new StaticKeyManagedSigningRequestDto();
+            schemeV1.setCertificateUuid(rsaCertificate.getUuid());
+            schemeV1.setSigningOperationAttributes(List.of(
+                    buildRsaSchemeAttribute(RsaSignatureScheme.PKCS1_v1_5),
+                    buildDigestAttribute(DigestAlgorithm.SHA_256)));
+            SigningProfileRequestDto createRequest = new SigningProfileRequestDto();
+            createRequest.setName("static-key-update-sign-attrs");
+            createRequest.setSigningScheme(schemeV1);
+            createRequest.setWorkflow(new RawSigningWorkflowRequestDto());
+            SigningProfileDto created = signingProfileService.createSigningProfile(createRequest);
+            SecuredUUID profileUuid = SecuredUUID.fromString(created.getUuid());
+
+            // when: update to PSS/SHA-384
+            StaticKeyManagedSigningRequestDto schemeV2 = new StaticKeyManagedSigningRequestDto();
+            schemeV2.setCertificateUuid(rsaCertificate.getUuid());
+            schemeV2.setSigningOperationAttributes(List.of(
+                    buildRsaSchemeAttribute(RsaSignatureScheme.PSS),
+                    buildDigestAttribute(DigestAlgorithm.SHA_384)));
+            SigningProfileRequestDto updateRequest = new SigningProfileRequestDto();
+            updateRequest.setName("static-key-update-sign-attrs");
+            updateRequest.setSigningScheme(schemeV2);
+            updateRequest.setWorkflow(new RawSigningWorkflowRequestDto());
+            SigningProfileDto updated = signingProfileService.updateSigningProfile(profileUuid, updateRequest);
+
+            // then: new value (PSS) is reflected in the returned DTO
+            assertInstanceOf(StaticKeyManagedSigningDto.class, updated.getSigningScheme());
+            StaticKeyManagedSigningDto schemeDto = (StaticKeyManagedSigningDto) updated.getSigningScheme();
+            Optional<ResponseAttribute> rsaAttr = schemeDto.getSigningOperationAttributes().stream()
+                    .filter(a -> RsaSignatureAttributes.ATTRIBUTE_DATA_RSA_SIG_SCHEME.equals(a.getName()))
+                    .findFirst();
+            assertTrue(rsaAttr.isPresent());
+            String actualCode = switch (rsaAttr.get().getVersion()) {
+                case V2 -> ((ResponseAttributeV2) rsaAttr.get()).getContent().getFirst().getData().toString();
+                case V3 -> ((ResponseAttributeV3) rsaAttr.get()).getContent().getFirst().getData().toString();
+                default -> fail("Unknown attribute version: " + rsaAttr.get().getVersion());
+            };
+            assertEquals(RsaSignatureScheme.PSS.getCode(), actualCode,
+                    "Signing operation attributes should be replaced with PSS on update");
+        }
+
+        @Test
+        void update_schemeChangedToNonStaticKey_attributesCleared()
+                throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
+            // given: STATIC_KEY profile with signing-op attributes
+            StaticKeyManagedSigningRequestDto scheme = new StaticKeyManagedSigningRequestDto();
+            scheme.setCertificateUuid(rsaCertificate.getUuid());
+            scheme.setSigningOperationAttributes(List.of(
+                    buildRsaSchemeAttribute(RsaSignatureScheme.PKCS1_v1_5),
+                    buildDigestAttribute(DigestAlgorithm.SHA_256)));
+            SigningProfileRequestDto createRequest = new SigningProfileRequestDto();
+            createRequest.setName("static-key-to-delegated");
+            createRequest.setSigningScheme(scheme);
+            createRequest.setWorkflow(new RawSigningWorkflowRequestDto());
+            SigningProfileDto created = signingProfileService.createSigningProfile(createRequest);
+            SecuredUUID profileUuid = SecuredUUID.fromString(created.getUuid());
+
+            // when: switch to DELEGATED
+            signingProfileService.updateSigningProfile(profileUuid, buildDelegatedRawRequest("static-key-to-delegated"));
+
+            // then: no attributes remain in engine
+            List<ResponseAttribute> remaining = attributeEngine.getObjectDataAttributesContent(
+                    ObjectAttributeContentInfo.builder(Resource.SIGNING_PROFILE, UUID.fromString(created.getUuid()))
+                            .operation(AttributeOperation.SIGN).version(1).build());
+            assertTrue(remaining.isEmpty(),
+                    "Signing-scheme attributes should be deleted when scheme changes away from STATIC_KEY");
+        }
+
+        @Test
+        void delete_removesAttributesFromEngine()
+                throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
+            // given
+            StaticKeyManagedSigningRequestDto scheme = new StaticKeyManagedSigningRequestDto();
+            scheme.setCertificateUuid(rsaCertificate.getUuid());
+            scheme.setSigningOperationAttributes(List.of(
+                    buildRsaSchemeAttribute(RsaSignatureScheme.PSS),
+                    buildDigestAttribute(DigestAlgorithm.SHA_256)));
+            SigningProfileRequestDto request = new SigningProfileRequestDto();
+            request.setName("delete-clears-sign-attrs");
+            request.setSigningScheme(scheme);
+            request.setWorkflow(new RawSigningWorkflowRequestDto());
+            SigningProfileDto created = signingProfileService.createSigningProfile(request);
+            UUID profileUuid = UUID.fromString(created.getUuid());
+
+            // when
+            signingProfileService.deleteSigningProfile(SecuredUUID.fromUUID(profileUuid));
+
+            // then
+            List<ResponseAttribute> remaining = attributeEngine.getObjectDataAttributesContent(
+                    ObjectAttributeContentInfo.builder(Resource.SIGNING_PROFILE, profileUuid)
+                            .operation(AttributeOperation.SIGN).version(1).build());
+            assertTrue(remaining.isEmpty());
+        }
     }
-
-    @Test
-    void testUpdateSigningProfile_notFound_throwsNotFoundException() {
-        SigningProfileRequestDto request = buildDelegatedRawRequest("does-not-matter");
-
-        Assertions.assertThrows(NotFoundException.class,
-                () -> signingProfileService.updateSigningProfile(
-                        SecuredUUID.fromString("00000000-0000-0000-0000-000000000001"), request));
-    }
-
-    @Test
-    void testUpdateSigningProfile_changeSchemeFromDelegatedToStaticKeyManaged()
-            throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
-        // savedProfile uses DELEGATED scheme
-        Assertions.assertEquals(SigningScheme.DELEGATED, savedProfile.getSigningScheme());
-
-        // Update to MANAGED/STATIC_KEY
-        signingProfileService.updateSigningProfile(savedProfile.getSecuredUuid(), buildManagedStaticKeyRawRequest("scheme-switched"));
-
-        Optional<SigningProfile> fromDb = signingProfileRepository.findById(savedProfile.getUuid());
-        Assertions.assertTrue(fromDb.isPresent());
-        SigningProfile entity = fromDb.get();
-        Assertions.assertEquals(SigningScheme.MANAGED, entity.getSigningScheme());
-
-        SigningProfileVersion currentVersion = signingProfileVersionRepository
-                .findBySigningProfileUuidAndVersion(entity.getUuid(), entity.getLatestVersion()).orElseThrow();
-        Assertions.assertEquals(ManagedSigningType.STATIC_KEY, currentVersion.getManagedSigningType());
-        // Previous delegated connector reference must have been cleared
-        Assertions.assertNull(currentVersion.getDelegatedSignerConnectorUuid());
-    }
-
-    @Test
-    void testUpdateSigningProfile_staticKeyManaged_incompleteChain_throwsValidationException()
-            throws CertificateException, NoSuchAlgorithmException, OperatorCreationException {
-        Certificate incompleteChainCert = buildIncompleteChainCertificate();
-
-        StaticKeyManagedSigningRequestDto scheme = new StaticKeyManagedSigningRequestDto();
-        scheme.setCertificateUuid(incompleteChainCert.getUuid());
-        SigningProfileRequestDto request = new SigningProfileRequestDto();
-        request.setName("incomplete-chain-update");
-        request.setSigningScheme(scheme);
-        request.setWorkflow(new RawSigningWorkflowRequestDto());
-
-        Assertions.assertThrows(ValidationException.class,
-                () -> signingProfileService.updateSigningProfile(savedProfile.getSecuredUuid(), request),
-                "updateSigningProfile must reject a certificate whose chain is incomplete");
-    }
-
-    @Test
-    void testUpdateSigningProfile_changeSchemeFromStaticKeyManagedToDelegated()
-            throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
-        // Create a MANAGED/STATIC_KEY profile first
-        SigningProfileDto created = signingProfileService.createSigningProfile(buildManagedStaticKeyRawRequest("managed-to-delegated"));
-        SecuredUUID profileUuid = SecuredUUID.fromString(created.getUuid());
-
-        // Switch to DELEGATED
-        signingProfileService.updateSigningProfile(profileUuid, buildDelegatedRawRequest("managed-to-delegated"));
-
-        Optional<SigningProfile> fromDb = signingProfileRepository.findById(UUID.fromString(created.getUuid()));
-        Assertions.assertTrue(fromDb.isPresent());
-        SigningProfile entity = fromDb.get();
-        Assertions.assertEquals(SigningScheme.DELEGATED, entity.getSigningScheme());
-
-        SigningProfileVersion currentVersion = signingProfileVersionRepository
-                .findBySigningProfileUuidAndVersion(entity.getUuid(), entity.getLatestVersion()).orElseThrow();
-        // managedSigningType must have been cleared by applyScheme
-        Assertions.assertNull(currentVersion.getManagedSigningType());
-        // token profile and certificate references must have been cleared
-        Assertions.assertNull(currentVersion.getCertificateUuid());
-    }
-
-    @Test
-    void testUpdateSigningProfile_changeWorkflowFromRawToTimestamping()
-            throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
-        // savedProfile uses RAW_SIGNING workflow
-        TimestampingWorkflowRequestDto timestampingWorkflow = new TimestampingWorkflowRequestDto();
-        timestampingWorkflow.setSignatureFormatterConnectorUuid(formatterConnector.getUuid());
-        timestampingWorkflow.setDefaultPolicyId("1.2.3.4.5");
-        timestampingWorkflow.setAllowedPolicyIds(List.of("1.2.3.4.5"));
-        timestampingWorkflow.setQualifiedTimestamp(false);
-        timestampingWorkflow.setValidateTokenSignature(false);
-
-        SigningProfileRequestDto request = new SigningProfileRequestDto();
-        request.setName("workflow-changed");
-        request.setDescription("Changed to timestamping");
-        request.setSigningScheme(new DelegatedSigningRequestDto());
-        request.setWorkflow(timestampingWorkflow);
-
-        SigningProfileDto dto = signingProfileService.updateSigningProfile(savedProfile.getSecuredUuid(), request);
-
-        Assertions.assertEquals(SigningWorkflowType.TIMESTAMPING, dto.getWorkflow().getType());
-
-        Optional<SigningProfile> fromDb = signingProfileRepository.findById(savedProfile.getUuid());
-        Assertions.assertTrue(fromDb.isPresent());
-        SigningProfile entity = fromDb.get();
-        Assertions.assertEquals(SigningWorkflowType.TIMESTAMPING, entity.getWorkflowType());
-        SigningProfileVersion currentVersion = signingProfileVersionRepository
-                .findBySigningProfileUuidAndVersion(entity.getUuid(), entity.getLatestVersion()).orElseThrow();
-        Assertions.assertEquals("1.2.3.4.5", currentVersion.getDefaultPolicyId());
-        Assertions.assertFalse(currentVersion.getQualifiedTimestamp());
-        Assertions.assertFalse(currentVersion.getValidateTokenSignature());
-    }
-
-    @Test
-    void testUpdateSigningProfile_noVersionBump_overwritesExistingSnapshot()
-            throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
-        // Create via service to get a proper v1 snapshot
-        SigningProfileDto created = signingProfileService.createSigningProfile(buildDelegatedRawRequest("overwrite-snapshot-profile"));
-        SecuredUUID profileUuid = SecuredUUID.fromString(created.getUuid());
-        UUID profileUuidRaw = UUID.fromString(created.getUuid());
-
-        // Update without signing records (no bump — snapshot is overwritten in place)
-        signingProfileService.updateSigningProfile(profileUuid, buildDelegatedContentRequest("overwrite-snapshot-profile"));
-
-        // Still only one snapshot (version 1) — overwritten
-        Optional<SigningProfileVersion> v1Snapshot = signingProfileVersionRepository.findBySigningProfileUuidAndVersion(profileUuidRaw, 1);
-        Assertions.assertTrue(v1Snapshot.isPresent(), "Version 1 snapshot should still exist after in-place overwrite");
-        Assertions.assertFalse(
-                signingProfileVersionRepository.findBySigningProfileUuidAndVersion(profileUuidRaw, 2).isPresent(),
-                "No version 2 snapshot should exist when version was not bumped"
-        );
-
-        // Fetching version 1 should now return the updated workflow type
-        SigningProfileDto v1 = signingProfileService.getSigningProfile(profileUuid, 1);
-        Assertions.assertEquals(SigningWorkflowType.CONTENT_SIGNING, v1.getWorkflow().getType(),
-                "Overwritten v1 snapshot should reflect the new workflow type");
-    }
-
-    @Test
-    void testUpdateSigningProfile_multipleBumps_versionsAccumulate()
-            throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
-        // Create a profile (version 1)
-        SigningProfileDto created = signingProfileService.createSigningProfile(buildDelegatedRawRequest("multi-bump-profile"));
-        SecuredUUID profileUuid = SecuredUUID.fromString(created.getUuid());
-        UUID profileUuidRaw = UUID.fromString(created.getUuid());
-        SigningProfile entity = signingProfileRepository.findById(profileUuidRaw).orElseThrow();
-
-        // Trigger first bump: add sig for v1, then update → v2
-        createSigningRecordFor(entity, 1);
-        signingProfileService.updateSigningProfile(profileUuid, buildDelegatedContentRequest("multi-bump-profile"));
-
-        // Trigger second bump: add sig for v2, then update → v3
-        entity = signingProfileRepository.findById(profileUuidRaw).orElseThrow();
-        createSigningRecordFor(entity, 2);
-        signingProfileService.updateSigningProfile(profileUuid, buildDelegatedTimestampingRequest("multi-bump-profile"));
-
-        // Verify three snapshot versions exist
-        Assertions.assertTrue(signingProfileVersionRepository.findBySigningProfileUuidAndVersion(profileUuidRaw, 1).isPresent());
-        Assertions.assertTrue(signingProfileVersionRepository.findBySigningProfileUuidAndVersion(profileUuidRaw, 2).isPresent());
-        Assertions.assertTrue(signingProfileVersionRepository.findBySigningProfileUuidAndVersion(profileUuidRaw, 3).isPresent());
-
-        // Verify the latest is version 3 with TIMESTAMPING
-        SigningProfileDto latest = signingProfileService.getSigningProfile(profileUuid, null);
-        Assertions.assertEquals(3, latest.getVersion());
-        Assertions.assertEquals(SigningWorkflowType.TIMESTAMPING, latest.getWorkflow().getType());
-
-        // Verify version 1 still has RAW_SIGNING
-        SigningProfileDto v1 = signingProfileService.getSigningProfile(profileUuid, 1);
-        Assertions.assertEquals(SigningWorkflowType.RAW_SIGNING, v1.getWorkflow().getType());
-
-        // Verify version 2 has CONTENT_SIGNING
-        SigningProfileDto v2 = signingProfileService.getSigningProfile(profileUuid, 2);
-        Assertions.assertEquals(SigningWorkflowType.CONTENT_SIGNING, v2.getWorkflow().getType());
-    }
-
-    // ──────────────────────────────────────────────────────────────────────────
-    // Delete
-    // ──────────────────────────────────────────────────────────────────────────
-
-    @Test
-    void testDeleteSigningProfile_removesEntityFromDatabase() throws NotFoundException {
-        signingProfileService.deleteSigningProfile(savedProfile.getSecuredUuid());
-
-        Assertions.assertFalse(signingProfileRepository.findById(savedProfile.getUuid()).isPresent());
-        Assertions.assertThrows(NotFoundException.class,
-                () -> signingProfileService.getSigningProfile(savedProfile.getSecuredUuid(), null));
-    }
-
-    @Test
-    void testDeleteSigningProfile_notFound_throwsNotFoundException() {
-        Assertions.assertThrows(NotFoundException.class,
-                () -> signingProfileService.deleteSigningProfile(
-                        SecuredUUID.fromString("00000000-0000-0000-0000-000000000001")));
-    }
-
-    @Test
-    void testDeleteSigningProfile_withSigningRecords_throwsValidationException() {
-        createSigningRecordFor(savedProfile, 1);
-
-        Assertions.assertThrows(ValidationException.class,
-                () -> signingProfileService.deleteSigningProfile(savedProfile.getSecuredUuid()));
-
-        // Profile must still exist after the failed delete attempt
-        Assertions.assertTrue(signingProfileRepository.findById(savedProfile.getUuid()).isPresent());
-    }
-
-    @Test
-    void testDeleteSigningProfile_usedAsDefaultInTspProfile_throwsValidationException() {
-        TspProfile tspProfile = new TspProfile();
-        tspProfile.setName("blocking-tsp-profile");
-        tspProfile.setDefaultSigningProfile(savedProfile);
-        tspRepository.save(tspProfile);
-
-        Assertions.assertThrows(ValidationException.class,
-                () -> signingProfileService.deleteSigningProfile(savedProfile.getSecuredUuid()));
-
-        // Profile must still exist after the failed delete attempt
-        Assertions.assertTrue(signingProfileRepository.findById(savedProfile.getUuid()).isPresent());
-    }
-
-    // ──────────────────────────────────────────────────────────────────────────
-    // Bulk delete
-    // ──────────────────────────────────────────────────────────────────────────
-
-    @Test
-    void testBulkDeleteSigningProfiles_removesAllEntities() throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
-        SigningProfileDto second = signingProfileService.createSigningProfile(buildDelegatedRawRequest("second-profile"));
-
-        List<BulkActionMessageDto> messages = signingProfileService.bulkDeleteSigningProfiles(
-                List.of(savedProfile.getSecuredUuid(),
-                        SecuredUUID.fromString(second.getUuid())));
-
-        Assertions.assertNotNull(messages);
-        Assertions.assertTrue(messages.isEmpty(), "Expected no errors but got: " + messages);
-        Assertions.assertFalse(signingProfileRepository.findById(savedProfile.getUuid()).isPresent());
-        Assertions.assertFalse(signingProfileRepository.findById(UUID.fromString(second.getUuid())).isPresent());
-    }
-
-    @Test
-    void testBulkDeleteSigningProfiles_withSigningRecords_returnsErrorAndLeavesBlockedProfileIntact()
-            throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
-        // Attach a signing record to the savedProfile — bulk delete should surface an error for it
-        createSigningRecordFor(savedProfile, 1);
-
-        // Create a second profile with no dependencies — it should be deleted successfully
-        SigningProfileDto second = signingProfileService.createSigningProfile(buildDelegatedRawRequest("second-profile-no-deps"));
-
-        List<BulkActionMessageDto> messages = signingProfileService.bulkDeleteSigningProfiles(
-                List.of(savedProfile.getSecuredUuid(),
-                        SecuredUUID.fromString(second.getUuid())));
-
-        // savedProfile deletion must fail; second must succeed
-        Assertions.assertFalse(messages.isEmpty(), "Expected an error message for the blocked profile");
-        Assertions.assertTrue(messages.stream().anyMatch(m -> savedProfile.getUuid().toString().equals(m.getUuid())),
-                "Error message should reference the blocked profile UUID");
-        Assertions.assertTrue(signingProfileRepository.findById(savedProfile.getUuid()).isPresent(),
-                "Blocked profile must still exist in the database");
-        Assertions.assertFalse(signingProfileRepository.findById(UUID.fromString(second.getUuid())).isPresent(),
-                "Unblocked profile must be deleted");
-    }
-
-    @Test
-    void testBulkDeleteSigningProfiles_emptyList_returnsEmptyMessages() {
-        List<BulkActionMessageDto> messages = signingProfileService.bulkDeleteSigningProfiles(List.of());
-
-        Assertions.assertNotNull(messages);
-        Assertions.assertTrue(messages.isEmpty(), "Bulk delete of empty list should return no error messages");
-    }
-
-    @Test
-    void testBulkDeleteSigningProfiles_withNonExistentUuid_silentlyIgnoresUnknown() {
-        SecuredUUID unknownUuid = SecuredUUID.fromString("00000000-0000-0000-0000-000000000099");
-
-        List<BulkActionMessageDto> messages = signingProfileService.bulkDeleteSigningProfiles(
-                List.of(unknownUuid, savedProfile.getSecuredUuid()));
-
-        // The unknown UUID surfaces as an error message; no exception is thrown
-        Assertions.assertFalse(messages.isEmpty(), "An error message should be returned for the non-existent UUID");
-        Assertions.assertTrue(messages.stream().anyMatch(m -> "00000000-0000-0000-0000-000000000099".equals(m.getUuid())));
-        // The known profile must still have been deleted
-        Assertions.assertFalse(signingProfileRepository.findById(savedProfile.getUuid()).isPresent(),
-                "The known profile should be deleted even when the list contains an unknown UUID");
-    }
-
-    @Test
-    void testDeleteSigningProfile_withNoSigningRecordsOrTspProfiles_succeeds() throws NotFoundException {
-        // Precondition: no signing records and no TSP profiles reference savedProfile
-        signingProfileService.deleteSigningProfile(savedProfile.getSecuredUuid());
-
-        Assertions.assertFalse(signingProfileRepository.findById(savedProfile.getUuid()).isPresent(),
-                "Profile with no dependents must be removed from the database");
-    }
-
-    @Test
-    void testDeleteSigningProfile_withSigningRecords_errorMessageContainsProfileInfo() {
-        createSigningRecordFor(savedProfile, 1);
-
-        ValidationException ex = Assertions.assertThrows(ValidationException.class,
-                () -> signingProfileService.deleteSigningProfile(savedProfile.getSecuredUuid()));
-
-        String message = ex.getErrors().stream()
-                .map(ValidationError::getErrorDescription)
-                .findFirst()
-                .orElse("");
-        Assertions.assertTrue(message.contains("signing records"),
-                "Error message should mention signing records, got: " + message);
-    }
-
-    @Test
-    void testDeleteSigningProfile_usedAsDefaultInTspProfile_errorMessageContainsTspProfileName() {
-        TspProfile tspProfile = new TspProfile();
-        tspProfile.setName("expected-tsp-name");
-        tspProfile.setDefaultSigningProfile(savedProfile);
-        tspRepository.save(tspProfile);
-
-        ValidationException ex = Assertions.assertThrows(ValidationException.class,
-                () -> signingProfileService.deleteSigningProfile(savedProfile.getSecuredUuid()));
-
-        String message = ex.getErrors().stream()
-                .map(ValidationError::getErrorDescription)
-                .findFirst()
-                .orElse("");
-        Assertions.assertTrue(message.contains("expected-tsp-name"),
-                "Error message should contain the TSP profile name, got: " + message);
-    }
-
-    @Test
-    void testBulkDeleteSigningProfiles_withTspProfileDependency_returnsErrorAndLeavesBlockedProfileIntact()
-            throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
-        TspProfile tspProfile = new TspProfile();
-        tspProfile.setName("blocking-tsp");
-        tspProfile.setDefaultSigningProfile(savedProfile);
-        tspRepository.save(tspProfile);
-
-        SigningProfileDto second = signingProfileService.createSigningProfile(buildDelegatedRawRequest("unblocked-profile"));
-
-        List<BulkActionMessageDto> messages = signingProfileService.bulkDeleteSigningProfiles(
-                List.of(savedProfile.getSecuredUuid(),
-                        SecuredUUID.fromString(second.getUuid())));
-
-        Assertions.assertFalse(messages.isEmpty(), "Expected an error message for the blocked profile");
-        Assertions.assertTrue(messages.stream().anyMatch(m -> savedProfile.getUuid().toString().equals(m.getUuid())),
-                "Error message should reference the blocked profile UUID");
-        Assertions.assertTrue(signingProfileRepository.findById(savedProfile.getUuid()).isPresent(),
-                "Blocked profile must still exist in the database");
-        Assertions.assertFalse(signingProfileRepository.findById(UUID.fromString(second.getUuid())).isPresent(),
-                "Unblocked profile must be deleted");
-    }
-
-    // ──────────────────────────────────────────────────────────────────────────
-    // Enable / Disable
-    // ──────────────────────────────────────────────────────────────────────────
-
-    @Test
-    void testEnableSigningProfile() throws NotFoundException {
-        Assertions.assertFalse(savedProfile.getEnabled());
-
-        signingProfileService.enableSigningProfile(savedProfile.getSecuredUuid());
-
-        SigningProfileDto dto = signingProfileService.getSigningProfile(savedProfile.getSecuredUuid(), null);
-        Assertions.assertTrue(dto.isEnabled());
-
-        Optional<SigningProfile> fromDb = signingProfileRepository.findById(savedProfile.getUuid());
-        Assertions.assertTrue(fromDb.isPresent());
-        Assertions.assertTrue(fromDb.get().getEnabled());
-    }
-
-    @Test
-    void testEnableSigningProfile_notFound() {
-        Assertions.assertThrows(NotFoundException.class,
-                () -> signingProfileService.enableSigningProfile(
-                        SecuredUUID.fromString("00000000-0000-0000-0000-000000000001")));
-    }
-
-    @Test
-    void testEnableSigningProfile_alreadyEnabled_remainsEnabled() throws NotFoundException {
-        savedProfile.setEnabled(true);
-        signingProfileRepository.save(savedProfile);
-
-        // Enable again — should be idempotent
-        signingProfileService.enableSigningProfile(savedProfile.getSecuredUuid());
-
-        Optional<SigningProfile> fromDb = signingProfileRepository.findById(savedProfile.getUuid());
-        Assertions.assertTrue(fromDb.isPresent());
-        Assertions.assertTrue(fromDb.get().getEnabled(), "Profile should remain enabled after enabling an already-enabled profile");
-    }
-
-    @Test
-    void testEnableSigningProfile_afterCreate_persistsEnabledState() throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
-        SigningProfileRequestDto request = buildDelegatedRawRequest("enabled-profile");
-
-        SigningProfileDto dto = signingProfileService.createSigningProfile(request);
-        Assertions.assertFalse(dto.isEnabled(), "Profiles must be created in a disabled state");
-
-        signingProfileService.enableSigningProfile(SecuredUUID.fromString(dto.getUuid()));
-
-        Optional<SigningProfile> fromDb = signingProfileRepository.findById(UUID.fromString(dto.getUuid()));
-        Assertions.assertTrue(fromDb.isPresent());
-        Assertions.assertTrue(fromDb.get().getEnabled());
-    }
-
-    @Test
-    void testDisableSigningProfile() throws NotFoundException {
-        savedProfile.setEnabled(true);
-        signingProfileRepository.save(savedProfile);
-
-        signingProfileService.disableSigningProfile(savedProfile.getSecuredUuid());
-
-        SigningProfileDto dto = signingProfileService.getSigningProfile(savedProfile.getSecuredUuid(), null);
-        Assertions.assertFalse(dto.isEnabled());
-
-        Optional<SigningProfile> fromDb = signingProfileRepository.findById(savedProfile.getUuid());
-        Assertions.assertTrue(fromDb.isPresent());
-        Assertions.assertFalse(fromDb.get().getEnabled());
-    }
-
-    @Test
-    void testDisableSigningProfile_notFound() {
-        Assertions.assertThrows(NotFoundException.class,
-                () -> signingProfileService.disableSigningProfile(
-                        SecuredUUID.fromString("00000000-0000-0000-0000-000000000001")));
-    }
-
-    @Test
-    void testDisableSigningProfile_alreadyDisabled_remainsDisabled() throws NotFoundException {
-        // savedProfile is already disabled (enabled = false from setUp)
-        signingProfileService.disableSigningProfile(savedProfile.getSecuredUuid());
-
-        Optional<SigningProfile> fromDb = signingProfileRepository.findById(savedProfile.getUuid());
-        Assertions.assertTrue(fromDb.isPresent());
-        Assertions.assertFalse(fromDb.get().getEnabled(), "Profile should remain disabled after disabling an already-disabled profile");
-    }
-
-    @Test
-    void testBulkEnableSigningProfiles_multipleProfiles() throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
-        SigningProfileDto second = signingProfileService.createSigningProfile(buildDelegatedRawRequest("second-for-bulk-enable"));
-        SigningProfileDto third = signingProfileService.createSigningProfile(buildDelegatedContentRequest("third-for-bulk-enable"));
-
-        signingProfileService.bulkEnableSigningProfiles(List.of(
-                savedProfile.getSecuredUuid(),
-                SecuredUUID.fromString(second.getUuid()),
-                SecuredUUID.fromString(third.getUuid())
-        ));
-
-        Assertions.assertTrue(signingProfileRepository.findById(savedProfile.getUuid()).map(SigningProfile::getEnabled).orElse(false));
-        Assertions.assertTrue(signingProfileRepository.findById(UUID.fromString(second.getUuid())).map(SigningProfile::getEnabled).orElse(false));
-        Assertions.assertTrue(signingProfileRepository.findById(UUID.fromString(third.getUuid())).map(SigningProfile::getEnabled).orElse(false));
-    }
-
-    @Test
-    void testBulkDisableSigningProfiles_multipleProfiles() throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
-        // Create two additional enabled profiles
-        SigningProfileRequestDto req2 = buildDelegatedRawRequest("second-for-bulk-disable");
-        SigningProfileDto second = signingProfileService.createSigningProfile(req2);
-        signingProfileService.enableSigningProfile(SecuredUUID.fromString(second.getUuid()));
-
-        SigningProfileRequestDto req3 = buildDelegatedContentRequest("third-for-bulk-disable");
-        SigningProfileDto third = signingProfileService.createSigningProfile(req3);
-        signingProfileService.enableSigningProfile(SecuredUUID.fromString(third.getUuid()));
-
-        signingProfileService.bulkDisableSigningProfiles(List.of(
-                SecuredUUID.fromString(second.getUuid()),
-                SecuredUUID.fromString(third.getUuid())
-        ));
-
-        Assertions.assertFalse(signingProfileRepository.findById(UUID.fromString(second.getUuid())).map(SigningProfile::getEnabled).orElse(true));
-        Assertions.assertFalse(signingProfileRepository.findById(UUID.fromString(third.getUuid())).map(SigningProfile::getEnabled).orElse(true));
-    }
-
-    @Test
-    void testBulkEnableSigningProfiles_withNonExistentUuid_silentlyIgnores() {
-        // A UUID that does not correspond to any profile
-        SecuredUUID unknownUuid = SecuredUUID.fromString("00000000-0000-0000-0000-000000000099");
-
-        List<BulkActionMessageDto> messages = signingProfileService.bulkEnableSigningProfiles(
-                List.of(unknownUuid, savedProfile.getSecuredUuid()));
-
-        // The unknown UUID surfaces as an error message; no exception is thrown
-        Assertions.assertFalse(messages.isEmpty(), "An error message should be returned for the non-existent UUID");
-        Assertions.assertTrue(messages.stream().anyMatch(m -> "00000000-0000-0000-0000-000000000099".equals(m.getUuid())));
-        // The known profile must still have been enabled
-        Assertions.assertTrue(signingProfileRepository.findById(savedProfile.getUuid())
-                        .map(SigningProfile::getEnabled).orElse(false),
-                "The known profile should be enabled even when the list contains an unknown UUID");
-    }
-
-    @Test
-    void testBulkDisableSigningProfiles_withNonExistentUuid_silentlyIgnores() {
-        savedProfile.setEnabled(true);
-        signingProfileRepository.save(savedProfile);
-
-        SecuredUUID unknownUuid = SecuredUUID.fromString("00000000-0000-0000-0000-000000000099");
-
-        List<BulkActionMessageDto> messages = signingProfileService.bulkDisableSigningProfiles(
-                List.of(unknownUuid, savedProfile.getSecuredUuid()));
-
-        Assertions.assertFalse(messages.isEmpty(), "An error message should be returned for the non-existent UUID");
-        Assertions.assertTrue(messages.stream().anyMatch(m -> "00000000-0000-0000-0000-000000000099".equals(m.getUuid())));
-        Assertions.assertFalse(signingProfileRepository.findById(savedProfile.getUuid())
-                        .map(SigningProfile::getEnabled).orElse(true),
-                "The known profile should be disabled even when the list contains an unknown UUID");
-    }
-
-    // ──────────────────────────────────────────────────────────────────────────
-    // Protocol activation — TSP
-    // ──────────────────────────────────────────────────────────────────────────
-
-    @Test
-    void testActivateTsp_setsLinkOnSigningProfile() throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
-        SigningProfileDto profileDto = signingProfileService.createSigningProfile(buildDelegatedTimestampingRequest("timestamping-for-tsp-activate"));
-        SecuredUUID profileUuid = SecuredUUID.fromString(profileDto.getUuid());
-
-        TspProfile tspProfile = new TspProfile();
-        tspProfile.setName("test-tsp-profile");
-        tspProfile = tspRepository.save(tspProfile);
-
-        var activationDto = signingProfileService.activateTsp(profileUuid, tspProfile.getSecuredUuid());
-        Assertions.assertTrue(activationDto.isAvailable());
-        Assertions.assertNotNull(activationDto.getSigningUrl());
-
-        Optional<SigningProfile> fromDb = signingProfileRepository.findById(UUID.fromString(profileDto.getUuid()));
-        Assertions.assertTrue(fromDb.isPresent());
-        Assertions.assertEquals(tspProfile.getUuid(), fromDb.get().getTspProfileUuid());
-    }
-
-    @Test
-    void testActivateTsp_profileNotFound_throwsNotFoundException() {
-        TspProfile tspProfile = new TspProfile();
-        tspProfile.setName("tsp-for-not-found-test");
-        tspProfile = tspRepository.save(tspProfile);
-        final UUID tspUuid = tspProfile.getUuid();
-
-        Assertions.assertThrows(NotFoundException.class,
-                () -> signingProfileService.activateTsp(
-                        SecuredUUID.fromString("00000000-0000-0000-0000-000000000001"),
-                        SecuredUUID.fromUUID(tspUuid)));
-    }
-
-    @Test
-    void testActivateTsp_tspProfileNotFound_throwsNotFoundException() throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
-        SigningProfileDto profileDto = signingProfileService.createSigningProfile(buildDelegatedTimestampingRequest("timestamping-for-tsp-not-found"));
-        SecuredUUID profileUuid = SecuredUUID.fromString(profileDto.getUuid());
-
-        Assertions.assertThrows(NotFoundException.class,
-                () -> signingProfileService.activateTsp(
-                        profileUuid,
-                        SecuredUUID.fromString("00000000-0000-0000-0000-000000000002")));
-    }
-
-    @Test
-    void testActivateTsp_replacesExistingLink() throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
-        SigningProfileDto profileDto = signingProfileService.createSigningProfile(buildDelegatedTimestampingRequest("timestamping-for-tsp-replace"));
-        SecuredUUID profileUuid = SecuredUUID.fromString(profileDto.getUuid());
-
-        TspProfile tspProfile1 = new TspProfile();
-        tspProfile1.setName("tsp-profile-1");
-        tspProfile1 = tspRepository.save(tspProfile1);
-
-        TspProfile tspProfile2 = new TspProfile();
-        tspProfile2.setName("tsp-profile-2");
-        tspProfile2 = tspRepository.save(tspProfile2);
-
-        // Link the first profile
-        signingProfileService.activateTsp(profileUuid, tspProfile1.getSecuredUuid());
-        // Replace it with the second profile
-        signingProfileService.activateTsp(profileUuid, tspProfile2.getSecuredUuid());
-
-        Optional<SigningProfile> fromDb = signingProfileRepository.findById(UUID.fromString(profileDto.getUuid()));
-        Assertions.assertTrue(fromDb.isPresent());
-        Assertions.assertEquals(tspProfile2.getUuid(), fromDb.get().getTspProfileUuid(),
-                "The profile should reference the second TSP profile after replacement");
-    }
-
-    @Test
-    void testActivateTsp_unsupportedWorkflowType_throwsValidationException() {
-        // savedProfile uses RAW_SIGNING which does not support TSP
-        TspProfile tspProfile = new TspProfile();
-        tspProfile.setName("tsp-profile-unsupported-workflow");
-        tspProfile = tspRepository.save(tspProfile);
-        final SecuredUUID tspUuid = tspProfile.getSecuredUuid();
-
-        Assertions.assertThrows(ValidationException.class,
-                () -> signingProfileService.activateTsp(savedProfile.getSecuredUuid(), tspUuid));
-    }
-
-    @Test
-    void testDeactivateTsp_profileNotFound_throwsNotFoundException() {
-        Assertions.assertThrows(NotFoundException.class,
-                () -> signingProfileService.deactivateTsp(
-                        SecuredUUID.fromString("00000000-0000-0000-0000-000000000001")));
-    }
-
-    @Test
-    void testDeactivateTsp_removesFromEnabledProtocols() throws NotFoundException {
-        TspProfile tspProfile = new TspProfile();
-        tspProfile.setName("tsp-to-deactivate");
-        tspProfile = tspRepository.save(tspProfile);
-
-        savedProfile.setTspProfile(tspProfile);
-        signingProfileRepository.save(savedProfile);
-
-        // Verify TSP is listed as an enabled protocol before deactivation
-        SigningProfileDto before = signingProfileService.getSigningProfile(savedProfile.getSecuredUuid(), null);
-        Assertions.assertTrue(before.getEnabledProtocols().contains(SigningProtocol.TSP));
-
-        signingProfileService.deactivateTsp(savedProfile.getSecuredUuid());
-
-        // TSP profile UUID must be null in the database after deactivation
-        Optional<SigningProfile> fromDb = signingProfileRepository.findById(savedProfile.getUuid());
-        Assertions.assertTrue(fromDb.isPresent());
-        Assertions.assertNull(fromDb.get().getTspProfileUuid(),
-                "TSP profile UUID must be cleared after deactivation");
-
-        // After deactivation, TSP should no longer appear in enabled protocols
-        SigningProfileDto after = signingProfileService.getSigningProfile(savedProfile.getSecuredUuid(), null);
-        Assertions.assertFalse(after.getEnabledProtocols().contains(SigningProtocol.TSP),
-                "TSP should be removed from enabledProtocols after deactivation");
-    }
-
-    @Test
-    void testDeactivateTsp_noLinkExists_isIdempotent() {
-        // savedProfile has no TSP link from setUp — calling deactivateTsp should be a no-op
-        Assertions.assertNull(savedProfile.getTspProfileUuid());
-
-        Assertions.assertDoesNotThrow(() -> signingProfileService.deactivateTsp(savedProfile.getSecuredUuid()),
-                "deactivateTsp must not throw when no TSP is currently linked");
-
-        Optional<SigningProfile> fromDb = signingProfileRepository.findById(savedProfile.getUuid());
-        Assertions.assertTrue(fromDb.isPresent());
-        Assertions.assertNull(fromDb.get().getTspProfileUuid(),
-                "TSP profile UUID should still be null after a no-op deactivation");
-    }
-
-    @Test
-    void testActivateTsp_contentSigningWorkflow_throwsValidationException()
-            throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
-        // CONTENT_SIGNING, like RAW_SIGNING, is not mapped to TSP in SUPPORTED_PROTOCOLS
-        SigningProfileDto profileDto = signingProfileService.createSigningProfile(buildDelegatedContentRequest("content-for-tsp-test"));
-        SecuredUUID profileUuid = SecuredUUID.fromString(profileDto.getUuid());
-
-        TspProfile tspProfile = new TspProfile();
-        tspProfile.setName("tsp-for-content-workflow");
-        tspProfile = tspRepository.save(tspProfile);
-        final SecuredUUID tspUuid = tspProfile.getSecuredUuid();
-
-        Assertions.assertThrows(ValidationException.class,
-                () -> signingProfileService.activateTsp(profileUuid, tspUuid),
-                "activateTsp must reject CONTENT_SIGNING workflow with a ValidationException");
-    }
-
-    // ──────────────────────────────────────────────────────────────────────────
-    // Connector attribute persistence — signingOperationAttributes
-    // ──────────────────────────────────────────────────────────────────────────
 
     /**
      * Builds a valid RSA {@code signingOperationAttributes} request attribute for use in tests.
@@ -1673,175 +1737,6 @@ class SigningProfileServiceImplTest extends BaseSpringBootTest {
         attr.setContent(List.of(content));
         return attr;
     }
-
-    @Test
-    void testCreateSigningProfile_staticKey_signingOperationAttributesPersistedAndReturned()
-            throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
-        StaticKeyManagedSigningRequestDto scheme = new StaticKeyManagedSigningRequestDto();
-        scheme.setCertificateUuid(rsaCertificate.getUuid());
-        scheme.setSigningOperationAttributes(List.of(
-                buildRsaSchemeAttribute(RsaSignatureScheme.PKCS1_v1_5),
-                buildDigestAttribute(DigestAlgorithm.SHA_256)));
-
-        SigningProfileRequestDto request = new SigningProfileRequestDto();
-        request.setName("static-key-with-sign-attrs");
-        request.setDescription("Profile with signing operation attributes");
-        request.setSigningScheme(scheme);
-        request.setWorkflow(new RawSigningWorkflowRequestDto());
-
-        SigningProfileDto dto = signingProfileService.createSigningProfile(request);
-
-        // The returned DTO must expose the persisted signing operation attributes
-        Assertions.assertInstanceOf(StaticKeyManagedSigningDto.class, dto.getSigningScheme());
-        StaticKeyManagedSigningDto schemeDto = (StaticKeyManagedSigningDto) dto.getSigningScheme();
-        Assertions.assertNotNull(schemeDto.getSigningOperationAttributes());
-        Assertions.assertFalse(schemeDto.getSigningOperationAttributes().isEmpty(),
-                "Signing operation attributes should be populated after create");
-        Assertions.assertTrue(
-                schemeDto.getSigningOperationAttributes().stream()
-                        .anyMatch(a -> RsaSignatureAttributes.ATTRIBUTE_DATA_RSA_SIG_SCHEME.equals(a.getName())),
-                "RSA signature scheme attribute should be present in the returned DTO");
-    }
-
-    @Test
-    void testGetSigningProfile_staticKey_signingOperationAttributesLoadedFromEngine()
-            throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
-        StaticKeyManagedSigningRequestDto scheme = new StaticKeyManagedSigningRequestDto();
-        scheme.setCertificateUuid(rsaCertificate.getUuid());
-        scheme.setSigningOperationAttributes(List.of(
-                buildRsaSchemeAttribute(RsaSignatureScheme.PSS),
-                buildDigestAttribute(DigestAlgorithm.SHA_256)));
-
-        SigningProfileRequestDto request = new SigningProfileRequestDto();
-        request.setName("static-key-get-sign-attrs");
-        request.setSigningScheme(scheme);
-        request.setWorkflow(new RawSigningWorkflowRequestDto());
-
-        SigningProfileDto created = signingProfileService.createSigningProfile(request);
-        SecuredUUID profileUuid = SecuredUUID.fromString(created.getUuid());
-
-        // Re-fetch — attributes must be loaded from AttributeEngine
-        SigningProfileDto fetched = signingProfileService.getSigningProfile(profileUuid, null);
-        Assertions.assertInstanceOf(StaticKeyManagedSigningDto.class, fetched.getSigningScheme());
-        StaticKeyManagedSigningDto schemeDto = (StaticKeyManagedSigningDto) fetched.getSigningScheme();
-        Assertions.assertFalse(schemeDto.getSigningOperationAttributes().isEmpty(),
-                "Signing operation attributes should survive a create→get round-trip");
-    }
-
-    @Test
-    void testUpdateSigningProfile_staticKey_signingOperationAttributesReplacedOnUpdate()
-            throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
-        // Create with PKCS1-v1_5 / SHA-256
-        StaticKeyManagedSigningRequestDto schemeV1 = new StaticKeyManagedSigningRequestDto();
-        schemeV1.setCertificateUuid(rsaCertificate.getUuid());
-        schemeV1.setSigningOperationAttributes(List.of(
-                buildRsaSchemeAttribute(RsaSignatureScheme.PKCS1_v1_5),
-                buildDigestAttribute(DigestAlgorithm.SHA_256)));
-
-        SigningProfileRequestDto createRequest = new SigningProfileRequestDto();
-        createRequest.setName("static-key-update-sign-attrs");
-        createRequest.setSigningScheme(schemeV1);
-        createRequest.setWorkflow(new RawSigningWorkflowRequestDto());
-
-        SigningProfileDto created = signingProfileService.createSigningProfile(createRequest);
-        SecuredUUID profileUuid = SecuredUUID.fromString(created.getUuid());
-
-        // Update to PSS / SHA-384
-        StaticKeyManagedSigningRequestDto schemeV2 = new StaticKeyManagedSigningRequestDto();
-        schemeV2.setCertificateUuid(rsaCertificate.getUuid());
-        schemeV2.setSigningOperationAttributes(List.of(
-                buildRsaSchemeAttribute(RsaSignatureScheme.PSS),
-                buildDigestAttribute(DigestAlgorithm.SHA_384)));
-
-        SigningProfileRequestDto updateRequest = new SigningProfileRequestDto();
-        updateRequest.setName("static-key-update-sign-attrs");
-        updateRequest.setSigningScheme(schemeV2);
-        updateRequest.setWorkflow(new RawSigningWorkflowRequestDto());
-
-        SigningProfileDto updated = signingProfileService.updateSigningProfile(profileUuid, updateRequest);
-
-        Assertions.assertInstanceOf(StaticKeyManagedSigningDto.class, updated.getSigningScheme());
-        StaticKeyManagedSigningDto schemeDto = (StaticKeyManagedSigningDto) updated.getSigningScheme();
-        List<ResponseAttribute> signingOperationAttributes = schemeDto.getSigningOperationAttributes();
-        Assertions.assertFalse(signingOperationAttributes.isEmpty());
-        Optional<ResponseAttribute> rsaSigningSchemeAttribute = signingOperationAttributes.stream().filter(
-                a -> RsaSignatureAttributes.ATTRIBUTE_DATA_RSA_SIG_SCHEME.equals(a.getName())).findFirst();
-        Assertions.assertTrue(rsaSigningSchemeAttribute.isPresent());
-        // The RSA sig-scheme attribute content should reflect the new PSS value, not the old PKCS1-v1_5
-        if (AttributeVersion.V2.equals(rsaSigningSchemeAttribute.get().getVersion())) {
-            ResponseAttributeV2 rsaSigningSchemeAttributeV2 = (ResponseAttributeV2) rsaSigningSchemeAttribute.get();
-            var attributeContentV2 = rsaSigningSchemeAttributeV2.getContent().getFirst();
-            Assertions.assertEquals(RsaSignatureScheme.PSS.getCode(), attributeContentV2.getData().toString(),
-                    "Signing operation attributes should be replaced with new value on update");
-        } else if (AttributeVersion.V3.equals(rsaSigningSchemeAttribute.get().getVersion())) {
-            ResponseAttributeV3 rsaSigningSchemeAttributeV3 = (ResponseAttributeV3) rsaSigningSchemeAttribute.get();
-            var attributeContentV3 = rsaSigningSchemeAttributeV3.getContent().getFirst();
-            Assertions.assertEquals(RsaSignatureScheme.PSS.getCode(), attributeContentV3.getData().toString(),
-                    "Signing operation attributes should be replaced with new value on update");
-        } else {
-            Assertions.fail("Unknown attribute version: " + rsaSigningSchemeAttribute.get().getVersion() + " - the test needs to be updated to handle this version");
-        }
-    }
-
-    @Test
-    void testUpdateSigningProfile_schemeChangedToNonStaticKey_signingOperationAttributesCleared()
-            throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
-        // Create a STATIC_KEY profile with signing operation attributes
-        StaticKeyManagedSigningRequestDto scheme = new StaticKeyManagedSigningRequestDto();
-        scheme.setCertificateUuid(rsaCertificate.getUuid());
-        scheme.setSigningOperationAttributes(List.of(
-                buildRsaSchemeAttribute(RsaSignatureScheme.PKCS1_v1_5),
-                buildDigestAttribute(DigestAlgorithm.SHA_256)));
-
-        SigningProfileRequestDto createRequest = new SigningProfileRequestDto();
-        createRequest.setName("static-key-to-delegated");
-        createRequest.setSigningScheme(scheme);
-        createRequest.setWorkflow(new RawSigningWorkflowRequestDto());
-
-        SigningProfileDto created = signingProfileService.createSigningProfile(createRequest);
-        SecuredUUID profileUuid = SecuredUUID.fromString(created.getUuid());
-
-        // Switch to DELEGATED — should clear signing-operation attributes from the engine
-        signingProfileService.updateSigningProfile(profileUuid, buildDelegatedRawRequest("static-key-to-delegated"));
-
-        // Verify nothing remains in AttributeEngine under SIGNING_SCHEME for this profile (version 1, in-place overwrite)
-        List<ResponseAttribute> remaining = attributeEngine.getObjectDataAttributesContent(
-                ObjectAttributeContentInfo.builder(Resource.SIGNING_PROFILE, UUID.fromString(created.getUuid()))
-                        .operation(AttributeOperation.SIGN).version(1).build());
-        Assertions.assertTrue(remaining.isEmpty(),
-                "Signing-scheme attributes should be deleted when scheme changes away from STATIC_KEY");
-    }
-
-    @Test
-    void testDeleteSigningProfile_removesSigningOperationAttributesFromEngine()
-            throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
-        StaticKeyManagedSigningRequestDto scheme = new StaticKeyManagedSigningRequestDto();
-        scheme.setCertificateUuid(rsaCertificate.getUuid());
-        scheme.setSigningOperationAttributes(List.of(
-                buildRsaSchemeAttribute(RsaSignatureScheme.PSS),
-                buildDigestAttribute(DigestAlgorithm.SHA_256)));
-
-        SigningProfileRequestDto request = new SigningProfileRequestDto();
-        request.setName("delete-clears-sign-attrs");
-        request.setSigningScheme(scheme);
-        request.setWorkflow(new RawSigningWorkflowRequestDto());
-
-        SigningProfileDto created = signingProfileService.createSigningProfile(request);
-        UUID profileUuid = UUID.fromString(created.getUuid());
-
-        signingProfileService.deleteSigningProfile(SecuredUUID.fromUUID(profileUuid));
-
-        // AttributeEngine should have no attributes left for this profile
-        List<ResponseAttribute> remaining = attributeEngine.getObjectDataAttributesContent(
-                ObjectAttributeContentInfo.builder(Resource.SIGNING_PROFILE, profileUuid)
-                        .operation(AttributeOperation.SIGN).version(1).build());
-        Assertions.assertTrue(remaining.isEmpty(),
-                "Signing-scheme attributes should be removed by deleteObjectAttributeContent on profile deletion");
-    }
-
-    // ──────────────────────────────────────────────────────────────────────────
-    // Connector attribute persistence — signatureFormatterConnectorAttributes
-    // ──────────────────────────────────────────────────────────────────────────
 
     /**
      * Creates and persists a minimal {@link Connector} entity for use as a signature formatter connector,
@@ -1881,573 +1776,543 @@ class SigningProfileServiceImplTest extends BaseSpringBootTest {
         return attr;
     }
 
-    @Test
-    void testCreateSigningProfile_contentSigning_formatterAttributesPersistedAndReturned()
-            throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
-        Connector formatter = createFormatterConnector("formatter-content-create");
+    @Nested
+    class FormatterAttributes {
 
-        // Pre-register the attribute definition so the engine can store content for it
-        UUID attrUuid = UUID.randomUUID();
-        String attrName = "data_testFormatterAttr";
-        DataAttributeV2 attrDef = new DataAttributeV2();
-        attrDef.setUuid(attrUuid.toString());
-        attrDef.setName(attrName);
-        attrDef.setContentType(AttributeContentType.STRING);
-        DataAttributeProperties props = new DataAttributeProperties();
-        props.setLabel("Test Formatter Attribute");
-        attrDef.setProperties(props);
-        attributeEngine.updateDataAttributeDefinitions(formatter.getUuid(), AttributeOperation.WORKFLOW_FORMATTER, List.of(attrDef));
-
-        ContentSigningWorkflowRequestDto workflow = new ContentSigningWorkflowRequestDto();
-        workflow.setSignatureFormatterConnectorUuid(formatter.getUuid());
-        workflow.setSignatureFormatterConnectorAttributes(
-                List.of(buildFormatterAttribute(attrUuid, attrName, "testValue")));
-
-        SigningProfileRequestDto request = new SigningProfileRequestDto();
-        request.setName("doc-profile-with-formatter-attrs");
-        request.setSigningScheme(new DelegatedSigningRequestDto());
-        request.setWorkflow(workflow);
-
-        SigningProfileDto dto = signingProfileService.createSigningProfile(request);
-
-        Assertions.assertInstanceOf(ContentSigningWorkflowDto.class, dto.getWorkflow());
-        ContentSigningWorkflowDto wfDto = (ContentSigningWorkflowDto) dto.getWorkflow();
-        Assertions.assertFalse(wfDto.getSignatureFormatterConnectorAttributes().isEmpty(),
-                "Formatter connector attributes should be populated after create");
-        Assertions.assertEquals(attrName, wfDto.getSignatureFormatterConnectorAttributes().getFirst().getName());
-    }
-
-    @Test
-    void testUpdateSigningProfile_workflowFormatterConnectorChanged_oldAttributesCleared()
-            throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
-        Connector formatterA = createFormatterConnector("formatter-old");
-        Connector formatterB = createFormatterConnector("formatter-new");
-
-        // Pre-register attribute definition for both connectors
-        UUID attrUuid = UUID.randomUUID();
-        String attrName = "data_switchTest";
-        DataAttributeV2 attrDef = new DataAttributeV2();
-        attrDef.setUuid(attrUuid.toString());
-        attrDef.setName(attrName);
-        attrDef.setContentType(AttributeContentType.STRING);
-        DataAttributeProperties props = new DataAttributeProperties();
-        props.setLabel("Switch Test Attribute");
-        attrDef.setProperties(props);
-        attributeEngine.updateDataAttributeDefinitions(formatterA.getUuid(), AttributeOperation.WORKFLOW_FORMATTER, List.of(attrDef));
-        attributeEngine.updateDataAttributeDefinitions(formatterB.getUuid(), AttributeOperation.WORKFLOW_FORMATTER, List.of(attrDef));
-
-        // Create with formatterA
-        ContentSigningWorkflowRequestDto workflowA = new ContentSigningWorkflowRequestDto();
-        workflowA.setSignatureFormatterConnectorUuid(formatterA.getUuid());
-        workflowA.setSignatureFormatterConnectorAttributes(
-                List.of(buildFormatterAttribute(attrUuid, attrName, "valueA")));
-
-        SigningProfileRequestDto createRequest = new SigningProfileRequestDto();
-        createRequest.setName("workflow-formatter-switch");
-        createRequest.setSigningScheme(new DelegatedSigningRequestDto());
-        createRequest.setWorkflow(workflowA);
-
-        SigningProfileDto created = signingProfileService.createSigningProfile(createRequest);
-        SecuredUUID profileUuid = SecuredUUID.fromString(created.getUuid());
-        UUID profileUuidRaw = UUID.fromString(created.getUuid());
-
-        // Update with formatterB — old formatter A attributes should be cleared
-        ContentSigningWorkflowRequestDto workflowB = new ContentSigningWorkflowRequestDto();
-        workflowB.setSignatureFormatterConnectorUuid(formatterB.getUuid());
-        workflowB.setSignatureFormatterConnectorAttributes(
-                List.of(buildFormatterAttribute(attrUuid, attrName, "valueB")));
-
-        SigningProfileRequestDto updateRequest = new SigningProfileRequestDto();
-        updateRequest.setName("workflow-formatter-switch");
-        updateRequest.setSigningScheme(new DelegatedSigningRequestDto());
-        updateRequest.setWorkflow(workflowB);
-
-        signingProfileService.updateSigningProfile(profileUuid, updateRequest);
-
-        // Attributes for old formatterA should be gone (version 1, in-place overwrite)
-        List<ResponseAttribute> oldAttrs = attributeEngine.getObjectDataAttributesContent(
-                ObjectAttributeContentInfo.builder(Resource.SIGNING_PROFILE, profileUuidRaw)
-                        .connector(formatterA.getUuid())
-                        .operation(AttributeOperation.WORKFLOW_FORMATTER).version(1).build());
-        Assertions.assertTrue(oldAttrs.isEmpty(),
-                "Attributes for the old formatter connector should be removed when the connector changes");
-
-        // Attributes for new formatterB should be present
-        List<ResponseAttribute> newAttrs = attributeEngine.getObjectDataAttributesContent(
-                ObjectAttributeContentInfo.builder(Resource.SIGNING_PROFILE, profileUuidRaw)
-                        .connector(formatterB.getUuid())
-                        .operation(AttributeOperation.WORKFLOW_FORMATTER).version(1).build());
-        Assertions.assertFalse(newAttrs.isEmpty(),
-                "Attributes for the new formatter connector should be stored after the update");
-    }
-
-    @Test
-    void testGetSigningProfile_formatterAttributesReturnedForAllWorkflowTypes()
-            throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
-        Connector formatter = createFormatterConnector("formatter-multi-workflow");
-
-        UUID attrUuid = UUID.randomUUID();
-        String attrName = "data_multiWorkflowAttr";
-        DataAttributeV2 attrDef = new DataAttributeV2();
-        attrDef.setUuid(attrUuid.toString());
-        attrDef.setName(attrName);
-        attrDef.setContentType(AttributeContentType.STRING);
-        DataAttributeProperties props = new DataAttributeProperties();
-        props.setLabel("Multi Workflow Attribute");
-        attrDef.setProperties(props);
-        attributeEngine.updateDataAttributeDefinitions(formatter.getUuid(), AttributeOperation.WORKFLOW_FORMATTER, List.of(attrDef));
-
-        for (SigningWorkflowType workflowLabel : List.of(SigningWorkflowType.CONTENT_SIGNING, SigningWorkflowType.TIMESTAMPING)) {
-            WorkflowRequestDto wfRequest;
-            switch (workflowLabel) {
-                case CONTENT_SIGNING -> {
-                    ContentSigningWorkflowRequestDto wf = new ContentSigningWorkflowRequestDto();
-                    wf.setSignatureFormatterConnectorUuid(formatter.getUuid());
-                    wf.setSignatureFormatterConnectorAttributes(List.of(buildFormatterAttribute(attrUuid, attrName, "val-" + workflowLabel)));
-                    wfRequest = wf;
-                }
-                case TIMESTAMPING -> {
-                    TimestampingWorkflowRequestDto wf = new TimestampingWorkflowRequestDto();
-                    wf.setSignatureFormatterConnectorUuid(formatter.getUuid());
-                    wf.setSignatureFormatterConnectorAttributes(List.of(buildFormatterAttribute(attrUuid, attrName, "val-" + workflowLabel)));
-                    wfRequest = wf;
-                }
-                default -> throw new IllegalStateException("Unexpected workflow type: " + workflowLabel);
-            }
-
+        @Test
+        void create_contentSigning_persistedAndReturnedInDto()
+                throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
+            // given
+            Connector formatter = createFormatterConnector("formatter-content-create");
+            FormatterAttr attr = registerFormatterAttribute(formatter, "Test Formatter Attribute");
+            ContentSigningWorkflowRequestDto workflow = new ContentSigningWorkflowRequestDto();
+            workflow.setSignatureFormatterConnectorUuid(formatter.getUuid());
+            workflow.setSignatureFormatterConnectorAttributes(
+                    List.of(buildFormatterAttribute(attr.uuid(), attr.name(), "testValue")));
             SigningProfileRequestDto request = new SigningProfileRequestDto();
-            request.setName("formatter-attrs-" + workflowLabel);
+            request.setName("doc-profile-with-formatter-attrs");
             request.setSigningScheme(new DelegatedSigningRequestDto());
-            request.setWorkflow(wfRequest);
+            request.setWorkflow(workflow);
 
+            // when
             SigningProfileDto dto = signingProfileService.createSigningProfile(request);
-            SigningProfileDto fetched = signingProfileService.getSigningProfile(
-                    SecuredUUID.fromString(dto.getUuid()), null);
 
-            List<ResponseAttribute> fetchedAttrs;
-            switch (fetched.getWorkflow().getType()) {
-                case CONTENT_SIGNING ->
-                        fetchedAttrs = ((ContentSigningWorkflowDto) fetched.getWorkflow()).getSignatureFormatterConnectorAttributes();
-                case TIMESTAMPING ->
-                        fetchedAttrs = ((TimestampingWorkflowDto) fetched.getWorkflow()).getSignatureFormatterConnectorAttributes();
-                default ->
-                        throw new IllegalStateException("Unexpected workflow type: " + fetched.getWorkflow().getType());
+            // then
+            assertInstanceOf(ContentSigningWorkflowDto.class, dto.getWorkflow());
+            ContentSigningWorkflowDto wfDto = (ContentSigningWorkflowDto) dto.getWorkflow();
+            assertFalse(wfDto.getSignatureFormatterConnectorAttributes().isEmpty());
+            assertEquals(attr.name(), wfDto.getSignatureFormatterConnectorAttributes().getFirst().getName());
+        }
+
+        @Test
+        void update_connectorChanged_oldAttributesCleared()
+                throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
+            // given: create with formatterA
+            Connector formatterA = createFormatterConnector("formatter-old");
+            Connector formatterB = createFormatterConnector("formatter-new");
+            FormatterAttr attr = registerFormatterAttribute(formatterA, "Switch Test Attribute");
+            attributeEngine.updateDataAttributeDefinitions(formatterB.getUuid(),
+                    AttributeOperation.WORKFLOW_FORMATTER,
+                    List.of(buildDataAttrDef(attr.uuid(), attr.name())));
+
+            ContentSigningWorkflowRequestDto workflowA = new ContentSigningWorkflowRequestDto();
+            workflowA.setSignatureFormatterConnectorUuid(formatterA.getUuid());
+            workflowA.setSignatureFormatterConnectorAttributes(
+                    List.of(buildFormatterAttribute(attr.uuid(), attr.name(), "valueA")));
+            SigningProfileRequestDto createRequest = new SigningProfileRequestDto();
+            createRequest.setName("workflow-formatter-switch");
+            createRequest.setSigningScheme(new DelegatedSigningRequestDto());
+            createRequest.setWorkflow(workflowA);
+            SigningProfileDto created = signingProfileService.createSigningProfile(createRequest);
+            SecuredUUID profileUuid = SecuredUUID.fromString(created.getUuid());
+            UUID profileUuidRaw = UUID.fromString(created.getUuid());
+
+            // when: update to formatterB
+            ContentSigningWorkflowRequestDto workflowB = new ContentSigningWorkflowRequestDto();
+            workflowB.setSignatureFormatterConnectorUuid(formatterB.getUuid());
+            workflowB.setSignatureFormatterConnectorAttributes(
+                    List.of(buildFormatterAttribute(attr.uuid(), attr.name(), "valueB")));
+            SigningProfileRequestDto updateRequest = new SigningProfileRequestDto();
+            updateRequest.setName("workflow-formatter-switch");
+            updateRequest.setSigningScheme(new DelegatedSigningRequestDto());
+            updateRequest.setWorkflow(workflowB);
+            signingProfileService.updateSigningProfile(profileUuid, updateRequest);
+
+            // then: old formatterA attributes gone, new formatterB attributes present
+            List<ResponseAttribute> oldAttrs = attributeEngine.getObjectDataAttributesContent(
+                    ObjectAttributeContentInfo.builder(Resource.SIGNING_PROFILE, profileUuidRaw)
+                            .connector(formatterA.getUuid())
+                            .operation(AttributeOperation.WORKFLOW_FORMATTER).version(1).build());
+            assertTrue(oldAttrs.isEmpty());
+            List<ResponseAttribute> newAttrs = attributeEngine.getObjectDataAttributesContent(
+                    ObjectAttributeContentInfo.builder(Resource.SIGNING_PROFILE, profileUuidRaw)
+                            .connector(formatterB.getUuid())
+                            .operation(AttributeOperation.WORKFLOW_FORMATTER).version(1).build());
+            assertFalse(newAttrs.isEmpty());
+        }
+
+        @Test
+        void get_returnedForContentAndTimestampingWorkflows()
+                throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
+            // given: one formatter used by both CONTENT and TIMESTAMPING profiles
+            Connector formatter = createFormatterConnector("formatter-multi-workflow");
+            FormatterAttr attr = registerFormatterAttribute(formatter, "Multi Workflow Attribute");
+
+            for (SigningWorkflowType workflowType : List.of(SigningWorkflowType.CONTENT_SIGNING, SigningWorkflowType.TIMESTAMPING)) {
+                WorkflowRequestDto wfRequest = switch (workflowType) {
+                    case CONTENT_SIGNING -> {
+                        ContentSigningWorkflowRequestDto wf = new ContentSigningWorkflowRequestDto();
+                        wf.setSignatureFormatterConnectorUuid(formatter.getUuid());
+                        wf.setSignatureFormatterConnectorAttributes(
+                                List.of(buildFormatterAttribute(attr.uuid(), attr.name(), "val-" + workflowType)));
+                        yield wf;
+                    }
+                    case TIMESTAMPING -> {
+                        TimestampingWorkflowRequestDto wf = new TimestampingWorkflowRequestDto();
+                        wf.setSignatureFormatterConnectorUuid(formatter.getUuid());
+                        wf.setSignatureFormatterConnectorAttributes(
+                                List.of(buildFormatterAttribute(attr.uuid(), attr.name(), "val-" + workflowType)));
+                        yield wf;
+                    }
+                    default -> throw new IllegalStateException("Unexpected: " + workflowType);
+                };
+                SigningProfileRequestDto request = new SigningProfileRequestDto();
+                request.setName("formatter-attrs-" + workflowType);
+                request.setSigningScheme(new DelegatedSigningRequestDto());
+                request.setWorkflow(wfRequest);
+                SigningProfileDto dto = signingProfileService.createSigningProfile(request);
+                SigningProfileDto fetched = signingProfileService.getSigningProfile(
+                        SecuredUUID.fromString(dto.getUuid()), null);
+
+                List<ResponseAttribute> fetchedAttrs = switch (fetched.getWorkflow().getType()) {
+                    case CONTENT_SIGNING ->
+                            ((ContentSigningWorkflowDto) fetched.getWorkflow()).getSignatureFormatterConnectorAttributes();
+                    case TIMESTAMPING ->
+                            ((TimestampingWorkflowDto) fetched.getWorkflow()).getSignatureFormatterConnectorAttributes();
+                    default -> throw new IllegalStateException("Unexpected: " + fetched.getWorkflow().getType());
+                };
+                assertFalse(fetchedAttrs.isEmpty(), "Formatter attributes should be loaded for: " + workflowType);
+                assertEquals(attr.name(), fetchedAttrs.getFirst().getName());
             }
-            Assertions.assertFalse(fetchedAttrs.isEmpty(),
-                    "Formatter attributes should be loaded for workflow type: " + workflowLabel);
-            Assertions.assertEquals(attrName, fetchedAttrs.getFirst().getName());
+        }
+
+        @Test
+        void delete_removesAttributesFromEngine()
+                throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
+            // given
+            Connector formatter = createFormatterConnector("formatter-delete-test");
+            FormatterAttr attr = registerFormatterAttribute(formatter, "Delete Formatter Attribute");
+            ContentSigningWorkflowRequestDto workflow = new ContentSigningWorkflowRequestDto();
+            workflow.setSignatureFormatterConnectorUuid(formatter.getUuid());
+            workflow.setSignatureFormatterConnectorAttributes(
+                    List.of(buildFormatterAttribute(attr.uuid(), attr.name(), "toDelete")));
+            SigningProfileRequestDto request = new SigningProfileRequestDto();
+            request.setName("delete-clears-formatter-attrs");
+            request.setSigningScheme(new DelegatedSigningRequestDto());
+            request.setWorkflow(workflow);
+            SigningProfileDto created = signingProfileService.createSigningProfile(request);
+            UUID profileUuid = UUID.fromString(created.getUuid());
+
+            // when
+            signingProfileService.deleteSigningProfile(SecuredUUID.fromUUID(profileUuid));
+
+            // then
+            List<ResponseAttribute> remaining = attributeEngine.getObjectDataAttributesContent(
+                    ObjectAttributeContentInfo.builder(Resource.SIGNING_PROFILE, profileUuid)
+                            .connector(formatter.getUuid())
+                            .operation(AttributeOperation.WORKFLOW_FORMATTER).version(1).build());
+            assertTrue(remaining.isEmpty());
+        }
+
+        private DataAttributeV2 buildDataAttrDef(UUID uuid, String name) {
+            DataAttributeV2 def = new DataAttributeV2();
+            def.setUuid(uuid.toString());
+            def.setName(name);
+            def.setContentType(AttributeContentType.STRING);
+            DataAttributeProperties props = new DataAttributeProperties();
+            props.setLabel(name);
+            def.setProperties(props);
+            return def;
         }
     }
 
-    @Test
-    void testDeleteSigningProfile_removesFormatterAttributesFromEngine()
-            throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
-        Connector formatter = createFormatterConnector("formatter-delete-test");
+    @Nested
+    class CustomAttributes {
 
-        UUID attrUuid = UUID.randomUUID();
-        String attrName = "data_deleteFormatterAttr";
-        DataAttributeV2 attrDef = new DataAttributeV2();
-        attrDef.setUuid(attrUuid.toString());
-        attrDef.setName(attrName);
-        attrDef.setContentType(AttributeContentType.STRING);
-        DataAttributeProperties props = new DataAttributeProperties();
-        props.setLabel("Delete Formatter Attribute");
-        attrDef.setProperties(props);
-        attributeEngine.updateDataAttributeDefinitions(formatter.getUuid(), AttributeOperation.WORKFLOW_FORMATTER, List.of(attrDef));
+        @Test
+        void create_returnedInDto()
+                throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
+            // given
+            RequestAttributeV3 customAttr = new RequestAttributeV3(UUID.fromString(CUSTOM_ATTR_UUID),
+                    CUSTOM_ATTR_NAME, AttributeContentType.STRING,
+                    List.of(new StringAttributeContentV3("profile-value-on-create")));
+            SigningProfileRequestDto request = buildDelegatedRawRequest("profile-with-custom-attr");
+            request.setCustomAttributes(List.of(customAttr));
 
-        ContentSigningWorkflowRequestDto workflow = new ContentSigningWorkflowRequestDto();
-        workflow.setSignatureFormatterConnectorUuid(formatter.getUuid());
-        workflow.setSignatureFormatterConnectorAttributes(
-                List.of(buildFormatterAttribute(attrUuid, attrName, "toDelete")));
+            // when
+            SigningProfileDto dto = signingProfileService.createSigningProfile(request);
 
-        SigningProfileRequestDto request = new SigningProfileRequestDto();
-        request.setName("delete-clears-formatter-attrs");
-        request.setSigningScheme(new DelegatedSigningRequestDto());
-        request.setWorkflow(workflow);
+            // then
+            assertNotNull(dto.getCustomAttributes());
+            assertFalse(dto.getCustomAttributes().isEmpty());
+            assertEquals("profile-value-on-create",
+                    ((ResponseAttributeV3) dto.getCustomAttributes().getFirst()).getContent().getFirst().getData());
+        }
 
-        SigningProfileDto created = signingProfileService.createSigningProfile(request);
-        UUID profileUuid = UUID.fromString(created.getUuid());
+        @Test
+        void update_returnedInDto()
+                throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
+            // given: create then update
+            RequestAttributeV3 createAttr = new RequestAttributeV3(UUID.fromString(CUSTOM_ATTR_UUID),
+                    CUSTOM_ATTR_NAME, AttributeContentType.STRING,
+                    List.of(new StringAttributeContentV3("initial-value")));
+            SigningProfileRequestDto createRequest = buildDelegatedRawRequest("profile-update-custom-attr");
+            createRequest.setCustomAttributes(List.of(createAttr));
+            SigningProfileDto created = signingProfileService.createSigningProfile(createRequest);
 
-        signingProfileService.deleteSigningProfile(SecuredUUID.fromUUID(profileUuid));
+            RequestAttributeV3 updateAttr = new RequestAttributeV3(UUID.fromString(CUSTOM_ATTR_UUID),
+                    CUSTOM_ATTR_NAME, AttributeContentType.STRING,
+                    List.of(new StringAttributeContentV3("updated-value")));
+            SigningProfileRequestDto updateRequest = buildDelegatedRawRequest("profile-update-custom-attr");
+            updateRequest.setCustomAttributes(List.of(updateAttr));
 
-        List<ResponseAttribute> remaining = attributeEngine.getObjectDataAttributesContent(
-                ObjectAttributeContentInfo.builder(Resource.SIGNING_PROFILE, profileUuid)
-                        .connector(formatter.getUuid())
-                        .operation(AttributeOperation.WORKFLOW_FORMATTER).version(1).build());
-        Assertions.assertTrue(remaining.isEmpty(),
-                "Formatter attributes should be removed by deleteObjectAttributeContent on profile deletion");
+            // when
+            SigningProfileDto updated = signingProfileService.updateSigningProfile(
+                    SecuredUUID.fromString(created.getUuid()), updateRequest);
+
+            // then
+            assertNotNull(updated.getCustomAttributes());
+            assertFalse(updated.getCustomAttributes().isEmpty());
+            assertEquals("updated-value",
+                    ((ResponseAttributeV3) updated.getCustomAttributes().getFirst()).getContent().getFirst().getData());
+        }
     }
 
-    // ──────────────────────────────────────────────────────────────────────────
-    // Custom attributes via ResourceExtensionService
-    // ──────────────────────────────────────────────────────────────────────────
+    @Nested
+    class ManagedTimestampingModel {
 
-    @Test
-    void testCreateSigningProfile_withCustomAttributes_returnedInDto() throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
-        RequestAttributeV3 customAttr = new RequestAttributeV3(UUID.fromString(CUSTOM_ATTR_UUID),
-                CUSTOM_ATTR_NAME, AttributeContentType.STRING,
-                List.of(new StringAttributeContentV3("profile-value-on-create")));
+        @Test
+        void nonTimestampingProfile_throwsNotFoundException()
+                throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
+            // given: a non-timestamping profile
+            signingProfileService.createSigningProfile(buildManagedStaticKeyRawRequest("raw-profile-for-ts-check"));
 
-        SigningProfileRequestDto request = buildDelegatedRawRequest("profile-with-custom-attr");
-        request.setCustomAttributes(List.of(customAttr));
+            // when
+            NotFoundException ex = assertThrows(NotFoundException.class,
+                    () -> signingProfileService.getManagedTimestampingProfileModel("raw-profile-for-ts-check"));
 
-        SigningProfileDto dto = signingProfileService.createSigningProfile(request);
+            // then
+            assertTrue(ex.getMessage().contains("not configured with a timestamping workflow"));
+        }
 
-        Assertions.assertNotNull(dto.getCustomAttributes());
-        Assertions.assertFalse(dto.getCustomAttributes().isEmpty(),
-                "Custom attributes should be returned in the create DTO");
-        Assertions.assertEquals("profile-value-on-create",
-                ((ResponseAttributeV3) dto.getCustomAttributes().getFirst()).getContent().getFirst().getData());
+        @Test
+        void timestamping_staticKeyScheme_returnsTypedModelWithResolvedCertificate()
+                throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
+            // given
+            signingProfileService.createSigningProfile(buildManagedStaticKeyTimestampingRequest("ts-managed-model"));
+
+            // when
+            SigningProfileModel<ManagedTimestampingWorkflow<? extends TimeQualityConfigurationModel>, ?> model =
+                    signingProfileService.getManagedTimestampingProfileModel("ts-managed-model");
+
+            // then
+            assertInstanceOf(ManagedTimestampingWorkflow.class, model.workflow());
+            assertInstanceOf(StaticKeyManagedSigning.class, model.signingScheme());
+            StaticKeyManagedSigning schemeModel = (StaticKeyManagedSigning) model.signingScheme();
+            assertNotNull(schemeModel.certificate());
+            assertEquals(tsaCertificate.getUuid(), schemeModel.certificate().getUuid());
+        }
+
+        @Test
+        void validationPropertiesRoundTrip()
+                throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
+            // given
+            signingProfileService.createSigningProfile(
+                    buildManagedStaticKeyTimestampingRequestWithValidationProps("ts-managed-validation-props"));
+
+            // when
+            SigningProfileModel<ManagedTimestampingWorkflow<? extends TimeQualityConfigurationModel>, ?> model =
+                    signingProfileService.getManagedTimestampingProfileModel("ts-managed-validation-props");
+
+            // then
+            ManagedTimestampingWorkflow<?> wf = model.workflow();
+            assertEquals("1.2.3.4.5", wf.defaultPolicyId());
+            assertEquals(List.of("1.2.3.4.5", "1.2.3.4.6"), wf.allowedPolicyIds());
+            assertEquals(List.of(DigestAlgorithm.SHA_256), wf.allowedDigestAlgorithms());
+            assertTrue(wf.validateTokenSignature());
+        }
+
+        @Test
+        void baseFieldsArePropagatedToModel()
+                throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
+            // given
+            SigningProfileRequestDto request = buildManagedStaticKeyTimestampingRequest("ts-managed-base-fields");
+            request.setDescription("expected ts description");
+            SigningProfileDto created = signingProfileService.createSigningProfile(request);
+
+            // when
+            SigningProfileModel<ManagedTimestampingWorkflow<? extends TimeQualityConfigurationModel>, ?> model =
+                    signingProfileService.getManagedTimestampingProfileModel("ts-managed-base-fields");
+
+            // then
+            assertEquals("ts-managed-base-fields", model.name());
+            assertEquals("expected ts description", model.description());
+            assertEquals(UUID.fromString(created.getUuid()), model.uuid());
+            assertEquals(1, model.version());
+            assertFalse(model.enabled());
+        }
     }
 
-    @Test
-    void testUpdateSigningProfile_withCustomAttributes_returnedInDto() throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
-        RequestAttributeV3 createAttr = new RequestAttributeV3(UUID.fromString(CUSTOM_ATTR_UUID),
-                CUSTOM_ATTR_NAME, AttributeContentType.STRING,
-                List.of(new StringAttributeContentV3("initial-value")));
-        SigningProfileRequestDto createRequest = buildDelegatedRawRequest("profile-update-custom-attr");
-        createRequest.setCustomAttributes(List.of(createAttr));
-        SigningProfileDto created = signingProfileService.createSigningProfile(createRequest);
+    @Nested
+    class NameUniqueness {
 
-        RequestAttributeV3 updateAttr = new RequestAttributeV3(UUID.fromString(CUSTOM_ATTR_UUID),
-                CUSTOM_ATTR_NAME, AttributeContentType.STRING,
-                List.of(new StringAttributeContentV3("updated-value")));
-        SigningProfileRequestDto updateRequest = buildDelegatedRawRequest("profile-update-custom-attr");
-        updateRequest.setCustomAttributes(List.of(updateAttr));
-        SigningProfileDto updated = signingProfileService.updateSigningProfile(
-                SecuredUUID.fromString(created.getUuid()), updateRequest);
+        @Test
+        void create_duplicateName_throwsAlreadyExistException()
+                throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
+            // given: first profile created
+            signingProfileService.createSigningProfile(buildDelegatedRawRequest("duplicate-name"));
 
-        Assertions.assertNotNull(updated.getCustomAttributes());
-        Assertions.assertFalse(updated.getCustomAttributes().isEmpty());
-        Assertions.assertEquals("updated-value",
-                ((ResponseAttributeV3) updated.getCustomAttributes().getFirst()).getContent().getFirst().getData());
+            // when/then
+            assertThrows(AlreadyExistException.class,
+                    () -> signingProfileService.createSigningProfile(buildDelegatedRawRequest("duplicate-name")));
+        }
+
+        @Test
+        void update_toExistingNameOfAnotherProfile_throwsAlreadyExistException()
+                throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
+            // given: two profiles
+            signingProfileService.createSigningProfile(buildDelegatedRawRequest("profile-alpha"));
+            SigningProfileDto beta = signingProfileService.createSigningProfile(buildDelegatedRawRequest("profile-beta"));
+
+            // when: rename beta to alpha
+            SigningProfileRequestDto updateRequest = buildDelegatedRawRequest("profile-alpha");
+
+            // then
+            assertThrows(AlreadyExistException.class,
+                    () -> signingProfileService.updateSigningProfile(
+                            SecuredUUID.fromString(beta.getUuid()), updateRequest));
+        }
+
+        @Test
+        void update_keepingSameName_succeeds()
+                throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
+            // given
+            SigningProfileDto created = signingProfileService.createSigningProfile(
+                    buildDelegatedRawRequest("keep-same-name"));
+            SigningProfileRequestDto updateRequest = buildDelegatedRawRequest("keep-same-name");
+            updateRequest.setDescription("updated description");
+
+            // when
+            SigningProfileDto updated = signingProfileService.updateSigningProfile(
+                    SecuredUUID.fromString(created.getUuid()), updateRequest);
+
+            // then
+            assertEquals("keep-same-name", updated.getName());
+            assertEquals("updated description", updated.getDescription());
+        }
     }
 
-    // ──────────────────────────────────────────────────────────────────────────
-    // getManagedTimestampingProfileModel
-    // ──────────────────────────────────────────────────────────────────────────
+    @Nested
+    class TimeQualityConfiguration {
 
-    @Test
-    void testGetManagedTimestampingProfileModel_notFound_throwsNotFoundException() {
-        Assertions.assertThrows(NotFoundException.class,
-                () -> signingProfileService.getManagedTimestampingProfileModel("no-such-profile"));
+        @Test
+        void create_timestampingWorkflow_linkedTqcReturnedInDto()
+                throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
+            // given
+            TimeQualityConfigurationDto tqc = timeQualityConfigurationService
+                    .createTimeQualityConfiguration(buildTimeQualityConfigurationRequestDto("tqc-for-create-link"));
+
+            TimestampingWorkflowRequestDto workflow = new TimestampingWorkflowRequestDto();
+            workflow.setSignatureFormatterConnectorUuid(formatterConnector.getUuid());
+            workflow.setTimeQualityConfigurationUuid(UUID.fromString(tqc.getUuid()));
+
+            SigningProfileRequestDto request = new SigningProfileRequestDto();
+            request.setName("ts-with-tqc");
+            request.setSigningScheme(new DelegatedSigningRequestDto());
+            request.setWorkflow(workflow);
+
+            // when
+            SigningProfileDto dto = signingProfileService.createSigningProfile(request);
+
+            // then: header entity links to TQC
+            SigningProfile entity = signingProfileRepository.findById(UUID.fromString(dto.getUuid())).orElseThrow();
+            assertNotNull(entity.getTimeQualityConfiguration());
+            assertEquals(UUID.fromString(tqc.getUuid()), entity.getTimeQualityConfiguration().getUuid());
+
+            // then: DTO exposes TQC
+            TimestampingWorkflowDto tsDto = (TimestampingWorkflowDto) dto.getWorkflow();
+            assertNotNull(tsDto.getTimeQualityConfiguration());
+            assertEquals(tqc.getUuid(), tsDto.getTimeQualityConfiguration().getUuid());
+        }
+
+        @Test
+        void create_nonExistentTqcUuid_throwsNotFoundException() {
+            // given
+            TimestampingWorkflowRequestDto workflow = new TimestampingWorkflowRequestDto();
+            workflow.setSignatureFormatterConnectorUuid(formatterConnector.getUuid());
+            workflow.setTimeQualityConfigurationUuid(UUID.randomUUID());
+            SigningProfileRequestDto request = new SigningProfileRequestDto();
+            request.setName("ts-bad-tqc");
+            request.setSigningScheme(new DelegatedSigningRequestDto());
+            request.setWorkflow(workflow);
+
+            // when/then
+            assertThrows(NotFoundException.class, () -> signingProfileService.createSigningProfile(request));
+        }
+
+        @Test
+        void update_workflowChangedFromTimestamping_tqcClearedFromHeader()
+                throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
+            // given: profile with TQC linked
+            TimeQualityConfigurationDto tqc = timeQualityConfigurationService
+                    .createTimeQualityConfiguration(buildTimeQualityConfigurationRequestDto("tqc-for-clear-test"));
+            TimestampingWorkflowRequestDto timestampingWorkflow = new TimestampingWorkflowRequestDto();
+            timestampingWorkflow.setSignatureFormatterConnectorUuid(formatterConnector.getUuid());
+            timestampingWorkflow.setTimeQualityConfigurationUuid(UUID.fromString(tqc.getUuid()));
+            SigningProfileRequestDto createRequest = new SigningProfileRequestDto();
+            createRequest.setName("ts-to-raw-profile");
+            createRequest.setSigningScheme(new DelegatedSigningRequestDto());
+            createRequest.setWorkflow(timestampingWorkflow);
+            SigningProfileDto created = signingProfileService.createSigningProfile(createRequest);
+            assertNotNull(signingProfileRepository.findById(UUID.fromString(created.getUuid()))
+                    .orElseThrow().getTimeQualityConfiguration());
+
+            // when: update to RAW_SIGNING
+            SigningProfileRequestDto updateRequest = new SigningProfileRequestDto();
+            updateRequest.setName("ts-to-raw-profile");
+            updateRequest.setSigningScheme(new DelegatedSigningRequestDto());
+            updateRequest.setWorkflow(new RawSigningWorkflowRequestDto());
+            signingProfileService.updateSigningProfile(SecuredUUID.fromString(created.getUuid()), updateRequest);
+
+            // then: TQC cleared from header
+            assertNull(signingProfileRepository.findById(UUID.fromString(created.getUuid()))
+                    .orElseThrow().getTimeQualityConfiguration());
+        }
+
+        @Test
+        void managedTimestampingModel_withLinkedTqcAndValidateTokenSignature_modelCarriesBothFields()
+                throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
+            // given
+            TimeQualityConfigurationDto tqc = timeQualityConfigurationService
+                    .createTimeQualityConfiguration(buildTimeQualityConfigurationRequestDto("tqc-for-model-test"));
+            StaticKeyManagedSigningRequestDto scheme = new StaticKeyManagedSigningRequestDto();
+            scheme.setCertificateUuid(tsaCertificate.getUuid());
+            scheme.setSigningOperationAttributes(List.of(
+                    buildRsaSchemeAttribute(RsaSignatureScheme.PKCS1_v1_5),
+                    buildDigestAttribute(DigestAlgorithm.SHA_256)));
+            TimestampingWorkflowRequestDto workflow = new TimestampingWorkflowRequestDto();
+            workflow.setSignatureFormatterConnectorUuid(formatterConnector.getUuid());
+            workflow.setTimeQualityConfigurationUuid(UUID.fromString(tqc.getUuid()));
+            workflow.setValidateTokenSignature(true);
+            SigningProfileRequestDto request = new SigningProfileRequestDto();
+            request.setName("ts-model-tqc-and-validate");
+            request.setSigningScheme(scheme);
+            request.setWorkflow(workflow);
+            signingProfileService.createSigningProfile(request);
+
+            // when
+            SigningProfileModel<ManagedTimestampingWorkflow<? extends TimeQualityConfigurationModel>, ?> model =
+                    signingProfileService.getManagedTimestampingProfileModel("ts-model-tqc-and-validate");
+
+            // then
+            ManagedTimestampingWorkflow<?> wf = model.workflow();
+            assertTrue(wf.validateTokenSignature());
+            assertInstanceOf(ExplicitTimeQualityConfiguration.class, wf.timeQualityConfiguration());
+            assertEquals(UUID.fromString(tqc.getUuid()),
+                    ((ExplicitTimeQualityConfiguration) wf.timeQualityConfiguration()).uuid());
+        }
+
+        @Test
+        void list_returnsAssociatedProfiles()
+                throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
+            // given: 2 profiles linked to the same TQC
+            TimeQualityConfigurationDto tqc = timeQualityConfigurationService
+                    .createTimeQualityConfiguration(buildTimeQualityConfigurationRequestDto("tqc-for-list-test"));
+            UUID tqcUuid = UUID.fromString(tqc.getUuid());
+
+            TimestampingWorkflowRequestDto workflow = new TimestampingWorkflowRequestDto();
+            workflow.setSignatureFormatterConnectorUuid(formatterConnector.getUuid());
+            workflow.setTimeQualityConfigurationUuid(tqcUuid);
+            SigningProfileRequestDto r1 = new SigningProfileRequestDto();
+            r1.setName("list-ts-profile-one");
+            r1.setSigningScheme(new DelegatedSigningRequestDto());
+            r1.setWorkflow(workflow);
+            SigningProfileDto p1 = signingProfileService.createSigningProfile(r1);
+
+            TimestampingWorkflowRequestDto workflow2 = new TimestampingWorkflowRequestDto();
+            workflow2.setSignatureFormatterConnectorUuid(formatterConnector.getUuid());
+            workflow2.setTimeQualityConfigurationUuid(tqcUuid);
+            SigningProfileRequestDto r2 = new SigningProfileRequestDto();
+            r2.setName("list-ts-profile-two");
+            r2.setSigningScheme(new DelegatedSigningRequestDto());
+            r2.setWorkflow(workflow2);
+            SigningProfileDto p2 = signingProfileService.createSigningProfile(r2);
+
+            // when
+            List<SimplifiedSigningProfileDto> result = signingProfileService
+                    .listSigningProfilesAssociatedTimeQualityConfiguration(
+                            SecuredUUID.fromUUID(tqcUuid), SecurityFilter.create());
+
+            // then
+            assertEquals(2, result.size());
+            List<String> returnedUuids = result.stream().map(SimplifiedSigningProfileDto::getUuid).toList();
+            assertTrue(returnedUuids.contains(p1.getUuid()));
+            assertTrue(returnedUuids.contains(p2.getUuid()));
+        }
+
+        @Test
+        void list_emptyWhenNoneAssociated()
+                throws AlreadyExistException, AttributeException, NotFoundException {
+            // given: TQC with no profiles
+            TimeQualityConfigurationDto tqc = timeQualityConfigurationService
+                    .createTimeQualityConfiguration(buildTimeQualityConfigurationRequestDto("tqc-no-profiles"));
+
+            // when
+            List<SimplifiedSigningProfileDto> result = signingProfileService
+                    .listSigningProfilesAssociatedTimeQualityConfiguration(
+                            SecuredUUID.fromString(tqc.getUuid()), SecurityFilter.create());
+
+            // then
+            assertTrue(result.isEmpty());
+        }
+
+        @Test
+        void list_returnsOnlyProfilesLinkedToSpecificTqc()
+                throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
+            // given: two TQCs, each with one profile
+            TimeQualityConfigurationDto tqcA = timeQualityConfigurationService
+                    .createTimeQualityConfiguration(buildTimeQualityConfigurationRequestDto("tqc-A"));
+            TimeQualityConfigurationDto tqcB = timeQualityConfigurationService
+                    .createTimeQualityConfiguration(buildTimeQualityConfigurationRequestDto("tqc-B"));
+
+            TimestampingWorkflowRequestDto workflowA = new TimestampingWorkflowRequestDto();
+            workflowA.setSignatureFormatterConnectorUuid(formatterConnector.getUuid());
+            workflowA.setTimeQualityConfigurationUuid(UUID.fromString(tqcA.getUuid()));
+            SigningProfileRequestDto reqA = new SigningProfileRequestDto();
+            reqA.setName("profile-linked-to-tqc-A");
+            reqA.setSigningScheme(new DelegatedSigningRequestDto());
+            reqA.setWorkflow(workflowA);
+            SigningProfileDto profileA = signingProfileService.createSigningProfile(reqA);
+
+            TimestampingWorkflowRequestDto workflowB = new TimestampingWorkflowRequestDto();
+            workflowB.setSignatureFormatterConnectorUuid(formatterConnector.getUuid());
+            workflowB.setTimeQualityConfigurationUuid(UUID.fromString(tqcB.getUuid()));
+            SigningProfileRequestDto reqB = new SigningProfileRequestDto();
+            reqB.setName("profile-linked-to-tqc-B");
+            reqB.setSigningScheme(new DelegatedSigningRequestDto());
+            reqB.setWorkflow(workflowB);
+            signingProfileService.createSigningProfile(reqB);
+
+            // when: query for TQC-A
+            List<SimplifiedSigningProfileDto> result = signingProfileService
+                    .listSigningProfilesAssociatedTimeQualityConfiguration(
+                            SecuredUUID.fromString(tqcA.getUuid()), SecurityFilter.create());
+
+            // then: only profile-A returned
+            assertEquals(1, result.size());
+            assertEquals(profileA.getUuid(), result.getFirst().getUuid());
+        }
     }
-
-    @Test
-    void testGetManagedTimestampingProfileModel_nonTimestampingProfile_throwsNotFoundException()
-            throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
-        signingProfileService.createSigningProfile(buildManagedStaticKeyRawRequest("raw-profile-for-ts-check"));
-
-        NotFoundException ex = Assertions.assertThrows(NotFoundException.class,
-                () -> signingProfileService.getManagedTimestampingProfileModel("raw-profile-for-ts-check"));
-
-        Assertions.assertTrue(ex.getMessage().contains("not configured with a timestamping workflow"),
-                "Exception message must state the profile is not configured with a timestamping workflow");
-    }
-
-    @Test
-    void testGetManagedTimestampingProfileModel_timestamping_staticKeyScheme_returnsTypedModelWithResolvedCertificate()
-            throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
-        signingProfileService.createSigningProfile(buildManagedStaticKeyTimestampingRequest("ts-managed-model"));
-
-        SigningProfileModel<ManagedTimestampingWorkflow<? extends TimeQualityConfigurationModel>, ?> model =
-                signingProfileService.getManagedTimestampingProfileModel("ts-managed-model");
-
-        Assertions.assertInstanceOf(ManagedTimestampingWorkflow.class, model.workflow(),
-                "TIMESTAMPING managed profile should produce a ManagedTimestampingWorkflow");
-        Assertions.assertInstanceOf(StaticKeyManagedSigning.class, model.signingScheme(),
-                "STATIC_KEY scheme should produce a StaticKeyManagedSigning");
-        StaticKeyManagedSigning schemeModel = (StaticKeyManagedSigning) model.signingScheme();
-        Assertions.assertNotNull(schemeModel.certificate(),
-                "Certificate entity should be resolved and non-null");
-        Assertions.assertEquals(tsaCertificate.getUuid(), schemeModel.certificate().getUuid(),
-                "Resolved certificate UUID must match the TSA certificate configured on the profile");
-    }
-
-    @Test
-    void testGetManagedTimestampingProfileModel_validationPropertiesRoundTrip()
-            throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
-        signingProfileService.createSigningProfile(
-                buildManagedStaticKeyTimestampingRequestWithValidationProps("ts-managed-validation-props"));
-
-        SigningProfileModel<ManagedTimestampingWorkflow<? extends TimeQualityConfigurationModel>, ?> model =
-                signingProfileService.getManagedTimestampingProfileModel("ts-managed-validation-props");
-
-        ManagedTimestampingWorkflow<?> wf = model.workflow();
-        Assertions.assertEquals("1.2.3.4.5", wf.defaultPolicyId(),
-                "Default policy ID must round-trip through create → model");
-        Assertions.assertEquals(List.of("1.2.3.4.5", "1.2.3.4.6"), wf.allowedPolicyIds(),
-                "Allowed policy IDs must round-trip through create → model");
-        Assertions.assertEquals(List.of(DigestAlgorithm.SHA_256), wf.allowedDigestAlgorithms(),
-                "Allowed digest algorithms must round-trip through create → model");
-        Assertions.assertTrue(wf.validateTokenSignature(),
-                "validateTokenSignature must round-trip through create → model");
-    }
-
-    @Test
-    void testGetManagedTimestampingProfileModel_baseFieldsArePropagatedToModel()
-            throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
-        SigningProfileRequestDto request = buildManagedStaticKeyTimestampingRequest("ts-managed-base-fields");
-        request.setDescription("expected ts description");
-        SigningProfileDto created = signingProfileService.createSigningProfile(request);
-
-        SigningProfileModel<ManagedTimestampingWorkflow<? extends TimeQualityConfigurationModel>, ?> model =
-                signingProfileService.getManagedTimestampingProfileModel("ts-managed-base-fields");
-
-        Assertions.assertEquals("ts-managed-base-fields", model.name());
-        Assertions.assertEquals("expected ts description", model.description());
-        Assertions.assertEquals(UUID.fromString(created.getUuid()), model.uuid());
-        Assertions.assertEquals(1, model.version());
-        Assertions.assertFalse(model.enabled(),
-                "Newly created profiles are disabled by default");
-    }
-
-    // ──────────────────────────────────────────────────────────────────────────
-    // Name uniqueness
-    // ──────────────────────────────────────────────────────────────────────────
-
-    @Test
-    void testCreateSigningProfile_duplicateName_throwsAlreadyExistException()
-            throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
-        signingProfileService.createSigningProfile(buildDelegatedRawRequest("duplicate-name"));
-
-        Assertions.assertThrows(AlreadyExistException.class,
-                () -> signingProfileService.createSigningProfile(buildDelegatedRawRequest("duplicate-name")));
-    }
-
-    @Test
-    void testUpdateSigningProfile_toExistingNameOfAnotherProfile_throwsAlreadyExistException()
-            throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
-        signingProfileService.createSigningProfile(buildDelegatedRawRequest("profile-alpha"));
-        SigningProfileDto beta = signingProfileService.createSigningProfile(buildDelegatedRawRequest("profile-beta"));
-
-        SigningProfileRequestDto updateRequest = buildDelegatedRawRequest("profile-alpha");
-
-        Assertions.assertThrows(AlreadyExistException.class,
-                () -> signingProfileService.updateSigningProfile(SecuredUUID.fromString(beta.getUuid()), updateRequest));
-    }
-
-    @Test
-    void testUpdateSigningProfile_keepingSameName_succeeds() throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
-        SigningProfileDto created = signingProfileService.createSigningProfile(buildDelegatedRawRequest("keep-same-name"));
-
-        SigningProfileRequestDto updateRequest = buildDelegatedRawRequest("keep-same-name");
-        updateRequest.setDescription("updated description");
-
-        SigningProfileDto updated = signingProfileService.updateSigningProfile(SecuredUUID.fromString(created.getUuid()), updateRequest);
-
-        Assertions.assertEquals("keep-same-name", updated.getName());
-        Assertions.assertEquals("updated description", updated.getDescription());
-    }
-
-    // ──────────────────────────────────────────────────────────────────────────
-    // TimeQualityConfiguration linkage on timestamping workflow
-    // ──────────────────────────────────────────────────────────────────────────
-
-    @Test
-    void testCreateSigningProfile_timestampingWorkflow_withTimeQualityConfigurationUuid_headerLinkedAndReturnedInDto()
-            throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
-        TimeQualityConfigurationDto tqc = timeQualityConfigurationService
-                .createTimeQualityConfiguration(buildTimeQualityConfigurationRequestDto("tqc-for-create-link"));
-
-        TimestampingWorkflowRequestDto workflow = new TimestampingWorkflowRequestDto();
-        workflow.setSignatureFormatterConnectorUuid(formatterConnector.getUuid());
-        workflow.setTimeQualityConfigurationUuid(UUID.fromString(tqc.getUuid()));
-
-        SigningProfileRequestDto request = new SigningProfileRequestDto();
-        request.setName("ts-with-tqc");
-        request.setSigningScheme(new DelegatedSigningRequestDto());
-        request.setWorkflow(workflow);
-
-        SigningProfileDto dto = signingProfileService.createSigningProfile(request);
-
-        // Header entity in DB must link to the TQC
-        SigningProfile entity = signingProfileRepository.findById(UUID.fromString(dto.getUuid())).orElseThrow();
-        Assertions.assertNotNull(entity.getTimeQualityConfiguration(),
-                "SigningProfile header must have a linked TimeQualityConfiguration");
-        Assertions.assertEquals(UUID.fromString(tqc.getUuid()), entity.getTimeQualityConfiguration().getUuid());
-
-        // DTO must carry back the TQC data
-        TimestampingWorkflowDto tsDto = (TimestampingWorkflowDto) dto.getWorkflow();
-        Assertions.assertNotNull(tsDto.getTimeQualityConfiguration(),
-                "TimestampingWorkflowDto must expose the linked TimeQualityConfiguration");
-        Assertions.assertEquals(tqc.getUuid(), tsDto.getTimeQualityConfiguration().getUuid());
-    }
-
-    @Test
-    void testCreateSigningProfile_timestampingWorkflow_withNonExistentTimeQualityConfigurationUuid_throwsNotFoundException() {
-        TimestampingWorkflowRequestDto workflow = new TimestampingWorkflowRequestDto();
-        workflow.setSignatureFormatterConnectorUuid(formatterConnector.getUuid());
-        workflow.setTimeQualityConfigurationUuid(UUID.randomUUID());
-
-        SigningProfileRequestDto request = new SigningProfileRequestDto();
-        request.setName("ts-bad-tqc");
-        request.setSigningScheme(new DelegatedSigningRequestDto());
-        request.setWorkflow(workflow);
-
-        Assertions.assertThrows(NotFoundException.class,
-                () -> signingProfileService.createSigningProfile(request));
-    }
-
-    @Test
-    void testUpdateSigningProfile_workflowChangedFromTimestamping_timeQualityConfigurationClearedFromHeader()
-            throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
-        TimeQualityConfigurationDto tqc = timeQualityConfigurationService
-                .createTimeQualityConfiguration(buildTimeQualityConfigurationRequestDto("tqc-for-clear-test"));
-
-        TimestampingWorkflowRequestDto timestampingWorkflow = new TimestampingWorkflowRequestDto();
-        timestampingWorkflow.setSignatureFormatterConnectorUuid(formatterConnector.getUuid());
-        timestampingWorkflow.setTimeQualityConfigurationUuid(UUID.fromString(tqc.getUuid()));
-
-        SigningProfileRequestDto createRequest = new SigningProfileRequestDto();
-        createRequest.setName("ts-to-raw-profile");
-        createRequest.setSigningScheme(new DelegatedSigningRequestDto());
-        createRequest.setWorkflow(timestampingWorkflow);
-
-        SigningProfileDto created = signingProfileService.createSigningProfile(createRequest);
-
-        // Verify TQC is linked before the update
-        SigningProfile beforeUpdate = signingProfileRepository.findById(UUID.fromString(created.getUuid())).orElseThrow();
-        Assertions.assertNotNull(beforeUpdate.getTimeQualityConfiguration());
-
-        // Update to RAW_SIGNING - TQC must be cleared from the workflow
-        SigningProfileRequestDto updateRequest = new SigningProfileRequestDto();
-        updateRequest.setName("ts-to-raw-profile");
-        updateRequest.setSigningScheme(new DelegatedSigningRequestDto());
-        updateRequest.setWorkflow(new RawSigningWorkflowRequestDto());
-        signingProfileService.updateSigningProfile(SecuredUUID.fromString(created.getUuid()), updateRequest);
-
-        SigningProfile afterUpdate = signingProfileRepository.findById(UUID.fromString(created.getUuid())).orElseThrow();
-        Assertions.assertNull(afterUpdate.getTimeQualityConfiguration(),
-                "TimeQualityConfiguration must be cleared when workflow is changed away from TIMESTAMPING");
-    }
-
-    @Test
-    void testGetManagedTimestampingProfileModel_withLinkedTqcAndValidateTokenSignature_modelCarriesBothFields()
-            throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
-        TimeQualityConfigurationDto tqc = timeQualityConfigurationService
-                .createTimeQualityConfiguration(buildTimeQualityConfigurationRequestDto("tqc-for-model-test"));
-
-        StaticKeyManagedSigningRequestDto scheme = new StaticKeyManagedSigningRequestDto();
-        scheme.setCertificateUuid(tsaCertificate.getUuid());
-        scheme.setSigningOperationAttributes(List.of(
-                buildRsaSchemeAttribute(RsaSignatureScheme.PKCS1_v1_5),
-                buildDigestAttribute(DigestAlgorithm.SHA_256)));
-
-        TimestampingWorkflowRequestDto workflow = new TimestampingWorkflowRequestDto();
-        workflow.setSignatureFormatterConnectorUuid(formatterConnector.getUuid());
-        workflow.setTimeQualityConfigurationUuid(UUID.fromString(tqc.getUuid()));
-        workflow.setValidateTokenSignature(true);
-
-        SigningProfileRequestDto request = new SigningProfileRequestDto();
-        request.setName("ts-model-tqc-and-validate");
-        request.setSigningScheme(scheme);
-        request.setWorkflow(workflow);
-
-        signingProfileService.createSigningProfile(request);
-
-        SigningProfileModel<ManagedTimestampingWorkflow<? extends TimeQualityConfigurationModel>, ?> model =
-                signingProfileService.getManagedTimestampingProfileModel("ts-model-tqc-and-validate");
-
-        ManagedTimestampingWorkflow<?> wf = model.workflow();
-        Assertions.assertTrue(wf.validateTokenSignature(),
-                "validateTokenSignature must be true in the model");
-        Assertions.assertInstanceOf(ExplicitTimeQualityConfiguration.class, wf.timeQualityConfiguration(),
-                "timeQualityConfiguration in the model must be an ExplicitTimeQualityConfiguration, not the LocalClock placeholder");
-        ExplicitTimeQualityConfiguration explicitTqc = (ExplicitTimeQualityConfiguration) wf.timeQualityConfiguration();
-        Assertions.assertEquals(UUID.fromString(tqc.getUuid()), explicitTqc.uuid(),
-                "TQC UUID in the model must match the linked TimeQualityConfiguration");
-    }
-
-    // ──────────────────────────────────────────────────────────────────────────
-    // listSigningProfilesAssociatedTimeQualityConfiguration
-    // ──────────────────────────────────────────────────────────────────────────
-
-    @Test
-    void testListSigningProfilesAssociatedTimeQualityConfiguration_returnsAssociatedProfiles()
-            throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
-        TimeQualityConfigurationDto tqc = timeQualityConfigurationService
-                .createTimeQualityConfiguration(buildTimeQualityConfigurationRequestDto("tqc-for-list-test"));
-        UUID tqcUuid = UUID.fromString(tqc.getUuid());
-
-        TimestampingWorkflowRequestDto workflow = new TimestampingWorkflowRequestDto();
-        workflow.setSignatureFormatterConnectorUuid(formatterConnector.getUuid());
-        workflow.setTimeQualityConfigurationUuid(tqcUuid);
-
-        SigningProfileRequestDto r1 = new SigningProfileRequestDto();
-        r1.setName("list-ts-profile-one");
-        r1.setSigningScheme(new DelegatedSigningRequestDto());
-        r1.setWorkflow(workflow);
-        SigningProfileDto p1 = signingProfileService.createSigningProfile(r1);
-
-        TimestampingWorkflowRequestDto workflow2 = new TimestampingWorkflowRequestDto();
-        workflow2.setSignatureFormatterConnectorUuid(formatterConnector.getUuid());
-        workflow2.setTimeQualityConfigurationUuid(tqcUuid);
-        SigningProfileRequestDto r2 = new SigningProfileRequestDto();
-        r2.setName("list-ts-profile-two");
-        r2.setSigningScheme(new DelegatedSigningRequestDto());
-        r2.setWorkflow(workflow2);
-        SigningProfileDto p2 = signingProfileService.createSigningProfile(r2);
-
-        List<SimplifiedSigningProfileDto> result = signingProfileService
-                .listSigningProfilesAssociatedTimeQualityConfiguration(SecuredUUID.fromUUID(tqcUuid), SecurityFilter.create());
-
-        Assertions.assertEquals(2, result.size());
-        List<String> returnedUuids = result.stream().map(SimplifiedSigningProfileDto::getUuid).toList();
-        Assertions.assertTrue(returnedUuids.contains(p1.getUuid()));
-        Assertions.assertTrue(returnedUuids.contains(p2.getUuid()));
-    }
-
-    @Test
-    void testListSigningProfilesAssociatedTimeQualityConfiguration_emptyWhenNoneAssociated()
-            throws AlreadyExistException, AttributeException, NotFoundException {
-        TimeQualityConfigurationDto tqc = timeQualityConfigurationService
-                .createTimeQualityConfiguration(buildTimeQualityConfigurationRequestDto("tqc-no-profiles"));
-
-        List<SimplifiedSigningProfileDto> result = signingProfileService
-                .listSigningProfilesAssociatedTimeQualityConfiguration(SecuredUUID.fromString(tqc.getUuid()), SecurityFilter.create());
-
-        Assertions.assertTrue(result.isEmpty(),
-                "No signing profiles should be returned for a TQC with no associated profiles");
-    }
-
-    @Test
-    void testListSigningProfilesAssociatedTimeQualityConfiguration_returnsOnlyProfilesLinkedToSpecificTqc()
-            throws AlreadyExistException, AttributeException, ConnectorException, NotFoundException {
-        TimeQualityConfigurationDto tqcA = timeQualityConfigurationService
-                .createTimeQualityConfiguration(buildTimeQualityConfigurationRequestDto("tqc-A"));
-        TimeQualityConfigurationDto tqcB = timeQualityConfigurationService
-                .createTimeQualityConfiguration(buildTimeQualityConfigurationRequestDto("tqc-B"));
-
-        TimestampingWorkflowRequestDto workflowA = new TimestampingWorkflowRequestDto();
-        workflowA.setSignatureFormatterConnectorUuid(formatterConnector.getUuid());
-        workflowA.setTimeQualityConfigurationUuid(UUID.fromString(tqcA.getUuid()));
-        SigningProfileRequestDto reqA = new SigningProfileRequestDto();
-        reqA.setName("profile-linked-to-tqc-A");
-        reqA.setSigningScheme(new DelegatedSigningRequestDto());
-        reqA.setWorkflow(workflowA);
-        SigningProfileDto profileA = signingProfileService.createSigningProfile(reqA);
-
-        TimestampingWorkflowRequestDto workflowB = new TimestampingWorkflowRequestDto();
-        workflowB.setSignatureFormatterConnectorUuid(formatterConnector.getUuid());
-        workflowB.setTimeQualityConfigurationUuid(UUID.fromString(tqcB.getUuid()));
-        SigningProfileRequestDto reqB = new SigningProfileRequestDto();
-        reqB.setName("profile-linked-to-tqc-B");
-        reqB.setSigningScheme(new DelegatedSigningRequestDto());
-        reqB.setWorkflow(workflowB);
-        signingProfileService.createSigningProfile(reqB);
-
-        List<SimplifiedSigningProfileDto> result = signingProfileService
-                .listSigningProfilesAssociatedTimeQualityConfiguration(SecuredUUID.fromString(tqcA.getUuid()), SecurityFilter.create());
-
-        Assertions.assertEquals(1, result.size());
-        Assertions.assertEquals(profileA.getUuid(), result.getFirst().getUuid(),
-                "Only the profile linked to TQC-A should be returned");
-    }
-
-    // ──────────────────────────────────────────────────────────────────────────
-    // Helpers
-    // ──────────────────────────────────────────────────────────────────────────
 
     /**
      * Builds a minimal valid SigningProfileRequestDto using a DELEGATED scheme and RAW_SIGNING workflow
@@ -2515,23 +2380,6 @@ class SigningProfileServiceImplTest extends BaseSpringBootTest {
         request.setSigningScheme(new DelegatedSigningRequestDto());
         TimestampingWorkflowRequestDto workflow = new TimestampingWorkflowRequestDto();
         workflow.setSignatureFormatterConnectorUuid(formatterConnector.getUuid());
-        request.setWorkflow(workflow);
-        return request;
-    }
-
-    /**
-     * Builds a request using a MANAGED/STATIC_KEY scheme and CONTENT_SIGNING workflow,
-     * optionally setting a Signature Formatter Connector UUID on the workflow.
-     */
-    private SigningProfileRequestDto buildManagedStaticKeyContentRequest(String name, UUID formatterConnectorUuid) {
-        SigningProfileRequestDto request = new SigningProfileRequestDto();
-        request.setName(name);
-        request.setDescription("Test description for " + name);
-        StaticKeyManagedSigningRequestDto scheme = new StaticKeyManagedSigningRequestDto();
-        scheme.setCertificateUuid(certificate.getUuid());
-        request.setSigningScheme(scheme);
-        ContentSigningWorkflowRequestDto workflow = new ContentSigningWorkflowRequestDto();
-        workflow.setSignatureFormatterConnectorUuid(formatterConnectorUuid);
         request.setWorkflow(workflow);
         return request;
     }
@@ -2631,5 +2479,34 @@ class SigningProfileServiceImplTest extends BaseSpringBootTest {
         cert.setCertificateContent(entityWithContent.getCertificateContent());
         cert.setCertificateContentId(entityWithContent.getCertificateContentId());
         return certificateRepository.saveAndFlush(cert);
+    }
+
+    /**
+     * Registers a DataAttributeV2 definition in AttributeEngine for the given formatter connector
+     * and returns a record holding the generated UUID and name for use in attribute content building.
+     */
+    private FormatterAttr registerFormatterAttribute(Connector formatter, String label) throws AttributeException {
+        UUID attrUuid = UUID.randomUUID();
+        String attrName = "data_" + label.replaceAll("\\W+", "_");
+        DataAttributeV2 attrDef = new DataAttributeV2();
+        attrDef.setUuid(attrUuid.toString());
+        attrDef.setName(attrName);
+        attrDef.setContentType(AttributeContentType.STRING);
+        DataAttributeProperties props = new DataAttributeProperties();
+        props.setLabel(label);
+        attrDef.setProperties(props);
+        attributeEngine.updateDataAttributeDefinitions(formatter.getUuid(), AttributeOperation.WORKFLOW_FORMATTER, List.of(attrDef));
+        return new FormatterAttr(attrUuid, attrName);
+    }
+
+    private SigningProfile reloadProfile(UUID uuid) {
+        return signingProfileRepository.findById(uuid).orElseThrow();
+    }
+
+    private SigningProfileVersion loadVersionSnapshot(UUID profileUuid, int version) {
+        return signingProfileVersionRepository.findBySigningProfileUuidAndVersion(profileUuid, version).orElseThrow();
+    }
+
+    private record FormatterAttr(UUID uuid, String name) {
     }
 }
