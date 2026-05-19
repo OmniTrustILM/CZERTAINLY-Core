@@ -89,6 +89,7 @@ import org.springframework.cache.CacheManager;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
@@ -105,6 +106,7 @@ public class SigningProfileServiceImpl implements SigningProfileService {
             SigningWorkflowType.TIMESTAMPING, EnumSet.of(SigningProtocol.TSP)
     );
 
+    private SigningProfileServiceImpl self;
     private CacheManager cacheManager;
     private CryptographicOperationService cryptographicOperationService;
     private CertificateService certificateService;
@@ -345,9 +347,24 @@ public class SigningProfileServiceImpl implements SigningProfileService {
 
     @Override
     @ExternalAuthorization(resource = Resource.SIGNING_PROFILE, action = ResourceAction.DELETE)
-    @Transactional
     public List<BulkActionMessageDto> bulkDeleteSigningProfiles(List<SecuredUUID> uuids) {
-        return bulkAction(uuids, this::deleteSigningProfile);
+        List<BulkActionMessageDto> messages = new ArrayList<>();
+        for (SecuredUUID uuid : uuids) {
+            SigningProfile profile = null;
+            try {
+                profile = findByUuid(uuid);
+                self.deleteInOwnTransaction(profile);
+            } catch (Exception e) {
+                log.error("Failed to delete Signing Profile {}", uuid, e);
+                messages.add(BulkActionMessageDto.failure(uuid.toString(), profile != null ? profile.getName() : "", e, "Delete failed"));
+            }
+        }
+        return messages;
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    void deleteInOwnTransaction(SigningProfile profile) throws ValidationException {
+        deleteSigningProfile(profile);
     }
 
     private void deleteSigningProfile(SigningProfile signingProfile) throws ValidationException {
@@ -376,7 +393,32 @@ public class SigningProfileServiceImpl implements SigningProfileService {
     @ExternalAuthorization(resource = Resource.SIGNING_PROFILE, action = ResourceAction.ENABLE)
     @Transactional
     public void enableSigningProfile(SecuredUUID uuid) throws NotFoundException {
-        SigningProfile p = findByUuid(uuid);
+        enableSigningProfile(findByUuid(uuid));
+    }
+
+    @Override
+    @ExternalAuthorization(resource = Resource.SIGNING_PROFILE, action = ResourceAction.ENABLE)
+    public List<BulkActionMessageDto> bulkEnableSigningProfiles(List<SecuredUUID> uuids) {
+        List<BulkActionMessageDto> messages = new ArrayList<>();
+        for (SecuredUUID uuid : uuids) {
+            SigningProfile profile = null;
+            try {
+                profile = findByUuid(uuid);
+                self.enableInOwnTransaction(profile);
+            } catch (Exception e) {
+                log.error("Failed to enable Signing Profile {}", uuid, e);
+                messages.add(BulkActionMessageDto.failure(uuid.toString(), profile != null ? profile.getName() : "", e, "Enable failed"));
+            }
+        }
+        return messages;
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    void enableInOwnTransaction(SigningProfile profile) {
+        enableSigningProfile(profile);
+    }
+
+    private void enableSigningProfile(SigningProfile p) {
         p.setEnabled(true);
         signingProfileRepository.save(p);
     }
@@ -384,24 +426,35 @@ public class SigningProfileServiceImpl implements SigningProfileService {
     @Override
     @ExternalAuthorization(resource = Resource.SIGNING_PROFILE, action = ResourceAction.ENABLE)
     @Transactional
-    public List<BulkActionMessageDto> bulkEnableSigningProfiles(List<SecuredUUID> uuids) {
-        return bulkAction(uuids, this::enableSigningProfile);
+    public void disableSigningProfile(SecuredUUID uuid) throws NotFoundException {
+        disableSigningProfile(findByUuid(uuid));
     }
 
     @Override
     @ExternalAuthorization(resource = Resource.SIGNING_PROFILE, action = ResourceAction.ENABLE)
-    @Transactional
-    public void disableSigningProfile(SecuredUUID uuid) throws NotFoundException {
-        SigningProfile p = findByUuid(uuid);
+    public List<BulkActionMessageDto> bulkDisableSigningProfiles(List<SecuredUUID> uuids) {
+        List<BulkActionMessageDto> messages = new ArrayList<>();
+        for (SecuredUUID uuid : uuids) {
+            SigningProfile profile = null;
+            try {
+                profile = findByUuid(uuid);
+                self.disableInOwnTransaction(profile);
+            } catch (Exception e) {
+                log.error("Failed to disable Signing Profile {}", uuid, e);
+                messages.add(BulkActionMessageDto.failure(uuid.toString(), profile != null ? profile.getName() : "", e, "Disable failed"));
+            }
+        }
+        return messages;
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    void disableInOwnTransaction(SigningProfile profile) {
+        disableSigningProfile(profile);
+    }
+
+    private void disableSigningProfile(SigningProfile p) {
         p.setEnabled(false);
         signingProfileRepository.save(p);
-    }
-
-    @Override
-    @ExternalAuthorization(resource = Resource.SIGNING_PROFILE, action = ResourceAction.ENABLE)
-    @Transactional
-    public List<BulkActionMessageDto> bulkDisableSigningProfiles(List<SecuredUUID> uuids) {
-        return bulkAction(uuids, this::disableSigningProfile);
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -530,7 +583,6 @@ public class SigningProfileServiceImpl implements SigningProfileService {
             }
             case DelegatedSigningRequestDto s -> {
                 Connector connector = connectorService.getConnectorEntity(SecuredUUID.fromUUID(s.getConnectorUuid()));
-                version.setDelegatedSignerConnectorUuid(s.getConnectorUuid());
                 version.setDelegatedSignerConnector(connector);
             }
             default ->
@@ -701,27 +753,6 @@ public class SigningProfileServiceImpl implements SigningProfileService {
         return definitions;
     }
 
-    @FunctionalInterface
-    private interface CheckedConsumer<T> {
-        void accept(T t) throws NotFoundException;
-    }
-
-    private List<BulkActionMessageDto> bulkAction(List<SecuredUUID> uuids, CheckedConsumer<SecuredUUID> action) {
-        List<BulkActionMessageDto> results = new ArrayList<>();
-        for (SecuredUUID uuid : uuids) {
-            try {
-                action.accept(uuid);
-            } catch (NotFoundException | ValidationException e) {
-                BulkActionMessageDto message = new BulkActionMessageDto();
-                message.setUuid(uuid.getValue().toString());
-                // :TODO: Message needs to be more descriptive (action, entity name)
-                message.setMessage(e.getMessage());
-                results.add(message);
-            }
-        }
-        return results;
-    }
-
     // ──────────────────────────────────────────────────────────────────────────
     // ResourceExtensionService
     // ──────────────────────────────────────────────────────────────────────────
@@ -774,6 +805,12 @@ public class SigningProfileServiceImpl implements SigningProfileService {
     // ──────────────────────────────────────────────────────────────────────────
     // Dependencies
     // ──────────────────────────────────────────────────────────────────────────
+
+    @Lazy
+    @Autowired
+    public void setSelf(SigningProfileServiceImpl self) {
+        this.self = self;
+    }
 
     @Autowired
     public void setCacheManager(CacheManager cacheManager) {
