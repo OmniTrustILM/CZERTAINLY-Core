@@ -3,6 +3,8 @@ package com.czertainly.core.search;
 import com.czertainly.api.model.client.attribute.RequestAttributeV3;
 import com.czertainly.api.model.client.certificate.SearchFilterRequestDto;
 import com.czertainly.api.model.client.certificate.SearchRequestDto;
+import com.czertainly.api.model.client.signing.profile.scheme.SigningScheme;
+import com.czertainly.api.model.client.signing.profile.workflow.SigningWorkflowType;
 import com.czertainly.api.model.client.signing.protocols.tsp.TspProfileListDto;
 import com.czertainly.api.model.common.PaginationResponseDto;
 import com.czertainly.api.model.common.attribute.common.AttributeType;
@@ -16,7 +18,9 @@ import com.czertainly.api.model.core.search.FilterFieldSource;
 import com.czertainly.api.model.core.search.SearchFieldDataByGroupDto;
 import com.czertainly.api.model.core.search.SearchFieldDataDto;
 import com.czertainly.core.attribute.engine.AttributeEngine;
+import com.czertainly.core.dao.entity.signing.SigningProfile;
 import com.czertainly.core.dao.entity.signing.TspProfile;
+import com.czertainly.core.dao.repository.signing.SigningProfileRepository;
 import com.czertainly.core.dao.repository.signing.TspProfileRepository;
 import com.czertainly.core.enums.FilterField;
 import com.czertainly.core.security.authz.SecurityFilter;
@@ -44,15 +48,28 @@ class TspProfileSearchTest extends BaseSpringBootTest {
     @Autowired
     private TspProfileRepository tspProfileRepository;
 
+    @Autowired
+    private SigningProfileRepository signingProfileRepository;
+
     private TspProfile alpha;
     private TspProfile beta;
     private TspProfile gamma;
+    private SigningProfile signingProfile;
 
     @BeforeEach
     void setUp() throws Exception {
+        signingProfile = new SigningProfile();
+        signingProfile.setName("default-signing");
+        signingProfile.setEnabled(true);
+        signingProfile.setSigningScheme(SigningScheme.DELEGATED);
+        signingProfile.setWorkflowType(SigningWorkflowType.RAW_SIGNING);
+        signingProfile.setLatestVersion(1);
+        signingProfile = signingProfileRepository.save(signingProfile);
+
         alpha = new TspProfile();
         alpha.setName("alpha-tsp");
         alpha.setEnabled(true);
+        alpha.setDefaultSigningProfile(signingProfile);
         alpha = tspProfileRepository.save(alpha);
 
         beta = new TspProfile();
@@ -98,6 +115,21 @@ class TspProfileSearchTest extends BaseSpringBootTest {
 
         Assertions.assertTrue(identifiers.contains(FilterField.TSP_PROFILE_NAME.name()));
         Assertions.assertTrue(identifiers.contains(FilterField.TSP_PROFILE_ENABLED.name()));
+        Assertions.assertTrue(identifiers.contains(FilterField.TSP_PROFILE_DEFAULT_SIGNING_PROFILE.name()));
+    }
+
+    @Test
+    void searchableFields_defaultSigningProfileDropdownContainsExistingNames() {
+        List<SearchFieldDataByGroupDto> groups = tspProfileService.getSearchableFieldInformation();
+
+        SearchFieldDataDto defaultSpField = groups.stream()
+                .flatMap(g -> g.getSearchFieldData().stream())
+                .filter(f -> f.getFieldIdentifier().equals(FilterField.TSP_PROFILE_DEFAULT_SIGNING_PROFILE.name()))
+                .findFirst()
+                .orElseThrow();
+
+        Assertions.assertNotNull(defaultSpField.getValue());
+        Assertions.assertTrue(((List<?>) defaultSpField.getValue()).contains("default-signing"));
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -165,6 +197,20 @@ class TspProfileSearchTest extends BaseSpringBootTest {
 
         Assertions.assertEquals(1, results.size());
         Assertions.assertEquals("beta-tsp", results.getFirst().getName());
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // Filter by defaultSigningProfile (join)
+    // ──────────────────────────────────────────────────────────────────────────
+
+    @Test
+    void filterByDefaultSigningProfile_equals_returnsOnlyAssociated() {
+        List<TspProfileListDto> results = listWithFilters(
+                new SearchFilterRequestDtoDummy(FilterFieldSource.PROPERTY, FilterField.TSP_PROFILE_DEFAULT_SIGNING_PROFILE.name(),
+                        FilterConditionOperator.EQUALS, "default-signing"));
+
+        Assertions.assertEquals(1, results.size());
+        Assertions.assertEquals("alpha-tsp", results.getFirst().getName());
     }
 
     // ──────────────────────────────────────────────────────────────────────────
