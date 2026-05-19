@@ -1,5 +1,6 @@
 package com.czertainly.core.service.impl;
 
+import com.czertainly.api.model.common.UuidDto;
 import com.czertainly.core.client.ConnectorApiFactory;
 import com.czertainly.api.exception.*;
 import com.czertainly.api.model.client.attribute.RequestAttribute;
@@ -56,6 +57,7 @@ import com.czertainly.core.messaging.jms.producers.EventProducer;
 import com.czertainly.core.messaging.jms.producers.NotificationProducer;
 import com.czertainly.core.messaging.jms.producers.ValidationProducer;
 import com.czertainly.core.messaging.model.CertificateUploadEventMessageData;
+import com.czertainly.core.messaging.model.EventMessage;
 import com.czertainly.core.messaging.model.NotificationRecipient;
 import com.czertainly.core.messaging.model.ValidationMessage;
 import com.czertainly.core.model.auth.CertificateProtocolInfo;
@@ -173,11 +175,19 @@ public class CertificateServiceImpl implements CertificateService, AttributeReso
     private ApplicationEventPublisher applicationEventPublisher;
     private ValidationProducer validationProducer;
     private AuthenticationCache authenticationCache;
+    private CertificateUploadedEventHandler certificateUploadedEventHandler;
 
     /**
      * A map that contains ICertificateValidator implementations mapped to their corresponding certificate type code
      */
     private Map<String, ICertificateValidator> certificateValidatorMap;
+
+
+    @Autowired
+    @Lazy
+    public void setCertificateUploadedEventHandler(CertificateUploadedEventHandler certificateUploadedEventHandler) {
+        this.certificateUploadedEventHandler = certificateUploadedEventHandler;
+    }
 
     @Autowired
     public void setValidationProducer(ValidationProducer validationProducer) {
@@ -1204,19 +1214,24 @@ public class CertificateServiceImpl implements CertificateService, AttributeReso
         return certificateContent;
     }
 
-
     @Override
-    public void upload(UploadCertificateRequestDto request) throws CertificateException, AlreadyExistException {
-        upload(request.getCertificate(), request.getCustomAttributes(), null);
-    }
-
-
-
     @ExternalAuthorization(resource = Resource.CERTIFICATE, action = ResourceAction.CREATE)
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public FingerprintDto uploadAsync(UploadCertificateRequestDto request) throws CertificateException, AlreadyExistException {
+        String fingerprint = upload(request.getCertificate(), request.getCustomAttributes(), false);
+        return new FingerprintDto(fingerprint);
+    }
+
     @Override
-    public void upload(String certificateData, List<RequestAttribute> customAttributes, UUID userUuid) throws CertificateException, AlreadyExistException {
-        X509Certificate certificate = CertificateUtil.parseUploadedCertificateContent(certificateData;
+    @ExternalAuthorization(resource = Resource.CERTIFICATE, action = ResourceAction.CREATE)
+    public UuidDto uploadSync(UploadCertificateRequestDto request) throws CertificateException, AlreadyExistException {
+        String fingerprint = upload(request.getCertificate(), request.getCustomAttributes(), true);
+        return new UuidDto(certificateRepository.findByFingerprint(fingerprint).orElseThrow().getUuid().toString());
+    }
+
+    @Override
+    public String upload(String certificateData, List<RequestAttribute> customAttributes, boolean sync) throws CertificateException, AlreadyExistException {
+        X509Certificate certificate = CertificateUtil.parseUploadedCertificateContent(certificateData);
         String fingerprint;
         try {
             fingerprint = CertificateUtil.getThumbprint(certificate);
@@ -1232,14 +1247,22 @@ public class CertificateServiceImpl implements CertificateService, AttributeReso
         }
 
         CertificateUploadEventMessageData eventMessageData = CertificateUploadEventMessageData.builder()
-            .customAttributes(customAttributes)
-            .userUuid(userUuid)
-            .certificateContent(certificateData)
-            .fingerprint(fingerprint)
-            .build();
-        eventProducer.produceMessage(CertificateUploadedEventHandler.constructEventMessage(eventMessageData));
+                .customAttributes(customAttributes)
+                .certificateContent(certificateData)
+                .fingerprint(fingerprint)
+                .build();
+        EventMessage eventMessage = CertificateUploadedEventHandler.constructEventMessage(eventMessageData);
+        if (sync) {
+            try {
+                certificateUploadedEventHandler.handleEvent(eventMessage);
+            } catch (EventException e) {
+                throw new CertificateException("Failed to produce certificate upload event: " + e.getMessage());
+            }
+        } else {
+            eventProducer.produceMessage(eventMessage);
+        }
+        return fingerprint;
     }
-
 
 
     @Override

@@ -20,7 +20,6 @@ import com.czertainly.core.events.EventContext;
 import com.czertainly.core.events.EventHandler;
 import com.czertainly.core.events.data.EventDataBuilder;
 import com.czertainly.core.events.transaction.CertificateValidationEvent;
-import com.czertainly.core.events.transaction.UserCertificateAssignedEvent;
 import com.czertainly.core.messaging.model.CertificateUploadEventMessageData;
 import com.czertainly.core.messaging.model.EventMessage;
 import com.czertainly.core.messaging.model.NotificationMessage;
@@ -82,8 +81,7 @@ public class CertificateUploadedEventHandler extends EventHandler<Certificate> {
 
     @Override
     protected Object getEventData(Certificate object, Object eventMessageData) {
-        CertificateUploadEventMessageData uploadEventMessageData = objectMapper.convertValue(eventMessageData, CertificateUploadEventMessageData.class);
-        return EventDataBuilder.getCertificateUploadedEventData(object, uploadEventMessageData.userUuid());
+        return EventDataBuilder.getCertificateUploadedEventData(object);
     }
 
     @Override
@@ -143,16 +141,6 @@ public class CertificateUploadedEventHandler extends EventHandler<Certificate> {
             } catch (NotFoundException | AttributeException e) {
                 logger.error("Error updating custom attributes for certificate {}: {}", certificate.getUuid(), e.getMessage());
             }
-        }
-
-        if (eventMessageData.userUuid() != null) {
-            try {
-                certificateService.updateCertificateUser(certificate.getUuid(), String.valueOf(eventMessageData.userUuid()));
-            } catch (NotFoundException e) {
-                ((CertificateUploadedEventData) context.getResourceObjectsEventData().getFirst()).setUserUuid(null);
-                logger.error("Error linking user {} to certificate {}: {}", eventMessageData.userUuid(), certificate.getUuid(), e.getMessage());
-            }
-            applicationEventPublisher.publishEvent(new UserCertificateAssignedEvent(String.valueOf(eventMessageData.userUuid()), String.valueOf(certificate.getUuid()), null));
         }
 
         certificateEventHistoryService.addEventHistory(certificate.getUuid(), CertificateEvent.UPLOAD, CertificateEventStatus.SUCCESS, "Certificate uploaded", "");
