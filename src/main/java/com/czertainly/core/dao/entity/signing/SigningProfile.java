@@ -4,22 +4,14 @@ import com.czertainly.api.model.client.signing.profile.scheme.SigningScheme;
 import com.czertainly.api.model.client.signing.profile.workflow.SigningWorkflowType;
 import com.czertainly.core.dao.entity.UniquelyIdentifiedAndAudited;
 import com.czertainly.core.service.model.Securable;
-
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.FetchType;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
-import jakarta.persistence.OneToMany;
-import jakarta.persistence.Table;
+import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.ToString;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 
 @Getter
@@ -36,7 +28,7 @@ public class SigningProfile extends UniquelyIdentifiedAndAudited implements Secu
     private String description;
 
     @Column(name = "enabled", nullable = false)
-    private Boolean enabled = false;
+    private boolean enabled = false;
 
     /**
      * Denormalized cache column — mirrors the latest {@link SigningProfileVersion#signingScheme}.
@@ -85,5 +77,20 @@ public class SigningProfile extends UniquelyIdentifiedAndAudited implements Secu
     public void setTspProfile(TspProfile tspProfile) {
         this.tspProfile = tspProfile;
         this.tspProfileUuid = tspProfile != null ? tspProfile.getUuid() : null;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (o == null || getClass() != o.getClass())
+            return false;
+        if (!super.equals(o))
+            return false;
+        SigningProfile that = (SigningProfile) o;
+        return Objects.equals(name, that.name) && Objects.equals(description, that.description) && Objects.equals(enabled, that.enabled) && signingScheme == that.signingScheme && workflowType == that.workflowType && Objects.equals(latestVersion, that.latestVersion) && Objects.equals(timeQualityConfigurationUuid, that.timeQualityConfigurationUuid) && Objects.equals(timeQualityConfiguration, that.timeQualityConfiguration) && Objects.equals(tspProfileUuid, that.tspProfileUuid) && Objects.equals(tspProfile, that.tspProfile) && Objects.equals(versions, that.versions);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(super.hashCode(), name, description, enabled, signingScheme, workflowType, latestVersion, timeQualityConfigurationUuid, timeQualityConfiguration, tspProfileUuid, tspProfile, versions);
     }
 }

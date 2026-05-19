@@ -167,7 +167,7 @@ public class TspProfileServiceImpl implements TspProfileService {
         for (SecuredUUID uuid : uuids) {
             TspProfile profile = null;
             try {
-                profile = getTspProfileEntity(uuid);
+                profile = self.getTspProfileEntity(uuid);
                 self.deleteInOwnTransaction(profile);
             } catch (Exception e) {
                 log.error("Failed to delete TSP Profile {}", uuid, e);
@@ -190,7 +190,7 @@ public class TspProfileServiceImpl implements TspProfileService {
     @ExternalAuthorization(resource = Resource.TSP_PROFILE, action = ResourceAction.ENABLE)
     @Transactional
     public void enableTspProfile(SecuredUUID uuid) throws NotFoundException {
-        TspProfile profile = getTspProfileEntity(uuid);
+        TspProfile profile = self.getTspProfileEntity(uuid);
         enableTspProfile(profile);
     }
 
@@ -201,7 +201,7 @@ public class TspProfileServiceImpl implements TspProfileService {
         for (SecuredUUID uuid : uuids) {
             TspProfile profile = null;
             try {
-                profile = getTspProfileEntity(uuid);
+                profile = self.getTspProfileEntity(uuid);
                 self.enableInOwnTransaction(profile);
             } catch (Exception e) {
                 log.error("Failed to enable TSP Profile {}", uuid, e);
@@ -215,7 +215,7 @@ public class TspProfileServiceImpl implements TspProfileService {
     @ExternalAuthorization(resource = Resource.TSP_PROFILE, action = ResourceAction.ENABLE)
     @Transactional
     public void disableTspProfile(SecuredUUID uuid) throws NotFoundException {
-        TspProfile profile = getTspProfileEntity(uuid);
+        TspProfile profile = self.getTspProfileEntity(uuid);
         disableTspProfile(profile);
     }
 
@@ -226,7 +226,7 @@ public class TspProfileServiceImpl implements TspProfileService {
         for (SecuredUUID uuid : uuids) {
             TspProfile profile = null;
             try {
-                profile = getTspProfileEntity(uuid);
+                profile = self.getTspProfileEntity(uuid);
                 self.disableInOwnTransaction(profile);
             } catch (Exception e) {
                 log.error("Failed to disable TSP Profile {}", uuid, e);

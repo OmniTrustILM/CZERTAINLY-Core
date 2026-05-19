@@ -1850,7 +1850,7 @@ public class CertificateServiceImpl implements CertificateService, AttributeReso
     @ExternalAuthorization(resource = Resource.CERTIFICATE, action = ResourceAction.LIST, parentResource = Resource.RA_PROFILE, parentAction = ResourceAction.LIST)
     public List<CertificateDto> listScepCaCertificates(SecurityFilter filter, boolean intuneEnabled) {
         setupSecurityFilter(filter);
-        List<Certificate> certificates = certificateRepository.findUsingSecurityFilter(filter, List.of("groups", "owner"),
+        List<Certificate> certificates = certificateRepository.findUsingSecurityFilter(filter, CertificateRepository.FETCH_GROUPS_AND_OWNER,
                 CertificateUtil.constructQueryScepCaCertAcceptable(intuneEnabled));
         return certificates.stream().map(Certificate::mapToListDto).toList();
     }
@@ -1860,7 +1860,7 @@ public class CertificateServiceImpl implements CertificateService, AttributeReso
     public List<CertificateDto> listCmpSigningCertificates(SecurityFilter filter) {
         setupSecurityFilter(filter);
 
-        List<Certificate> certificates = certificateRepository.findUsingSecurityFilter(filter, List.of("groups", "owner"),
+        List<Certificate> certificates = certificateRepository.findUsingSecurityFilter(filter, CertificateRepository.FETCH_GROUPS_AND_OWNER,
                 CertificateUtil.constructQueryCmpSigningCertAcceptable());
 
         return certificates.stream()
@@ -1872,7 +1872,7 @@ public class CertificateServiceImpl implements CertificateService, AttributeReso
     public List<CertificateDto> listDigitalSigningCertificates(SecurityFilter filter, SigningWorkflowType signingWorkflowType, boolean qualifiedTimestamp) {
         setupSecurityFilter(filter);
 
-        List<Certificate> certificates = certificateRepository.findUsingSecurityFilter(filter, List.of("groups", "owner"),
+        List<Certificate> certificates = certificateRepository.findUsingSecurityFilter(filter, CertificateRepository.FETCH_GROUPS_AND_OWNER,
                 CertificateUtil.constructQueryDigitalSigningCertAcceptable(signingWorkflowType, qualifiedTimestamp));
         return certificates.stream().map(Certificate::mapToListDto).toList();
     }

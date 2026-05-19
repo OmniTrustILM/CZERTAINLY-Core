@@ -43,7 +43,7 @@ public class SigningProfileMapper {
         dto.setName(header.getName());
         dto.setDescription(header.getDescription());
         dto.setVersion(version.getVersion() != null ? version.getVersion() : 1);
-        dto.setEnabled(header.getEnabled() != null ? header.getEnabled() : false);
+        dto.setEnabled(header.isEnabled());
         dto.setCustomAttributes(safeList(customAttributes));
 
         // Build signing scheme DTO from version
@@ -110,7 +110,7 @@ public class SigningProfileMapper {
         dto.setDescription(profile.getDescription());
         dto.setVersion(profile.getLatestVersion() != null ? profile.getLatestVersion() : 1);
         dto.setSigningWorkflowType(profile.getWorkflowType());
-        dto.setEnabled(profile.getEnabled() != null ? profile.getEnabled() : false);
+        dto.setEnabled(profile.isEnabled());
         return dto;
     }
 
@@ -136,7 +136,7 @@ public class SigningProfileMapper {
         SimplifiedSigningProfileDto signingProfileDto = new SimplifiedSigningProfileDto();
         signingProfileDto.setUuid(signingProfile.getUuid().toString());
         signingProfileDto.setName(signingProfile.getName());
-        signingProfileDto.setEnabled(Boolean.TRUE.equals(signingProfile.getEnabled()));
+        signingProfileDto.setEnabled(signingProfile.isEnabled());
         return signingProfileDto;
     }
 

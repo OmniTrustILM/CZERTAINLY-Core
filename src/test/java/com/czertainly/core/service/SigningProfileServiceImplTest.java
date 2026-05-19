@@ -668,7 +668,7 @@ class SigningProfileServiceImplTest extends BaseSpringBootTest {
         SigningProfile entity = fromDb.get();
         Assertions.assertEquals("new-delegated-profile", entity.getName());
         Assertions.assertEquals("Test description for new-delegated-profile", entity.getDescription());
-        Assertions.assertFalse(entity.getEnabled());
+        Assertions.assertFalse(entity.isEnabled());
         Assertions.assertEquals(SigningScheme.DELEGATED, entity.getSigningScheme());
         Assertions.assertEquals(SigningWorkflowType.RAW_SIGNING, entity.getWorkflowType());
         Assertions.assertEquals(1, entity.getLatestVersion());
@@ -909,7 +909,7 @@ class SigningProfileServiceImplTest extends BaseSpringBootTest {
         SigningProfile entity = fromDb.get();
         Assertions.assertEquals("updated-profile", entity.getName());
         Assertions.assertEquals("Updated description", entity.getDescription());
-        Assertions.assertFalse(entity.getEnabled());
+        Assertions.assertFalse(entity.isEnabled());
         Assertions.assertEquals(2, entity.getLatestVersion());
         Assertions.assertEquals(SigningScheme.DELEGATED, entity.getSigningScheme());
         Assertions.assertEquals(SigningWorkflowType.RAW_SIGNING, entity.getWorkflowType());
@@ -1364,7 +1364,7 @@ class SigningProfileServiceImplTest extends BaseSpringBootTest {
 
     @Test
     void testEnableSigningProfile() throws NotFoundException {
-        Assertions.assertFalse(savedProfile.getEnabled());
+        Assertions.assertFalse(savedProfile.isEnabled());
 
         signingProfileService.enableSigningProfile(savedProfile.getSecuredUuid());
 
@@ -1373,7 +1373,7 @@ class SigningProfileServiceImplTest extends BaseSpringBootTest {
 
         Optional<SigningProfile> fromDb = signingProfileRepository.findById(savedProfile.getUuid());
         Assertions.assertTrue(fromDb.isPresent());
-        Assertions.assertTrue(fromDb.get().getEnabled());
+        Assertions.assertTrue(fromDb.get().isEnabled());
     }
 
     @Test
@@ -1393,7 +1393,7 @@ class SigningProfileServiceImplTest extends BaseSpringBootTest {
 
         Optional<SigningProfile> fromDb = signingProfileRepository.findById(savedProfile.getUuid());
         Assertions.assertTrue(fromDb.isPresent());
-        Assertions.assertTrue(fromDb.get().getEnabled(), "Profile should remain enabled after enabling an already-enabled profile");
+        Assertions.assertTrue(fromDb.get().isEnabled(), "Profile should remain enabled after enabling an already-enabled profile");
     }
 
     @Test
@@ -1407,7 +1407,7 @@ class SigningProfileServiceImplTest extends BaseSpringBootTest {
 
         Optional<SigningProfile> fromDb = signingProfileRepository.findById(UUID.fromString(dto.getUuid()));
         Assertions.assertTrue(fromDb.isPresent());
-        Assertions.assertTrue(fromDb.get().getEnabled());
+        Assertions.assertTrue(fromDb.get().isEnabled());
     }
 
     @Test
@@ -1422,7 +1422,7 @@ class SigningProfileServiceImplTest extends BaseSpringBootTest {
 
         Optional<SigningProfile> fromDb = signingProfileRepository.findById(savedProfile.getUuid());
         Assertions.assertTrue(fromDb.isPresent());
-        Assertions.assertFalse(fromDb.get().getEnabled());
+        Assertions.assertFalse(fromDb.get().isEnabled());
     }
 
     @Test
@@ -1439,7 +1439,7 @@ class SigningProfileServiceImplTest extends BaseSpringBootTest {
 
         Optional<SigningProfile> fromDb = signingProfileRepository.findById(savedProfile.getUuid());
         Assertions.assertTrue(fromDb.isPresent());
-        Assertions.assertFalse(fromDb.get().getEnabled(), "Profile should remain disabled after disabling an already-disabled profile");
+        Assertions.assertFalse(fromDb.get().isEnabled(), "Profile should remain disabled after disabling an already-disabled profile");
     }
 
     @Test
@@ -1453,9 +1453,9 @@ class SigningProfileServiceImplTest extends BaseSpringBootTest {
                 SecuredUUID.fromString(third.getUuid())
         ));
 
-        Assertions.assertTrue(signingProfileRepository.findById(savedProfile.getUuid()).map(SigningProfile::getEnabled).orElse(false));
-        Assertions.assertTrue(signingProfileRepository.findById(UUID.fromString(second.getUuid())).map(SigningProfile::getEnabled).orElse(false));
-        Assertions.assertTrue(signingProfileRepository.findById(UUID.fromString(third.getUuid())).map(SigningProfile::getEnabled).orElse(false));
+        Assertions.assertTrue(signingProfileRepository.findById(savedProfile.getUuid()).map(SigningProfile::isEnabled).orElse(false));
+        Assertions.assertTrue(signingProfileRepository.findById(UUID.fromString(second.getUuid())).map(SigningProfile::isEnabled).orElse(false));
+        Assertions.assertTrue(signingProfileRepository.findById(UUID.fromString(third.getUuid())).map(SigningProfile::isEnabled).orElse(false));
     }
 
     @Test
@@ -1474,8 +1474,8 @@ class SigningProfileServiceImplTest extends BaseSpringBootTest {
                 SecuredUUID.fromString(third.getUuid())
         ));
 
-        Assertions.assertFalse(signingProfileRepository.findById(UUID.fromString(second.getUuid())).map(SigningProfile::getEnabled).orElse(true));
-        Assertions.assertFalse(signingProfileRepository.findById(UUID.fromString(third.getUuid())).map(SigningProfile::getEnabled).orElse(true));
+        Assertions.assertFalse(signingProfileRepository.findById(UUID.fromString(second.getUuid())).map(SigningProfile::isEnabled).orElse(true));
+        Assertions.assertFalse(signingProfileRepository.findById(UUID.fromString(third.getUuid())).map(SigningProfile::isEnabled).orElse(true));
     }
 
     @Test
@@ -1491,7 +1491,7 @@ class SigningProfileServiceImplTest extends BaseSpringBootTest {
         Assertions.assertTrue(messages.stream().anyMatch(m -> "00000000-0000-0000-0000-000000000099".equals(m.getUuid())));
         // The known profile must still have been enabled
         Assertions.assertTrue(signingProfileRepository.findById(savedProfile.getUuid())
-                        .map(SigningProfile::getEnabled).orElse(false),
+                        .map(SigningProfile::isEnabled).orElse(false),
                 "The known profile should be enabled even when the list contains an unknown UUID");
     }
 
@@ -1508,7 +1508,7 @@ class SigningProfileServiceImplTest extends BaseSpringBootTest {
         Assertions.assertFalse(messages.isEmpty(), "An error message should be returned for the non-existent UUID");
         Assertions.assertTrue(messages.stream().anyMatch(m -> "00000000-0000-0000-0000-000000000099".equals(m.getUuid())));
         Assertions.assertFalse(signingProfileRepository.findById(savedProfile.getUuid())
-                        .map(SigningProfile::getEnabled).orElse(true),
+                        .map(SigningProfile::isEnabled).orElse(true),
                 "The known profile should be disabled even when the list contains an unknown UUID");
     }
 

@@ -217,7 +217,7 @@ public enum FilterField {
 
     // Signing Profile
     SIGNING_PROFILE_NAME(Resource.SIGNING_PROFILE, null, null, SigningProfile_.name, "Name", SearchFieldTypeEnum.STRING),
-    SIGNING_PROFILE_ENABLED(Resource.SIGNING_PROFILE, null, null, SigningProfile_.enabled, "Enabled", SearchFieldTypeEnum.BOOLEAN),
+    SIGNING_PROFILE_ENABLED(Resource.SIGNING_PROFILE, null, null, SigningProfile_.enabled, Constants.ENABLED, SearchFieldTypeEnum.BOOLEAN),
     SIGNING_PROFILE_SIGNING_SCHEME(Resource.SIGNING_PROFILE, null, null, SigningProfile_.signingScheme, "Signing Scheme", SearchFieldTypeEnum.LIST, SigningScheme.class),
     SIGNING_PROFILE_WORKFLOW_TYPE(Resource.SIGNING_PROFILE, null, null, SigningProfile_.workflowType, "Workflow Type", SearchFieldTypeEnum.LIST, SigningWorkflowType.class),
     SIGNING_PROFILE_TSP_PROFILE(Resource.SIGNING_PROFILE, Resource.TSP_PROFILE, List.of(SigningProfile_.tspProfile), TspProfile_.name, "TSP Profile", SearchFieldTypeEnum.LIST),

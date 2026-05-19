@@ -24,6 +24,7 @@ import org.hibernate.type.SqlTypes;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 
 @Getter
@@ -149,5 +150,20 @@ public class SigningProfileVersion extends UniquelyIdentifiedAndAudited {
     public void setSignatureFormatterConnector(Connector signatureFormatterConnector) {
         this.signatureFormatterConnector = signatureFormatterConnector;
         this.signatureFormatterConnectorUuid = signatureFormatterConnector != null ? signatureFormatterConnector.getUuid() : null;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (o == null || getClass() != o.getClass())
+            return false;
+        if (!super.equals(o))
+            return false;
+        SigningProfileVersion that = (SigningProfileVersion) o;
+        return Objects.equals(signingProfileUuid, that.signingProfileUuid) && Objects.equals(signingProfile, that.signingProfile) && Objects.equals(version, that.version) && signingScheme == that.signingScheme && managedSigningType == that.managedSigningType && Objects.equals(tokenProfileUuid, that.tokenProfileUuid) && Objects.equals(tokenProfile, that.tokenProfile) && Objects.equals(certificateUuid, that.certificateUuid) && Objects.equals(certificate, that.certificate) && Objects.equals(raProfileUuid, that.raProfileUuid) && Objects.equals(raProfile, that.raProfile) && Objects.equals(csrTemplateUuid, that.csrTemplateUuid) && Objects.equals(delegatedSignerConnectorUuid, that.delegatedSignerConnectorUuid) && Objects.equals(delegatedSignerConnector, that.delegatedSignerConnector) && workflowType == that.workflowType && Objects.equals(signatureFormatterConnectorUuid, that.signatureFormatterConnectorUuid) && Objects.equals(signatureFormatterConnector, that.signatureFormatterConnector) && Objects.equals(qualifiedTimestamp, that.qualifiedTimestamp) && Objects.equals(defaultPolicyId, that.defaultPolicyId) && Objects.equals(allowedPolicyIds, that.allowedPolicyIds) && Objects.equals(allowedDigestAlgorithms, that.allowedDigestAlgorithms) && Objects.equals(validateTokenSignature, that.validateTokenSignature);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(super.hashCode(), signingProfileUuid, signingProfile, version, signingScheme, managedSigningType, tokenProfileUuid, tokenProfile, certificateUuid, certificate, raProfileUuid, raProfile, csrTemplateUuid, delegatedSignerConnectorUuid, delegatedSignerConnector, workflowType, signatureFormatterConnectorUuid, signatureFormatterConnector, qualifiedTimestamp, defaultPolicyId, allowedPolicyIds, allowedDigestAlgorithms, validateTokenSignature);
     }
 }

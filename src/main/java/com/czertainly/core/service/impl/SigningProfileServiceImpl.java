@@ -702,7 +702,7 @@ public class SigningProfileServiceImpl implements SigningProfileService {
                 ObjectAttributeContentInfo.builder(Resource.SIGNING_PROFILE, signingProfile.getUuid())
                         .operation(AttributeOperation.SIGN)
                         .version(version.getVersion()).build());
-        return null;
+        return List.of();
     }
 
     private List<ResponseAttribute> persistSignatureFormatterConnectorAttributes(SigningProfile p, SigningProfileVersion version, WorkflowRequestDto workflow)
