@@ -164,7 +164,7 @@ public class CryptographicOperationServiceImpl implements CryptographicOperation
         requestDto.setCipherAttributes(request.getCipherAttributes());
         logger.debug("Request to the connector: {}", requestDto);
         try {
-            var connectorDto = key.connector();
+            ApiClientConnectorInfo connectorDto = connectorService.getConnectorForApiClient(key.connectorUuid());
             CryptographicOperationsSyncApiClient apiClient = connectorApiFactory.getCryptographicOperationsApiClient(connectorDto);
             com.czertainly.api.model.connector.cryptography.operations.EncryptDataResponseDto response = apiClient.encryptData(
                     connectorDto,
@@ -221,7 +221,7 @@ public class CryptographicOperationServiceImpl implements CryptographicOperation
         requestDto.setCipherAttributes(request.getCipherAttributes());
         logger.debug("Request to the connector: {}", requestDto);
         try {
-            var connectorDto = key.connector();
+            ApiClientConnectorInfo connectorDto = connectorService.getConnectorForApiClient(key.connectorUuid());
             CryptographicOperationsSyncApiClient apiClient = connectorApiFactory.getCryptographicOperationsApiClient(connectorDto);
             com.czertainly.api.model.connector.cryptography.operations.DecryptDataResponseDto response = apiClient.decryptData(
                     connectorDto,
@@ -285,7 +285,7 @@ public class CryptographicOperationServiceImpl implements CryptographicOperation
         return executeSignData(key, request);
     }
 
-    private SignDataResponseDto executeSignData(CryptographicKeyItemModel key, SignDataRequestDto request) throws ConnectorException {
+    private SignDataResponseDto executeSignData(CryptographicKeyItemModel key, SignDataRequestDto request) throws ConnectorException, NotFoundException {
         verifyKeyActive(key);
         logger.debug("Key details: {}", key);
         if (request.getData() == null) {
@@ -305,7 +305,7 @@ public class CryptographicOperationServiceImpl implements CryptographicOperation
                 }).toList()
         );
         logger.debug("Request to the connector: {}", requestDto);
-        var connectorDto = key.connector();
+        ApiClientConnectorInfo connectorDto = connectorService.getConnectorForApiClient(key.connectorUuid());
         CryptographicOperationsSyncApiClient apiClient = connectorApiFactory.getCryptographicOperationsApiClient(connectorDto);
         com.czertainly.api.model.connector.cryptography.operations.SignDataResponseDto response = apiClient.signData(
                 connectorDto,
@@ -362,7 +362,7 @@ public class CryptographicOperationServiceImpl implements CryptographicOperation
         );
         logger.debug("Request to the connector: {}", requestDto);
         try {
-            var connectorDto = key.connector();
+            ApiClientConnectorInfo connectorDto = connectorService.getConnectorForApiClient(key.connectorUuid());
             CryptographicOperationsSyncApiClient apiClient = connectorApiFactory.getCryptographicOperationsApiClient(connectorDto);
             com.czertainly.api.model.connector.cryptography.operations.VerifyDataResponseDto response = apiClient.verifyData(
                     connectorDto,

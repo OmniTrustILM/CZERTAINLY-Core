@@ -1,6 +1,5 @@
 package com.czertainly.core.model.crypto;
 
-import com.czertainly.api.clients.ApiClientConnectorInfo;
 import com.czertainly.api.model.common.enums.cryptography.KeyAlgorithm;
 import com.czertainly.api.model.core.cryptography.key.KeyState;
 import com.czertainly.api.model.core.cryptography.key.KeyUsage;
@@ -15,6 +14,6 @@ public record CryptographicKeyItemModel(
         List<KeyUsage> usage,
         KeyAlgorithm keyAlgorithm,
         UUID keyReferenceUuid,
-        ApiClientConnectorInfo connector,
+        UUID connectorUuid,
         UUID tokenInstanceUuid
 ) {}

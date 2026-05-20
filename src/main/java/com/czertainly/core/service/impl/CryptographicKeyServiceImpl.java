@@ -959,7 +959,7 @@ public class CryptographicKeyServiceImpl implements CryptographicKeyService {
                 keyItem.getUsage(),
                 keyItem.getKeyAlgorithm(),
                 keyItem.getKeyReferenceUuid(),
-                tokenInstanceReference.getConnector().mapToApiClientDtoV1(),
+                tokenInstanceReference.getConnectorUuid(),
                 tokenInstanceUuid
         );
         if (cache != null)
