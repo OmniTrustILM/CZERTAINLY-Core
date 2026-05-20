@@ -2,8 +2,6 @@ package com.czertainly.core.service.v2.impl;
 
 import com.czertainly.api.clients.ApiClientConnectorInfo;
 import com.czertainly.api.exception.*;
-import com.czertainly.api.interfaces.core.tsp.error.TspException;
-import com.czertainly.api.interfaces.core.tsp.error.TspFailureInfo;
 import com.czertainly.api.model.client.certificate.SearchFilterRequestDto;
 import com.czertainly.api.model.client.certificate.SearchRequestDto;
 import com.czertainly.api.model.client.connector.ConnectRequestDto;
@@ -84,9 +82,10 @@ public class ConnectorServiceImpl implements ConnectorService {
 
     private ConnectorAuthInternalService connectorAuthService;
 
-    private CacheManager cacheManager;
     private AttributeEngine attributeEngine;
     private TransactionHandler transactionHandler;
+
+    private CacheManager cacheManager;
 
     @Autowired
     public void setCacheManager(CacheManager cacheManager) {
@@ -223,7 +222,6 @@ public class ConnectorServiceImpl implements ConnectorService {
         connector.setAuthAttributes(AttributeDefinitionUtils.serialize(authAttributes));
         connector.setProxy(proxy);
         connectorRepository.save(connector);
-        evictConnectorCache(connector.getUuid());
 
         ConnectorAdapter connectorAdapter = getAdapter(connector.getVersion());
         ConnectInfo connectInfo = connectorAdapter.validateConnection(connector.mapToApiClientDtoV2());
@@ -579,7 +577,6 @@ public class ConnectorServiceImpl implements ConnectorService {
                 connectorRepository.save(connector);
                 evictConnectorCache(connector.getUuid());
             });
-            evictConnectorCache(connector.getUuid());
 
             throw new ConnectorException(message);
         }

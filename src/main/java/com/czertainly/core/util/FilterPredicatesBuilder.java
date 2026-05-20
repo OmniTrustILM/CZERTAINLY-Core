@@ -667,21 +667,6 @@ public class FilterPredicatesBuilder {
         return criteriaBuilder.not(criteriaBuilder.exists(subquery));
     }
 
-    // NOT EXISTS subquery is required here instead of a per-row predicate because the array field is accessed through a
-    // collection join (e.g. connector → connector_interface), producing multiple rows per root entity. A per-row check
-    // would incorrectly include an entity if any of its joined rows has a null/non-matching array, even when another
-    // row does contain the value. NOT EXISTS ensures the condition holds across all joined rows for the entity.
-    private static <T> Predicate getArrayNotContainsPredicate(CriteriaBuilder criteriaBuilder, CommonAbstractCriteria query, Root<T> root, FilterField filterField, String value) {
-        Subquery<Integer> subquery = query.subquery(Integer.class);
-        From subFrom = subquery.correlate(root);
-        for (Attribute attr : filterField.getJoinAttributes()) {
-            subFrom = subFrom.join(attr.getName(), JoinType.INNER);
-        }
-        subquery.select(criteriaBuilder.literal(1))
-                .where(criteriaBuilder.isTrue(criteriaBuilder.function(ARRAY_CONTAINS_FUNCTION_NAME, Boolean.class, criteriaBuilder.literal(value), subFrom.get(filterField.getFieldAttribute().getName()))));
-        return criteriaBuilder.not(criteriaBuilder.exists(subquery));
-    }
-
     private static Predicate getNotPresentPredicate(final CriteriaBuilder criteriaBuilder, From from, Expression expression, boolean hasParent, boolean isParentCollection, boolean isEnumList, boolean isJsonArray) {
         if (isEnumList) {
             return criteriaBuilder.equal(expression, 0);
