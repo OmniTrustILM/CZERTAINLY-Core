@@ -595,10 +595,10 @@ class CertificateServiceTest extends BaseSpringBootTest {
         UploadCertificateRequestDto request = new UploadCertificateRequestDto();
         request.setCertificate(Base64.getEncoder().encodeToString(qcX509.getEncoded()));
 
-        CertificateDetailDto uploadDto = certificateService.upload(request, true);
-        Assertions.assertNotNull(uploadDto);
+        UuidDto uuidDto = certificateService.uploadSync(request);
+        Assertions.assertNotNull(uuidDto);
 
-        CertificateDetailDto dto = certificateService.getCertificate(SecuredUUID.fromString(uploadDto.getUuid()));
+        CertificateDetailDto dto = certificateService.getCertificate(SecuredUUID.fromString(uuidDto.getUuid()));
         CertificateQcStatementsDto qc = dto.getQcStatements();
         Assertions.assertNotNull(qc, "qcStatements should be present in the DTO");
         Assertions.assertTrue(Boolean.TRUE.equals(qc.getQcCompliance()), "qcCompliance should be true");
@@ -618,10 +618,10 @@ class CertificateServiceTest extends BaseSpringBootTest {
         UploadCertificateRequestDto request = new UploadCertificateRequestDto();
         request.setCertificate(Base64.getEncoder().encodeToString(plainX509.getEncoded()));
 
-        CertificateDetailDto uploadDto = certificateService.upload(request, true);
-        Assertions.assertNotNull(uploadDto);
+        UuidDto uuidDto = certificateService.uploadSync(request);
+        Assertions.assertNotNull(uuidDto);
 
-        CertificateDetailDto dto = certificateService.getCertificate(SecuredUUID.fromString(uploadDto.getUuid()));
+        CertificateDetailDto dto = certificateService.getCertificate(SecuredUUID.fromString(uuidDto.getUuid()));
         Assertions.assertNull(dto.getQcStatements(), "qcStatements should be null for a plain certificate");
     }
 

@@ -1,9 +1,9 @@
 package com.czertainly.core.service.tsa.timequality.builders;
 
-import com.czertainly.core.service.tsa.timequality.LeapSecondWarning;
+import com.czertainly.api.model.messaging.timequality.LeapSecondWarning;
 import com.czertainly.core.service.tsa.timequality.NtpServerResult;
 import com.czertainly.core.service.tsa.timequality.TimeQualityResult;
-import com.czertainly.core.service.tsa.timequality.TimeQualityStatus;
+import com.czertainly.api.model.messaging.timequality.TimeQualityStatus;
 
 import java.time.Instant;
 import java.util.List;

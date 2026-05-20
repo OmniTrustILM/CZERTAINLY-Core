@@ -45,7 +45,7 @@ import com.czertainly.core.enums.FilterField;
 import com.czertainly.core.util.SearchHelper;
 import com.czertainly.api.model.core.signing.SigningProtocol;
 import com.czertainly.api.model.core.signing.signingrecord.SigningRecordListDto;
-import com.czertainly.core.config.CacheConfig;
+import com.czertainly.core.config.cache.CacheConfig;
 import com.czertainly.core.attribute.engine.AttributeEngine;
 import com.czertainly.core.attribute.engine.AttributeOperation;
 import com.czertainly.core.attribute.engine.records.ObjectAttributeContentInfo;
@@ -129,6 +129,7 @@ public class SigningProfileServiceImpl implements SigningProfileService {
     private AttributeEngine attributeEngine;
     private ConnectorApiFactory connectorApiFactory;
     private ConnectorRepository connectorRepository;
+    private com.czertainly.core.service.v2.ConnectorService connectorService;
 
     // ──────────────────────────────────────────────────────────────────────────
     // List / search
@@ -813,9 +814,8 @@ public class SigningProfileServiceImpl implements SigningProfileService {
      * However, this is a temporary solution; a better solution for this should be implemented in general.</p>
      */
     private List<BaseAttribute> fetchAndUpdateFormatterAttributeDefinitions(UUID connectorUuid) throws AttributeException, ConnectorException, NotFoundException {
-        Connector connector = connectorRepository.findByUuid(connectorUuid)
-                .orElseThrow(() -> new NotFoundException(Connector.class, connectorUuid));
-        List<BaseAttribute> definitions = connectorApiFactory.getSignatureFormatterApiClient(connector.mapToApiClientDtoV2()).listFormatterAttributes(connector.mapToApiClientDtoV2());
+        com.czertainly.api.clients.ApiClientConnectorInfo connector = connectorService.getConnectorForApiClient(connectorUuid);
+        List<BaseAttribute> definitions = connectorApiFactory.getSignatureFormatterApiClient(connector).listFormatterAttributes(connector);
         attributeEngine.updateDataAttributeDefinitions(connectorUuid, AttributeOperation.WORKFLOW_FORMATTER, definitions);
         return definitions;
     }
@@ -953,5 +953,10 @@ public class SigningProfileServiceImpl implements SigningProfileService {
     @Autowired
     public void setConnectorRepository(ConnectorRepository connectorRepository) {
         this.connectorRepository = connectorRepository;
+    }
+
+    @Autowired
+    public void setConnectorService(com.czertainly.core.service.v2.ConnectorService connectorService) {
+        this.connectorService = connectorService;
     }
 }

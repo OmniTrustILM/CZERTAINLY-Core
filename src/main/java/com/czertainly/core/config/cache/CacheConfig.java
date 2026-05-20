@@ -23,6 +23,10 @@ public class CacheConfig {
     public static final String CERTIFICATE_AUTH_CACHE = "certificateAuth";
     public static final String TOKEN_AUTH_CACHE = "tokenAuth";
     public static final String CONNECTOR_API_CLIENT_CACHE = "connectorApiClient";
+    public static final String SIGNING_PROFILES_CACHE = "signingProfiles";
+    public static final String TSP_PROFILES_CACHE = "tspProfiles";
+    public static final String CERTIFICATE_CHAIN_CACHE = "certificateChain";
+    public static final String CRYPTOGRAPHIC_KEY_ITEM_CACHE = "cryptographicKeyItem";
 
     @Bean
     public CacheManager cacheManager(
@@ -31,7 +35,9 @@ public class CacheConfig {
             TokenJtiIndex tokenJtiIndex,
             UserCertificateIndex userCertificateIndex) {
 
-        CaffeineCacheManager mgr = new CaffeineCacheManager(SYSTEM_USER_AUTH_CACHE, USER_UUID_AUTH_CACHE);
+        CaffeineCacheManager mgr = new CaffeineCacheManager(
+                SYSTEM_USER_AUTH_CACHE, USER_UUID_AUTH_CACHE,
+                SIGNING_PROFILES_CACHE, TSP_PROFILES_CACHE, CERTIFICATE_CHAIN_CACHE, CRYPTOGRAPHIC_KEY_ITEM_CACHE);
         mgr.setCaffeine(Caffeine.newBuilder()
                 .expireAfterWrite(authCacheProperties.ttlMinutes(), TimeUnit.MINUTES)
                 .maximumSize(authCacheProperties.maxSize())

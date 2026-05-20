@@ -28,7 +28,7 @@ import com.czertainly.api.model.core.search.SearchFieldDataDto;
 import com.czertainly.core.attribute.engine.AttributeEngine;
 import com.czertainly.core.attribute.engine.records.ObjectAttributeContentInfo;
 import com.czertainly.core.comparator.SearchFieldDataComparator;
-import com.czertainly.core.config.CacheConfig;
+import com.czertainly.core.config.cache.CacheConfig;
 import com.czertainly.core.dao.entity.*;
 import com.czertainly.core.dao.repository.*;
 import com.czertainly.core.enums.FilterField;
@@ -958,7 +958,7 @@ public class CryptographicKeyServiceImpl implements CryptographicKeyService {
                 keyItem.getKeyAlgorithm(),
                 keyItem.getKeyReferenceUuid(),
                 keyItem.getKeyData(),
-                keyItem.getKey().getTokenProfile().getTokenInstanceReference().getConnector().mapToApiClientDtoV1(),
+                connectorService.getConnectorForApiClient(keyItem.getKey().getTokenProfile().getTokenInstanceReference().getConnector().getUuid()),
                 keyItem.getKey().getTokenProfile().getTokenInstanceReference().getTokenInstanceUuid()
         );
         if (cache != null)

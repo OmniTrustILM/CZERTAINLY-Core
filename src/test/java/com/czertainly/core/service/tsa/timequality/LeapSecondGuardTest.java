@@ -1,5 +1,6 @@
 package com.czertainly.core.service.tsa.timequality;
 
+import com.czertainly.api.model.messaging.timequality.LeapSecondWarning;
 import com.czertainly.core.util.clocksource.TestClockSource;
 import org.junit.jupiter.api.Test;
 

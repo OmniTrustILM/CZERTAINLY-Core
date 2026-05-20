@@ -77,7 +77,7 @@ import com.czertainly.core.security.authz.SecurityFilter;
 import com.czertainly.core.service.*;
 import com.czertainly.core.service.v2.ConnectorService;
 import com.czertainly.core.service.v2.ExtendedAttributeService;
-import com.czertainly.core.config.CacheConfig;
+import com.czertainly.core.config.cache.CacheConfig;
 import com.czertainly.core.settings.SettingsCache;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;

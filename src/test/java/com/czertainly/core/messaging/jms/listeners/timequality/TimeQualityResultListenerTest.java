@@ -1,12 +1,14 @@
 package com.czertainly.core.messaging.jms.listeners.timequality;
 
-import com.czertainly.api.model.messaging.timequality.*;
+import com.czertainly.api.model.messaging.timequality.NtpServerMeasurementResult;
+import com.czertainly.api.model.messaging.timequality.TimeQualityResultMessage;
 import com.czertainly.core.dao.entity.signing.TimeQualityConfiguration;
 import com.czertainly.core.dao.repository.signing.TimeQualityConfigurationRepository;
 import com.czertainly.core.security.authz.SecuredUUID;
 import com.czertainly.core.service.tsa.timequality.TimeQualityRegister;
 import com.czertainly.core.service.tsa.timequality.TimeQualityResult;
-import com.czertainly.core.service.tsa.timequality.TimeQualityStatus;
+import com.czertainly.api.model.messaging.timequality.LeapSecondWarning;
+import com.czertainly.api.model.messaging.timequality.TimeQualityStatus;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -38,7 +40,7 @@ class TimeQualityResultListenerTest {
         entity.setName("known");
         when(repository.findByUuid(any(SecuredUUID.class))).thenReturn(Optional.of(entity));
 
-        listener.processMessage(buildResult(id, "known", TimeQualityStatusMessage.OK));
+        listener.processMessage(buildResult(id, "known", TimeQualityStatus.OK));
 
         ArgumentCaptor<TimeQualityResult> captor = ArgumentCaptor.forClass(TimeQualityResult.class);
         verify(register).update(captor.capture());
@@ -51,7 +53,7 @@ class TimeQualityResultListenerTest {
         UUID id = UUID.randomUUID();
         when(repository.findByUuid(any(SecuredUUID.class))).thenReturn(Optional.empty());
 
-        listener.processMessage(buildResult(id, "unknown", TimeQualityStatusMessage.OK));
+        listener.processMessage(buildResult(id, "unknown", TimeQualityStatus.OK));
 
         verifyNoInteractions(register);
     }
@@ -63,15 +65,15 @@ class TimeQualityResultListenerTest {
         entity.setName("degraded");
         when(repository.findByUuid(any(SecuredUUID.class))).thenReturn(Optional.of(entity));
 
-        listener.processMessage(buildResult(id, "degraded", TimeQualityStatusMessage.DEGRADED));
+        listener.processMessage(buildResult(id, "degraded", TimeQualityStatus.DEGRADED));
 
         ArgumentCaptor<TimeQualityResult> captor = ArgumentCaptor.forClass(TimeQualityResult.class);
         verify(register).update(captor.capture());
         assertThat(captor.getValue().status()).isEqualTo(TimeQualityStatus.DEGRADED);
     }
 
-    private TimeQualityResultMessage buildResult(UUID id, String name, TimeQualityStatusMessage status) {
-        NtpServerMessage server = new NtpServerMessage();
+    private TimeQualityResultMessage buildResult(UUID id, String name, com.czertainly.api.model.messaging.timequality.TimeQualityStatus status) {
+        NtpServerMeasurementResult server = new NtpServerMeasurementResult();
         server.setHost("pool.ntp.org");
         server.setReachable(true);
         server.setOffsetMs(0.0);
@@ -80,14 +82,14 @@ class TimeQualityResultListenerTest {
         server.setPrecisionMs(0.1);
 
         TimeQualityResultMessage msg = new TimeQualityResultMessage();
-        msg.setId(id);
+        msg.setConfigurationId(id);
         msg.setName(name);
         msg.setTimestamp(Instant.now());
         msg.setStatus(status);
         msg.setMeasuredDriftMs(0.0);
         msg.setReachableServers(1);
-        msg.setLeapSecondWarning(LeapSecondWarningMessage.NONE);
-        msg.setServers(List.of(server));
+        msg.setLeapSecondWarning(LeapSecondWarning.NONE);
+        msg.setMeasurements(List.of(server));
         return msg;
     }
 }

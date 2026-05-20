@@ -1,5 +1,6 @@
 package com.czertainly.core.service.tsa.timequality;
 
+import com.czertainly.api.model.messaging.timequality.TimeQualityStatus;
 import com.czertainly.core.model.signing.timequality.TimeQualityConfigurationModel;
 
 public interface TimeQualityRegister {

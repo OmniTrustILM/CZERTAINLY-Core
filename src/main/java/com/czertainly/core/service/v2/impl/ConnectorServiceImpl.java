@@ -88,8 +88,6 @@ public class ConnectorServiceImpl implements ConnectorService {
     private AttributeEngine attributeEngine;
     private TransactionHandler transactionHandler;
 
-    private CacheManager cacheManager;
-
     @Autowired
     public void setCacheManager(CacheManager cacheManager) {
         this.cacheManager = cacheManager;
@@ -108,11 +106,6 @@ public class ConnectorServiceImpl implements ConnectorService {
     @Autowired
     public void setConnectorRepository(ConnectorRepository connectorRepository) {
         this.connectorRepository = connectorRepository;
-    }
-
-    @Autowired
-    public void setCacheManager(CacheManager cacheManager) {
-        this.cacheManager = cacheManager;
     }
 
     @Autowired

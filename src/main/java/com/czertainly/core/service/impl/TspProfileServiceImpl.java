@@ -34,7 +34,7 @@ import com.czertainly.core.security.authz.SecurityFilter;
 import com.czertainly.core.service.TspProfileService;
 import com.czertainly.core.service.SigningProfileService;
 import com.czertainly.core.service.model.SecuredList;
-import com.czertainly.core.config.CacheConfig;
+import com.czertainly.core.config.cache.CacheConfig;
 import com.czertainly.core.util.FilterPredicatesBuilder;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;

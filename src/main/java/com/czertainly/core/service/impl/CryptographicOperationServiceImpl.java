@@ -14,6 +14,7 @@ import com.czertainly.api.model.core.cryptography.key.KeyEventStatus;
 import com.czertainly.api.model.core.cryptography.key.KeyState;
 import com.czertainly.api.model.core.cryptography.key.KeyUsage;
 import com.czertainly.core.attribute.*;
+import com.czertainly.api.interfaces.client.v1.CryptographicOperationsSyncApiClient;
 import com.czertainly.core.client.ConnectorApiFactory;
 import com.czertainly.core.config.TokenContentSigner;
 import com.czertainly.core.dao.entity.CryptographicKey;
