@@ -51,9 +51,7 @@ class CiTestSplitTest {
 
         assertThat(restExcludes)
                 .describedAs("test-rest profile must define at least one <exclude> pattern in pom.xml")
-                .isNotEmpty();
-
-        assertThat(restExcludes)
+                .isNotEmpty()
                 .describedAs("""
                         test-rest <excludes> and test-services <includes> in pom.xml must be identical sets.
                         A pattern in one but not the other causes tests to run twice or not at all.
