@@ -43,10 +43,11 @@ class TimeQualityRegisterImplTest {
             // given — result timestamp is 3 minutes ago, maxAge is 5 minutes → fresh
             var clock = TestClockSource.ofWallTime(FIXED_NOW);
             var register = new TimeQualityRegisterImpl(clock);
-            register.update(aTimeQualityResult().withDefaults().status(TimeQualityStatus.OK).timestamp(FIXED_NOW.minus(Duration.ofMinutes(3))).build());
+            var profile = ExplicitTimeQualityConfigurationBuilder.valid("profile1");
+            register.update(aTimeQualityResult().withDefaults().configurationId(profile.uuid()).status(TimeQualityStatus.OK).timestamp(FIXED_NOW.minus(Duration.ofMinutes(3))).build());
 
             // when
-            var status = register.getStatus(ExplicitTimeQualityConfigurationBuilder.valid("profile1"));
+            var status = register.getStatus(profile);
 
             // then
             assertThat(status).isEqualTo(TimeQualityStatus.OK);
@@ -57,10 +58,11 @@ class TimeQualityRegisterImplTest {
             // given — result is fresh but status is DEGRADED
             var clock = TestClockSource.ofWallTime(FIXED_NOW);
             var register = new TimeQualityRegisterImpl(clock);
-            register.update(aTimeQualityResult().withDefaults().status(TimeQualityStatus.DEGRADED).timestamp(FIXED_NOW.minus(Duration.ofMinutes(3))).build());
+            var profile = ExplicitTimeQualityConfigurationBuilder.valid("profile1");
+            register.update(aTimeQualityResult().withDefaults().configurationId(profile.uuid()).status(TimeQualityStatus.DEGRADED).timestamp(FIXED_NOW.minus(Duration.ofMinutes(3))).build());
 
             // when
-            var status = register.getStatus(ExplicitTimeQualityConfigurationBuilder.valid("profile1"));
+            var status = register.getStatus(profile);
 
             // then
             assertThat(status).isEqualTo(TimeQualityStatus.DEGRADED);
@@ -71,10 +73,11 @@ class TimeQualityRegisterImplTest {
             // given — result timestamp is 6 minutes ago, maxAge is 5 minutes → stale
             var clock = TestClockSource.ofWallTime(FIXED_NOW);
             var register = new TimeQualityRegisterImpl(clock);
-            register.update(aTimeQualityResult().withDefaults().status(TimeQualityStatus.OK).timestamp(FIXED_NOW.minus(Duration.ofMinutes(6))).build());
+            var profile = ExplicitTimeQualityConfigurationBuilder.valid("profile1");
+            register.update(aTimeQualityResult().withDefaults().configurationId(profile.uuid()).status(TimeQualityStatus.OK).timestamp(FIXED_NOW.minus(Duration.ofMinutes(6))).build());
 
             // when
-            var status = register.getStatus(ExplicitTimeQualityConfigurationBuilder.valid("profile1"));
+            var status = register.getStatus(profile);
 
             // then
             assertThat(status).isEqualTo(TimeQualityStatus.DEGRADED);
@@ -177,13 +180,14 @@ class TimeQualityRegisterImplTest {
             // given
             var clock = TestClockSource.ofWallTime(FIXED_NOW);
             var register = new TimeQualityRegisterImpl(clock);
-            var result = aTimeQualityResult().withDefaults().timestamp(FIXED_NOW.minus(Duration.ofMinutes(1))).build();
+            var profile = ExplicitTimeQualityConfigurationBuilder.valid("profile1");
+            var result = aTimeQualityResult().withDefaults().configurationId(profile.uuid()).timestamp(FIXED_NOW.minus(Duration.ofMinutes(1))).build();
 
             // when
             register.update(result);
 
             // then
-            assertThat(register.getStatus(ExplicitTimeQualityConfigurationBuilder.valid("profile1"))).isEqualTo(TimeQualityStatus.OK);
+            assertThat(register.getStatus(profile)).isEqualTo(TimeQualityStatus.OK);
         }
 
         @Test
@@ -191,15 +195,16 @@ class TimeQualityRegisterImplTest {
             // given
             var clock = TestClockSource.ofWallTime(FIXED_NOW);
             var register = new TimeQualityRegisterImpl(clock);
-            var first = aTimeQualityResult().withDefaults().status(TimeQualityStatus.DEGRADED).timestamp(FIXED_NOW.minus(Duration.ofMinutes(1))).build();
-            var second = aTimeQualityResult().withDefaults().status(TimeQualityStatus.OK).timestamp(FIXED_NOW.minus(Duration.ofMinutes(1))).build();
+            var profile = ExplicitTimeQualityConfigurationBuilder.valid("profile1");
+            var first = aTimeQualityResult().withDefaults().configurationId(profile.uuid()).status(TimeQualityStatus.DEGRADED).timestamp(FIXED_NOW.minus(Duration.ofMinutes(1))).build();
+            var second = aTimeQualityResult().withDefaults().configurationId(profile.uuid()).status(TimeQualityStatus.OK).timestamp(FIXED_NOW.minus(Duration.ofMinutes(1))).build();
 
             // when
             register.update(first);
             register.update(second);
 
             // then
-            assertThat(register.getStatus(ExplicitTimeQualityConfigurationBuilder.valid("profile1"))).isEqualTo(TimeQualityStatus.OK);
+            assertThat(register.getStatus(profile)).isEqualTo(TimeQualityStatus.OK);
         }
 
         @Test
@@ -207,12 +212,13 @@ class TimeQualityRegisterImplTest {
             // given — OK result sets reference pair, DEGRADED clears it
             var clock = TestClockSource.ofWallTime(FIXED_NOW);
             var register = new TimeQualityRegisterImpl(clock);
+            var profile = ExplicitTimeQualityConfigurationBuilder.valid("profile1");
 
-            register.update(aTimeQualityResult().withDefaults().status(TimeQualityStatus.OK).timestamp(FIXED_NOW).build());
-            register.update(aTimeQualityResult().withDefaults().status(TimeQualityStatus.DEGRADED).timestamp(FIXED_NOW).build());
+            register.update(aTimeQualityResult().withDefaults().configurationId(profile.uuid()).status(TimeQualityStatus.OK).timestamp(FIXED_NOW).build());
+            register.update(aTimeQualityResult().withDefaults().configurationId(profile.uuid()).status(TimeQualityStatus.DEGRADED).timestamp(FIXED_NOW).build());
 
-            // when — even though the last result is DEGRADED, getStatus returns DEGRADED
-            var status = register.getStatus(ExplicitTimeQualityConfigurationBuilder.valid("profile1"));
+            // when — DEGRADED result stored, so getStatus returns DEGRADED
+            var status = register.getStatus(profile);
 
             // then
             assertThat(status).isEqualTo(TimeQualityStatus.DEGRADED);
@@ -223,15 +229,16 @@ class TimeQualityRegisterImplTest {
             // given — register holds an OK result and a captured drift reference for an id
             var clock = TestClockSource.ofWallTime(FIXED_NOW);
             var register = new TimeQualityRegisterImpl(clock);
-            register.update(aTimeQualityResult().withDefaults().status(TimeQualityStatus.OK).timestamp(FIXED_NOW).build());
+            var profile = ExplicitTimeQualityConfigurationBuilder.valid("profile1");
+            register.update(aTimeQualityResult().withDefaults().configurationId(profile.uuid()).status(TimeQualityStatus.OK).timestamp(FIXED_NOW).build());
             // status read also populates lastLoggedStatus
-            register.getStatus(ExplicitTimeQualityConfigurationBuilder.valid("profile1"));
+            register.getStatus(profile);
 
             // when
-            register.remove(java.util.UUID.fromString("00000000-0000-0000-0000-000000000001"));
+            register.remove(profile.uuid());
 
             // then — after removal, status reverts to "no result yet" → DEGRADED
-            assertThat(register.getStatus(ExplicitTimeQualityConfigurationBuilder.valid("profile1"))).isEqualTo(TimeQualityStatus.DEGRADED);
+            assertThat(register.getStatus(profile)).isEqualTo(TimeQualityStatus.DEGRADED);
         }
 
         @Test
@@ -239,6 +246,7 @@ class TimeQualityRegisterImplTest {
             // given
             var clock = TestClockSource.ofWallTime(FIXED_NOW);
             var register = new TimeQualityRegisterImpl(clock);
+            var profile = ExplicitTimeQualityConfigurationBuilder.valid("profile1");
             int threadCount = 50;
             var latch = new CountDownLatch(threadCount);
 
@@ -247,7 +255,7 @@ class TimeQualityRegisterImplTest {
                 for (int i = 0; i < threadCount; i++) {
                     var drift = (double) i;
                     executor.submit(() -> {
-                        register.update(aTimeQualityResult().withDefaults().measuredDriftMs(drift).timestamp(FIXED_NOW.minus(Duration.ofMinutes(1))).build());
+                        register.update(aTimeQualityResult().withDefaults().configurationId(profile.uuid()).measuredDriftMs(drift).timestamp(FIXED_NOW.minus(Duration.ofMinutes(1))).build());
                         latch.countDown();
                     });
                 }
@@ -255,7 +263,7 @@ class TimeQualityRegisterImplTest {
             }
 
             // then — entry exists and has a valid status
-            assertThat(register.getStatus(ExplicitTimeQualityConfigurationBuilder.valid("profile1"))).isEqualTo(TimeQualityStatus.OK);
+            assertThat(register.getStatus(profile)).isEqualTo(TimeQualityStatus.OK);
         }
     }
 }

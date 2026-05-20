@@ -22,7 +22,7 @@ public final class ExplicitTimeQualityConfigurationBuilder {
     }
 
     public static ExplicitTimeQualityConfiguration valid(String name) {
-        return anExplicitTimeQualityConfiguration().withDefaults().name(name).build();
+        return anExplicitTimeQualityConfiguration().withDefaults().uuid(UUID.randomUUID()).name(name).build();
     }
 
     public ExplicitTimeQualityConfigurationBuilder withDefaults() {

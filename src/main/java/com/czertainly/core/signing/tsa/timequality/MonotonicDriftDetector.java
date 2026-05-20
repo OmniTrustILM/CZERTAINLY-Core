@@ -21,12 +21,15 @@ public class MonotonicDriftDetector {
     }
 
     public void captureReference(UUID id, double measuredDriftMs) {
-        refFor(id).set(
-                new TimeReferencePair(clockSource.wallTimeMillis(), clockSource.monotonicNanos(), measuredDriftMs));
+        referencePairs.computeIfAbsent(id, ignored -> new AtomicReference<>())
+                .set(new TimeReferencePair(clockSource.wallTimeMillis(), clockSource.monotonicNanos(), measuredDriftMs));
     }
 
     public void clearReference(UUID id) {
-        refFor(id).set(null);
+        var ref = referencePairs.get(id);
+        if (ref != null) {
+            ref.set(null);
+        }
     }
 
     public void remove(UUID id) {
@@ -41,7 +44,8 @@ public class MonotonicDriftDetector {
      * {@link #captureReference}.
      */
     public boolean isDriftExceeded(UUID id, Duration maxClockDrift) {
-        var pair = refFor(id).get();
+        var ref = referencePairs.get(id);
+        var pair = ref != null ? ref.get() : null;
         if (pair == null) {
             return true;
         }
@@ -49,7 +53,7 @@ public class MonotonicDriftDetector {
         long elapsedNanos = clockSource.monotonicNanos() - pair.monotonicNanos();
         long expectedWallMillis = pair.wallTimeMillis() + (elapsedNanos / 1_000_000);
         long actualWallMillis = clockSource.wallTimeMillis();
-        long driftMillis = (actualWallMillis - expectedWallMillis) + (long) pair.measuredDriftMs();
+        long driftMillis = (actualWallMillis - expectedWallMillis) + Math.round(pair.measuredDriftMs());
         long maxDriftMillis = maxClockDrift.toMillis();
 
         if (Math.abs(driftMillis) > maxDriftMillis) {
@@ -60,7 +64,4 @@ public class MonotonicDriftDetector {
         return false;
     }
 
-    private AtomicReference<TimeReferencePair> refFor(UUID id) {
-        return referencePairs.computeIfAbsent(id, ignored -> new AtomicReference<>());
-    }
 }

@@ -39,6 +39,7 @@ public class TimeQualityRegisterImpl implements TimeQualityRegister {
         this.driftDetector = driftDetector;
     }
 
+    @Override
     public void update(TimeQualityResult result) {
         entries.compute(result.configurationId(), (id, ref) -> {
             if (ref == null) {
@@ -53,6 +54,14 @@ public class TimeQualityRegisterImpl implements TimeQualityRegister {
             return ref;
         });
 
+        if (result.status() == TimeQualityStatus.DEGRADED) {
+            logger.atWarn()
+                    .addKeyValue("configurationId", result.configurationId())
+                    .addKeyValue("name", result.name())
+                    .addKeyValue("reason", result.reason())
+                    .log("Received degraded time quality result from Monitor");
+        }
+
         logger.atTrace()
                 .addKeyValue("configurationId", result.configurationId())
                 .addKeyValue("name", result.name())
@@ -62,6 +71,7 @@ public class TimeQualityRegisterImpl implements TimeQualityRegister {
                 .log("Received time quality result");
     }
 
+    @Override
     public void remove(UUID configurationId) {
         entries.remove(configurationId);
         lastLoggedStatus.remove(configurationId);
@@ -73,15 +83,17 @@ public class TimeQualityRegisterImpl implements TimeQualityRegister {
         remove(event.getConfigurationId());
     }
 
+    @Override
     public TimeQualityStatus getStatus(TimeQualityConfigurationModel profile) {
         return switch (profile) {
             case LocalClockTimeQualityConfiguration ignored -> TimeQualityStatus.OK;
-            case ExplicitTimeQualityConfiguration explicit -> getStatus(explicit);
+            case ExplicitTimeQualityConfiguration explicit -> getExplicitStatus(explicit);
         };
     }
 
-    private TimeQualityStatus getStatus(ExplicitTimeQualityConfiguration config) {
-        var result = entryFor(config.uuid()).get();
+    private TimeQualityStatus getExplicitStatus(ExplicitTimeQualityConfiguration config) {
+        var ref = entries.get(config.uuid());
+        var result = ref != null ? ref.get() : null;
         if (result == null) {
             return degraded(config.uuid(), "no result received yet");
         }
@@ -105,10 +117,6 @@ public class TimeQualityRegisterImpl implements TimeQualityRegister {
         }
 
         return ok(config.uuid());
-    }
-
-    private AtomicReference<TimeQualityResult> entryFor(UUID id) {
-        return entries.computeIfAbsent(id, ignored -> new AtomicReference<>());
     }
 
     private TimeQualityStatus degraded(UUID id, String reason) {

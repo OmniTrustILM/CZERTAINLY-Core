@@ -12,7 +12,6 @@ import org.springframework.stereotype.Component;
 
 import java.time.Instant;
 import java.util.List;
-import java.util.Objects;
 import java.util.UUID;
 
 @Component
@@ -28,7 +27,7 @@ public class TimeQualityConfigurationProducer {
         TimeQualityConfigSnapshot message = new TimeQualityConfigSnapshot();
         message.setCorrelationId(correlationId);
         message.setGeneratedAt(Instant.now());
-        message.setConfigurations(configurations.stream().map(this::toMessage).toList());
+        message.setConfigurations(configurations.stream().map(this::toMessage).filter(m -> m != null).toList());
         log.debug("Publishing time quality config snapshot with {} configurations", message.getConfigurations().size());
 
         producerRetryTemplate.execute(context -> {
@@ -44,14 +43,19 @@ public class TimeQualityConfigurationProducer {
     }
 
     private TimeQualityConfig toMessage(TimeQualityConfiguration config) {
+        if (config.getNtpSamplesPerServer() == null || config.getNtpServersMinReachable() == null) {
+            log.warn("Skipping time quality configuration {} ({}) — ntpSamplesPerServer or ntpServersMinReachable is not configured",
+                    config.getUuid(), config.getName());
+            return null;
+        }
         TimeQualityConfig msg = new TimeQualityConfig();
         msg.setId(config.getUuid());
         msg.setName(config.getName());
         msg.setNtpServers(config.getNtpServers());
         msg.setNtpCheckInterval(config.getNtpCheckInterval());
-        msg.setNtpSamplesPerServer(Objects.requireNonNullElse(config.getNtpSamplesPerServer(), 0));
+        msg.setNtpSamplesPerServer(config.getNtpSamplesPerServer());
         msg.setNtpCheckTimeout(config.getNtpCheckTimeout());
-        msg.setNtpServersMinReachable(Objects.requireNonNullElse(config.getNtpServersMinReachable(), 0));
+        msg.setNtpServersMinReachable(config.getNtpServersMinReachable());
         msg.setMaxClockDrift(config.getMaxClockDrift());
         msg.setLeapSecondGuard(Boolean.TRUE.equals(config.getLeapSecondGuard()));
         return msg;

@@ -24,8 +24,8 @@ public class TimeQualityMonitorInitializer {
         timeQualityConfigurationProducer.publishSnapshot(timeQualityConfigurationRepository.findAll(), null);
     }
 
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
-    public void onConfigChanged(TimeQualityConfigChangedEvent event) {
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, classes = TimeQualityConfigChangedEvent.class)
+    public void onConfigChanged() {
         timeQualityConfigurationProducer.publishSnapshot(timeQualityConfigurationRepository.findAll(), null);
     }
 }
