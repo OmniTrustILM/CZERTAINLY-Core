@@ -1242,7 +1242,7 @@ public class CertificateServiceImpl implements CertificateService, AttributeReso
             throw new AlreadyExistException("Certificate already exists with fingerprint " + fingerprint);
         }
 
-        if (customAttributes != null && customAttributes.isEmpty()) {
+        if (customAttributes != null && !customAttributes.isEmpty()) {
             attributeEngine.validateCustomAttributesContent(Resource.CERTIFICATE, customAttributes);
         }
 
