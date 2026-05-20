@@ -5,8 +5,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.validation.annotation.Validated;
 
 @Validated
-@ConfigurationProperties(prefix = "caching.authentication")
-public record AuthCacheProperties(
+@ConfigurationProperties(prefix = "caching.connectors")
+public record ConnectorApiClientCacheProperties(
         @Min(1) int ttlMinutes,
         @Min(1) int maxSize
 ) {

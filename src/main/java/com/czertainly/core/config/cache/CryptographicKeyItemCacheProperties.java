@@ -1,15 +1,13 @@
 package com.czertainly.core.config.cache;
 
+import jakarta.validation.constraints.Min;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.validation.annotation.Validated;
 
+@Validated
 @ConfigurationProperties(prefix = "caching.crypto-keys")
 public record CryptographicKeyItemCacheProperties(
-        int ttlMinutes,
-        int maxSize
+        @Min(1) int ttlMinutes,
+        @Min(1) int maxSize
 ) {
-
-    public CryptographicKeyItemCacheProperties {
-        if (ttlMinutes <= 0) ttlMinutes = 5;
-        if (maxSize <= 0) maxSize = 10000;
-    }
 }
