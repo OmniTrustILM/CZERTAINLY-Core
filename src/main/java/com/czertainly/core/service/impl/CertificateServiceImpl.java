@@ -80,6 +80,7 @@ import com.czertainly.core.settings.SettingsCache;
 import com.czertainly.core.util.*;
 import com.czertainly.core.validation.certificate.ICertificateValidator;
 import jakarta.persistence.criteria.*;
+import org.springframework.aop.framework.AopContext;
 import org.apache.commons.lang3.function.TriFunction;
 import org.bouncycastle.asn1.ASN1Primitive;
 import org.bouncycastle.asn1.cms.ContentInfo;
@@ -1227,18 +1228,20 @@ public class CertificateServiceImpl implements CertificateService, AttributeReso
     @ExternalAuthorization(resource = Resource.CERTIFICATE, action = ResourceAction.CREATE)
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public FingerprintDto uploadAsync(UploadCertificateRequestDto request) throws CertificateException, AlreadyExistException {
-        String fingerprint = upload(request.getCertificate(), request.getCustomAttributes(), false);
+        String fingerprint = ((CertificateService) AopContext.currentProxy()).upload(request.getCertificate(), request.getCustomAttributes(), false);
         return new FingerprintDto(fingerprint);
     }
 
     @Override
     @ExternalAuthorization(resource = Resource.CERTIFICATE, action = ResourceAction.CREATE)
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public UuidDto uploadSync(UploadCertificateRequestDto request) throws CertificateException, AlreadyExistException {
-        String fingerprint = upload(request.getCertificate(), request.getCustomAttributes(), true);
+        String fingerprint = ((CertificateService) AopContext.currentProxy()).upload(request.getCertificate(), request.getCustomAttributes(), true);
         return new UuidDto(certificateRepository.findByFingerprint(fingerprint).orElseThrow().getUuid().toString());
     }
 
     @Override
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public String upload(String certificateData, List<RequestAttribute> customAttributes, boolean sync) throws CertificateException, AlreadyExistException {
         X509Certificate certificate = CertificateUtil.parseUploadedCertificateContent(certificateData);
         String fingerprint;
