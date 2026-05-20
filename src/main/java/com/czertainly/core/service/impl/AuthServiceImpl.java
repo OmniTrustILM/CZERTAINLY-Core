@@ -7,6 +7,7 @@ import com.czertainly.core.auth.ContextRefreshListener;
 import com.czertainly.core.model.auth.ResourceAction;
 import com.czertainly.core.security.authn.client.ResourceApiClient;
 import com.czertainly.core.security.authn.client.UserManagementApiClient;
+import com.czertainly.core.security.authz.AnyPrincipalEndpoint;
 import com.czertainly.core.security.authz.SelfPrincipalEndpoint;
 import com.czertainly.core.service.AuthExternalService;
 import com.czertainly.core.service.UserManagementService;
@@ -63,7 +64,7 @@ public class AuthServiceImpl implements AuthExternalService {
     }
 
     @Override
-    @SelfPrincipalEndpoint
+    @AnyPrincipalEndpoint
     public List<AuthResourceDto> getAuthResources() {
         return resourceApiClient.getAuthResources();
     }
