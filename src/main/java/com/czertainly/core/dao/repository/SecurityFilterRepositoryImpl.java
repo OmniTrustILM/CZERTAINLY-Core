@@ -170,11 +170,15 @@ public class SecurityFilterRepositoryImpl<T, ID> extends SimpleJpaRepository<T, 
         CriteriaQuery<NameAndUuidDto> query = cb.createQuery(NameAndUuidDto.class);
         final Root<T> root = query.from(entity);
 
+        Expression<String> nameExpression = nameAttribute == null
+                ? cb.nullLiteral(String.class)
+                : root.get(nameAttribute);
+
         query.select(
                 cb.construct(
                         NameAndUuidDto.class,
                         root.get("uuid"),
-                        root.get(nameAttribute)
+                        nameExpression
                 )
         );
         query.orderBy(cb.asc(root.get(nameAttribute)));
@@ -205,11 +209,15 @@ public class SecurityFilterRepositoryImpl<T, ID> extends SimpleJpaRepository<T, 
         CriteriaQuery<NameAndUuidDto> query = cb.createQuery(NameAndUuidDto.class);
         final Root<T> root = query.from(entity);
 
+        Expression<String> nameExpression = nameAttribute == null
+                ? cb.nullLiteral(String.class)
+                : root.get(nameAttribute);
+
         query.select(
                 cb.construct(
                         NameAndUuidDto.class,
                         root.get("uuid"),
-                        root.get(nameAttribute)
+                        nameExpression
                 )
         ).where(cb.equal(root.get("uuid"), uuid));
 

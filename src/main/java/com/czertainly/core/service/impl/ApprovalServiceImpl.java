@@ -4,6 +4,8 @@ import com.czertainly.api.exception.NotFoundException;
 import com.czertainly.api.exception.ValidationError;
 import com.czertainly.api.exception.ValidationException;
 import com.czertainly.api.model.client.approval.*;
+import com.czertainly.api.model.client.certificate.SearchFilterRequestDto;
+import com.czertainly.api.model.common.NameAndUuidDto;
 import com.czertainly.api.model.core.auth.Resource;
 import com.czertainly.api.model.core.auth.UserProfileDto;
 import com.czertainly.api.model.core.scheduler.PaginationRequestDto;
@@ -24,6 +26,7 @@ import com.czertainly.core.security.authz.SecurityFilter;
 import com.czertainly.core.service.ApprovalService;
 import com.czertainly.core.util.ApprovalRecipientHelper;
 import com.czertainly.core.util.AuthHelper;
+import com.czertainly.core.util.FilterPredicatesBuilder;
 import com.czertainly.core.util.RequestValidatorHelper;
 import jakarta.persistence.criteria.*;
 import org.apache.commons.lang3.function.TriFunction;
@@ -40,7 +43,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import java.time.Duration;
 import java.util.*;
 
-@Service
+@Service(Resource.Codes.APPROVAL)
 @Transactional
 public class ApprovalServiceImpl implements ApprovalService {
 
@@ -370,5 +373,27 @@ public class ApprovalServiceImpl implements ApprovalService {
     @Autowired
     public void setApprovalRecipientHelper(ApprovalRecipientHelper approvalRecipientHelper) {
         this.approvalRecipientHelper = approvalRecipientHelper;
+    }
+
+    @Override
+    public NameAndUuidDto getResourceObjectInternal(UUID objectUuid) throws NotFoundException {
+        return approvalRepository.findResourceObject(objectUuid, null);
+    }
+
+    @Override
+    public NameAndUuidDto getResourceObjectExternal(SecuredUUID objectUuid) throws NotFoundException {
+        return approvalRepository.findResourceObject(objectUuid.getValue(), null);
+    }
+
+    @Override
+    @ExternalAuthorization(resource = Resource.APPROVAL, action = ResourceAction.LIST)
+    public List<NameAndUuidDto> listResourceObjects(SecurityFilter filter, List<SearchFilterRequestDto> filters, PaginationRequestDto pagination) {
+        TriFunction<Root<Approval>, CriteriaBuilder, CriteriaQuery<?>, Predicate> additionalWhereClause = (root, cb, cr) -> FilterPredicatesBuilder.getFiltersPredicate(cb, cr, root, filters);
+        return approvalRepository.listResourceObjects(filter, null, additionalWhereClause, pagination);
+    }
+
+    @Override
+    public void evaluatePermissionChain(SecuredUUID uuid) throws NotFoundException {
+        // there is no permission chain for approvals
     }
 }
