@@ -1,5 +1,6 @@
 package com.czertainly.core.service.v2;
 
+import com.czertainly.api.clients.ApiClientConnectorInfo;
 import com.czertainly.api.exception.AlreadyExistException;
 import com.czertainly.api.exception.AttributeException;
 import com.czertainly.api.exception.ConnectorException;
@@ -25,8 +26,6 @@ public interface ConnectorService extends ResourceExtensionService {
     PaginationResponseDto<ConnectorDto> listConnectors(SecurityFilter filter, SearchRequestDto request);
 
     ConnectorDetailDto getConnector(SecuredUUID uuid) throws NotFoundException, ConnectorException;
-
-    com.czertainly.api.model.core.connector.v2.ConnectorApiClientDtoV2 getConnectorForApiClient(UUID connectorUuid) throws NotFoundException;
 
     ConnectorDetailDto createConnector(ConnectorRequestDto request) throws ConnectorException, NotFoundException, AlreadyExistException, AttributeException;
 
@@ -65,4 +64,9 @@ public interface ConnectorService extends ResourceExtensionService {
     ConnectorInfo getInfo(SecuredUUID uuid) throws NotFoundException, ConnectorException;
 
     List<SearchFieldDataByGroupDto> getSearchableFieldInformationByGroup();
+
+    /**
+     * Returns cached connector data shaped for API client routing.
+     */
+    ApiClientConnectorInfo getConnectorForApiClient(UUID connectorUuid) throws NotFoundException;
 }
