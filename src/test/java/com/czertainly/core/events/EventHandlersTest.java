@@ -38,12 +38,14 @@ import com.czertainly.core.dao.entity.notifications.NotificationInstanceReferenc
 import com.czertainly.core.dao.entity.notifications.PendingNotification;
 import com.czertainly.core.dao.entity.workflows.Trigger;
 import com.czertainly.core.dao.entity.workflows.TriggerAssociation;
+import com.czertainly.core.dao.entity.workflows.TriggerHistory;
 import com.czertainly.core.dao.repository.*;
 import com.czertainly.core.dao.repository.notifications.NotificationInstanceReferenceRepository;
 import com.czertainly.core.dao.repository.notifications.PendingNotificationRepository;
 import com.czertainly.core.dao.entity.workflows.EventHistory;
 import com.czertainly.core.dao.repository.workflows.EventHistoryRepository;
 import com.czertainly.core.dao.repository.workflows.TriggerAssociationRepository;
+import com.czertainly.core.dao.repository.workflows.TriggerHistoryRepository;
 import com.czertainly.core.dao.repository.workflows.TriggerRepository;
 import com.czertainly.core.enums.FilterField;
 import com.czertainly.core.events.data.DiscoveryResult;
@@ -76,7 +78,7 @@ import java.util.*;
 
 class EventHandlersTest extends BaseSpringBootTest {
 
-    public static final String CERTIFICATE_CUSTOM_ATTIBUTE_UUID = UUID.randomUUID().toString();
+    public static final String CERTIFICATE_CUSTOM_ATTRIBUTE_UUID = UUID.randomUUID().toString();
     public static final String CERTIFICATE_CUSTOM_ATTRIBUTE_NAME = "category";
     @Autowired
     private TriggerRepository triggerRepository;
@@ -134,6 +136,8 @@ class EventHandlersTest extends BaseSpringBootTest {
     private TriggerAssociationRepository triggerAssociationRepository;
     @Autowired
     private EventHistoryRepository eventHistoryRepository;
+    @Autowired
+    private TriggerHistoryRepository triggerHistoryRepository;
 
     @Autowired
     private ScheduledJobsRepository scheduledJobsRepository;
@@ -237,7 +241,7 @@ class EventHandlersTest extends BaseSpringBootTest {
     private void createCertificateTriggerAssociation(ResourceEvent event, Resource eventResource, UUID eventObjectUuid, boolean ignoreTrigger) throws AttributeException, AlreadyExistException, NotFoundException {
         // register custom attribute for SET_FIELD execution
         CustomAttributeV3 certAttr = new CustomAttributeV3();
-        certAttr.setUuid(CERTIFICATE_CUSTOM_ATTIBUTE_UUID);
+        certAttr.setUuid(CERTIFICATE_CUSTOM_ATTRIBUTE_UUID);
         certAttr.setName(CERTIFICATE_CUSTOM_ATTRIBUTE_NAME);
         certAttr.setType(AttributeType.CUSTOM);
         certAttr.setContentType(AttributeContentType.STRING);
@@ -365,7 +369,7 @@ class EventHandlersTest extends BaseSpringBootTest {
 
         // register custom attribute
         CustomAttributeV3 certificateDomainAttr = new CustomAttributeV3();
-        certificateDomainAttr.setUuid(CERTIFICATE_CUSTOM_ATTIBUTE_UUID);
+        certificateDomainAttr.setUuid(CERTIFICATE_CUSTOM_ATTRIBUTE_UUID);
         certificateDomainAttr.setName("domain");
         certificateDomainAttr.setType(AttributeType.CUSTOM);
         certificateDomainAttr.setContentType(AttributeContentType.STRING);
@@ -545,6 +549,15 @@ class EventHandlersTest extends BaseSpringBootTest {
         createCertificateTriggerAssociation(ResourceEvent.CERTIFICATE_UPLOADED, null, null, true);
         Assertions.assertDoesNotThrow(() -> certificateUploadedEventHandler.handleEvent(CertificateUploadedEventHandler.constructEventMessage(eventMessageData)));
         Assertions.assertFalse(certificateRepository.findByFingerprint(fingerprint).isPresent());
+
+        List<TriggerHistory> histories = triggerHistoryRepository.findAll();
+        Assertions.assertEquals(1, histories.size());
+        TriggerHistory th = histories.getFirst();
+        Assertions.assertTrue(th.isConditionsMatched());
+        Assertions.assertTrue(th.isActionsPerformed());
+
+        Assertions.assertNotNull(th.getMessage());
+        Assertions.assertTrue(th.getMessage().contains(fingerprint), "ignore TriggerHistory.message includes the fingerprint");
         mockServer.stop();
     }
 
@@ -604,7 +617,7 @@ class EventHandlersTest extends BaseSpringBootTest {
 
         // Test setting actions with custom attributes in the request and user UUID
         RequestAttributeV3 requestAttributeV3 = new RequestAttributeV3();
-        requestAttributeV3.setUuid(UUID.fromString(CERTIFICATE_CUSTOM_ATTIBUTE_UUID));
+        requestAttributeV3.setUuid(UUID.fromString(CERTIFICATE_CUSTOM_ATTRIBUTE_UUID));
         requestAttributeV3.setName(CERTIFICATE_CUSTOM_ATTRIBUTE_NAME);
         requestAttributeV3.setContentType(AttributeContentType.STRING);
         requestAttributeV3.setContent(List.of(new StringAttributeContentV3("fromRequest")));

@@ -39,7 +39,6 @@ import java.security.NoSuchAlgorithmException;
 import java.security.cert.CertificateEncodingException;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
-import java.time.OffsetDateTime;
 
 @Component(ResourceEvent.Codes.CERTIFICATE_UPLOADED)
 public class CertificateUploadedEventHandler extends EventHandler<Certificate> {
@@ -125,6 +124,7 @@ public class CertificateUploadedEventHandler extends EventHandler<Certificate> {
         }
         Certificate certificate = context.getResourceObjects().getFirst();
         CertificateUtil.prepareIssuedCertificate(certificate, x509Certificate);
+        certificate.setFingerprint(fingerprint);
         CertificateEventData eventData = (CertificateEventData) getEventData(certificate, eventMessageData);
         try {
             if (evaluateIgnoreTriggers(context, context.getPlatformTriggers(), certificate, eventData, eventHistory)) {
@@ -132,6 +132,7 @@ public class CertificateUploadedEventHandler extends EventHandler<Certificate> {
                 return;
             }
             saveCertificate(certificate, fingerprint, x509Certificate);
+            eventData.setCertificateUuid(certificate.getUuid());
             // Retroactively link trigger histories of the ignore triggers to the certificate
             triggerHistoryRepository.updateObjectUuidAndObjectResource(certificate.getUuid(), Resource.CERTIFICATE, eventHistory.getUuid());
 
@@ -161,7 +162,6 @@ public class CertificateUploadedEventHandler extends EventHandler<Certificate> {
         CertificateContent certificateContent = certificateService.checkAddCertificateContent(fingerprint, X509ObjectToString.toPem(x509Certificate));
         certificate.setCertificateContent(certificateContent);
         certificate.setCertificateContentId(certificateContent.getId());
-        certificate.setFingerprint(fingerprint);
 
         byte[] altPublicKey = x509Certificate.getExtensionValue(Extension.subjectAltPublicKeyInfo.getId());
         certificateService.uploadCertificateKey(x509Certificate.getPublicKey(), certificate, altPublicKey);
