@@ -1,6 +1,6 @@
 package com.czertainly.core.messaging.jms.listeners.timequality;
 
-import com.czertainly.api.model.messaging.timequality.TimeQualityConfigRequestMessage;
+import com.czertainly.api.model.messaging.timequality.TimeQualityConfigRequest;
 import com.czertainly.core.dao.repository.signing.TimeQualityConfigurationRepository;
 import com.czertainly.core.messaging.jms.listeners.MessageProcessor;
 import com.czertainly.core.messaging.jms.producers.TimeQualityConfigurationProducer;
@@ -14,13 +14,13 @@ import org.springframework.transaction.annotation.Transactional;
 @Slf4j
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 @AllArgsConstructor
-public class TimeQualityConfigRequestListener implements MessageProcessor<TimeQualityConfigRequestMessage> {
+public class TimeQualityConfigRequestListener implements MessageProcessor<TimeQualityConfigRequest> {
 
     private final TimeQualityConfigurationRepository timeQualityConfigurationRepository;
     private final TimeQualityConfigurationProducer timeQualityConfigurationProducer;
 
     @Override
-    public void processMessage(TimeQualityConfigRequestMessage message) {
+    public void processMessage(TimeQualityConfigRequest message) {
         log.debug("Received time quality config request (requestedAt={})", message.getRequestedAt());
         timeQualityConfigurationProducer.publishSnapshot(timeQualityConfigurationRepository.findAll());
     }

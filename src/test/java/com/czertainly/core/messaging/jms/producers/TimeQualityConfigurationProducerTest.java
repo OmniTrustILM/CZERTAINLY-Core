@@ -1,6 +1,6 @@
 package com.czertainly.core.messaging.jms.producers;
 
-import com.czertainly.api.model.messaging.timequality.TimeQualityConfigSnapshotMessage;
+import com.czertainly.api.model.messaging.timequality.TimeQualityConfigSnapshot;
 import com.czertainly.core.dao.entity.signing.TimeQualityConfiguration;
 import com.czertainly.core.messaging.jms.configuration.MessagingProperties;
 import org.junit.jupiter.api.BeforeEach;
@@ -47,7 +47,7 @@ class TimeQualityConfigurationProducerTest {
                 messageCaptor.capture(),
                 any(MessagePostProcessor.class));
 
-        TimeQualityConfigSnapshotMessage sent = (TimeQualityConfigSnapshotMessage) messageCaptor.getValue();
+        TimeQualityConfigSnapshot sent = (TimeQualityConfigSnapshot) messageCaptor.getValue();
         assertThat(sent.getConfigurations()).hasSize(1);
         assertThat(sent.getConfigurations().get(0).getId()).isEqualTo(config.getUuid());
         assertThat(sent.getGeneratedAt()).isNotNull();
@@ -60,7 +60,7 @@ class TimeQualityConfigurationProducerTest {
         ArgumentCaptor<Object> messageCaptor = ArgumentCaptor.forClass(Object.class);
         verify(jmsTemplate).convertAndSend(anyString(), messageCaptor.capture(), any(MessagePostProcessor.class));
 
-        TimeQualityConfigSnapshotMessage sent = (TimeQualityConfigSnapshotMessage) messageCaptor.getValue();
+        TimeQualityConfigSnapshot sent = (TimeQualityConfigSnapshot) messageCaptor.getValue();
         assertThat(sent.getConfigurations()).isEmpty();
     }
 

@@ -1,7 +1,7 @@
 package com.czertainly.core.messaging.jms.producers;
 
-import com.czertainly.api.model.messaging.timequality.TimeQualityConfigSnapshotMessage;
-import com.czertainly.api.model.messaging.timequality.TimeQualityConfigurationMessage;
+import com.czertainly.api.model.messaging.timequality.TimeQualityConfigSnapshot;
+import com.czertainly.api.model.messaging.timequality.TimeQualityConfig;
 import com.czertainly.core.dao.entity.signing.TimeQualityConfiguration;
 import com.czertainly.core.messaging.jms.configuration.MessagingProperties;
 import lombok.AllArgsConstructor;
@@ -24,7 +24,7 @@ public class TimeQualityConfigurationProducer {
     private final RetryTemplate producerRetryTemplate;
 
     public void publishSnapshot(List<TimeQualityConfiguration> configurations) {
-        TimeQualityConfigSnapshotMessage message = new TimeQualityConfigSnapshotMessage();
+        TimeQualityConfigSnapshot message = new TimeQualityConfigSnapshot();
         message.setGeneratedAt(Instant.now());
         message.setConfigurations(configurations.stream().map(this::toMessage).toList());
         log.debug("Publishing time quality config snapshot with {} configurations", message.getConfigurations().size());
@@ -41,8 +41,8 @@ public class TimeQualityConfigurationProducer {
         });
     }
 
-    private TimeQualityConfigurationMessage toMessage(TimeQualityConfiguration config) {
-        TimeQualityConfigurationMessage msg = new TimeQualityConfigurationMessage();
+    private TimeQualityConfig toMessage(TimeQualityConfiguration config) {
+        TimeQualityConfig msg = new TimeQualityConfig();
         msg.setId(config.getUuid());
         msg.setName(config.getName());
         msg.setNtpServers(config.getNtpServers());

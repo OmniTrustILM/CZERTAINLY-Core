@@ -1,6 +1,6 @@
 package com.czertainly.core.messaging.jms.listeners.timequality;
 
-import com.czertainly.api.model.messaging.timequality.TimeQualityConfigRequestMessage;
+import com.czertainly.api.model.messaging.timequality.TimeQualityConfigRequest;
 import com.czertainly.core.messaging.jms.configuration.MessagingConcurrencyProperties;
 import com.czertainly.core.messaging.jms.configuration.MessagingProperties;
 import com.czertainly.core.messaging.jms.listeners.AbstractJmsEndpointConfig;
@@ -13,13 +13,13 @@ import org.springframework.stereotype.Component;
 
 @Component
 @Profile("!test")
-public class TimeQualityConfigurationJmsEndpointConfig extends AbstractJmsEndpointConfig<TimeQualityConfigRequestMessage> {
+public class TimeQualityConfigurationJmsEndpointConfig extends AbstractJmsEndpointConfig<TimeQualityConfigRequest> {
 
     private final MessagingConcurrencyProperties messagingConcurrencyProperties;
 
     public TimeQualityConfigurationJmsEndpointConfig(
             ObjectMapper objectMapper,
-            MessageProcessor<TimeQualityConfigRequestMessage> listenerMessageProcessor,
+            MessageProcessor<TimeQualityConfigRequest> listenerMessageProcessor,
             RetryTemplate jmsRetryTemplate,
             MessagingProperties messagingProperties,
             MessagingConcurrencyProperties messagingConcurrencyProperties) {
@@ -35,7 +35,7 @@ public class TimeQualityConfigurationJmsEndpointConfig extends AbstractJmsEndpoi
                 messagingProperties.queue().timeQualityConfigRequest(),
                 messagingProperties.routingKey().timeQualityConfigRequest(),
                 messagingConcurrencyProperties.timeQualityConfigRequest(),
-                TimeQualityConfigRequestMessage.class
+                TimeQualityConfigRequest.class
         );
     }
 }

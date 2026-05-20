@@ -1,6 +1,6 @@
 package com.czertainly.core.messaging.jms.listeners.timequality;
 
-import com.czertainly.api.model.messaging.timequality.TimeQualityConfigRequestMessage;
+import com.czertainly.api.model.messaging.timequality.TimeQualityConfigRequest;
 import com.czertainly.core.dao.entity.signing.TimeQualityConfiguration;
 import com.czertainly.core.dao.repository.signing.TimeQualityConfigurationRepository;
 import com.czertainly.core.messaging.jms.producers.TimeQualityConfigurationProducer;
@@ -30,7 +30,7 @@ class TimeQualityConfigRequestListenerTest {
         config.setName("my-profile");
         when(repository.findAll()).thenReturn(List.of(config));
 
-        TimeQualityConfigRequestMessage request = new TimeQualityConfigRequestMessage();
+        TimeQualityConfigRequest request = new TimeQualityConfigRequest();
         request.setRequestedAt(Instant.now());
 
         listener.processMessage(request);
@@ -42,7 +42,7 @@ class TimeQualityConfigRequestListenerTest {
     void processMessage_withEmptyDb_publishesEmptySnapshot() {
         when(repository.findAll()).thenReturn(List.of());
 
-        listener.processMessage(new TimeQualityConfigRequestMessage());
+        listener.processMessage(new TimeQualityConfigRequest());
 
         verify(producer).publishSnapshot(List.of());
     }
