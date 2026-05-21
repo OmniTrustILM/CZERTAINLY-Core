@@ -201,7 +201,7 @@ public class CertificateHandler {
     }
 
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void handleCertificateValidationEvent(CertificateValidationEvent event) {
         ValidationMessage validationMessage = new ValidationMessage(Resource.CERTIFICATE, event.certificateUuids(), event.discoveryUuid(), event.discoveryName(), event.locationUuid(), event.locationName());
         validationProducer.produceMessage(validationMessage);

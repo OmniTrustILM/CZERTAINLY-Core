@@ -24,6 +24,12 @@ public abstract class CertificateEventsHandler extends EventHandler<Certificate>
     }
 
     @Override
+    protected void prefetchForFollowUp(EventContext<Certificate> context) {
+        context.getResourceObjects().forEach(Certificate::getOwner);
+        // groups are already loaded by getOverridingTriggers
+    }
+
+    @Override
     protected List<EventContextTriggers> getOverridingTriggers(EventContext<Certificate> eventContext, Certificate object) throws EventException {
         List<EventContextTriggers> eventContextTriggers = new ArrayList<>();
 
