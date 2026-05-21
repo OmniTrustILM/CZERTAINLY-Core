@@ -278,8 +278,9 @@ public class CryptographicOperationServiceImpl implements CryptographicOperation
     }
 
     @Override
-    // No @ExternalAuthorization — TsaService authorizes the request before calling this. Do not call from elsewhere.
+    @ExternalAuthorization(resource = Resource.CRYPTOGRAPHIC_KEY, action = ResourceAction.SIGN, parentResource = Resource.TOKEN, parentAction = ResourceAction.DETAIL)
     public SignDataResponseDto signDataWithoutEventHistory(SecuredParentUUID tokenInstanceUuid, SecuredUUID tokenProfileUuid, UUID uuid, UUID keyItemUuid, SignDataRequestDto request) throws ConnectorException, NotFoundException {
+        permissionEvaluator.tokenProfile(tokenProfileUuid);
         logger.info("Signing the data (no event history): {} using the key: {}", request, keyItemUuid);
         CryptographicKeyItemModel key = cryptographicKeyService.getKeyItemModel(keyItemUuid);
         return executeSignData(key, request);
