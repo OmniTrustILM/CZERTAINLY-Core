@@ -926,7 +926,6 @@ public class CryptographicKeyServiceImpl implements CryptographicKeyService {
     }
 
     @Override
-    // No @ExternalAuthorization — TsaService authorizes the request before calling this.
     public CryptographicKeyItemModel getKeyItemModel(UUID keyItemUuid) throws NotFoundException {
         Cache cache = cacheManager.getCache(CacheConfig.CRYPTOGRAPHIC_KEY_ITEM_CACHE);
         if (cache != null) {
@@ -941,15 +940,16 @@ public class CryptographicKeyServiceImpl implements CryptographicKeyService {
         if (keyItem.getKey() == null) {
             throw new NotFoundException("Cryptographic Key associated with the Key Item is not found");
         }
-        if (keyItem.getKey().getTokenProfile() == null) {
-            throw new NotFoundException("Token Profile associated with the Key is not found");
-        }
-        if (keyItem.getKey().getTokenProfile().getTokenInstanceReference() == null) {
+        TokenInstanceReference tokenInstanceReference = keyItem.getKey().getTokenInstanceReference();
+        if (tokenInstanceReference == null) {
             throw new NotFoundException("Token Instance associated with the Key is not found");
         }
-        if (keyItem.getKey().getTokenProfile().getTokenInstanceReference().getConnector() == null) {
+        if (tokenInstanceReference.getConnector() == null) {
             throw new NotFoundException("Connector associated to the Key is not found");
         }
+        UUID tokenInstanceUuid = UUID.fromString(tokenInstanceReference.getTokenInstanceUuid());
+
+
         CryptographicKeyItemModel model = new CryptographicKeyItemModel(
                 keyItem.getUuid(),
                 keyItem.getState(),
@@ -957,9 +957,8 @@ public class CryptographicKeyServiceImpl implements CryptographicKeyService {
                 keyItem.getUsage(),
                 keyItem.getKeyAlgorithm(),
                 keyItem.getKeyReferenceUuid(),
-                keyItem.getKeyData(),
-                connectorService.getConnectorForApiClient(keyItem.getKey().getTokenProfile().getTokenInstanceReference().getConnector().getUuid()),
-                keyItem.getKey().getTokenProfile().getTokenInstanceReference().getTokenInstanceUuid()
+                tokenInstanceReference.getConnectorUuid(),
+                tokenInstanceUuid
         );
         if (cache != null)
             cache.put(keyItemUuid, model);
