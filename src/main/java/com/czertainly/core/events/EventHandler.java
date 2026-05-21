@@ -14,6 +14,7 @@ import com.czertainly.core.dao.repository.SecurityFilterRepository;
 import com.czertainly.core.dao.repository.workflows.EventHistoryRepository;
 import com.czertainly.core.dao.repository.workflows.TriggerAssociationRepository;
 import com.czertainly.core.evaluator.TriggerEvaluator;
+import com.czertainly.core.events.transaction.TransactionHandler;
 import com.czertainly.core.messaging.jms.producers.EventProducer;
 import com.czertainly.core.messaging.jms.producers.NotificationProducer;
 import com.czertainly.core.messaging.model.EventMessage;
@@ -26,6 +27,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
@@ -45,6 +47,7 @@ public abstract class EventHandler<T extends UniquelyIdentifiedObject> implement
     protected NotificationProducer notificationProducer;
     protected ApplicationEventPublisher applicationEventPublisher;
     protected EventHistoryRepository eventHistoryRepository;
+    private TransactionHandler transactionHandler;
 
     protected final TriggerEvaluator<T> triggerEvaluator;
     protected final SecurityFilterRepository<T, UUID> repository;
@@ -86,6 +89,11 @@ public abstract class EventHandler<T extends UniquelyIdentifiedObject> implement
         this.triggerAssociationRepository = triggerAssociationRepository;
     }
 
+    @Autowired
+    public void setTransactionHandler(TransactionHandler transactionHandler) {
+        this.transactionHandler = transactionHandler;
+    }
+
     protected EventHandler(SecurityFilterRepository<T, UUID> repository, TriggerEvaluator<T> triggerEvaluator) {
         this.repository = repository;
         this.triggerEvaluator = triggerEvaluator;
@@ -106,11 +114,25 @@ public abstract class EventHandler<T extends UniquelyIdentifiedObject> implement
         return List.of();
     }
 
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public void handleEvent(EventMessage eventMessage) throws EventException {
         logger.debug("Going to handle event '{}'", eventMessage.getEvent().getLabel());
         EventContext<T> eventContext;
-        eventContext = prepareContext(eventMessage);
-        processAllTriggers(eventContext);
+        try {
+            eventContext = transactionHandler.runInTransaction(() -> {
+                try {
+                    EventContext<T> ctx = prepareContext(eventMessage);
+                    processAllTriggers(ctx);
+                    prefetchForFollowUp(ctx);
+                    return ctx;
+                } catch (EventException e) {
+                    throw new RuntimeException(e);
+                }
+            });
+        } catch (RuntimeException e) {
+            if (e.getCause() instanceof EventException ee) throw ee;
+            throw e;
+        }
         sendFollowUpEventsNotifications(eventContext);
         logger.debug("Event '{}' successfully handled", eventMessage.getEvent().getLabel());
     }
@@ -127,6 +149,10 @@ public abstract class EventHandler<T extends UniquelyIdentifiedObject> implement
 
     protected void sendFollowUpEventsNotifications(EventContext<T> eventContext) {
         // No follow-up events or internal notifications are sent by default
+    }
+
+    protected void prefetchForFollowUp(EventContext<T> context) {
+        // No-op; subclasses override to force-initialize lazy associations before the transaction ends
     }
 
     protected EventContextTriggers fetchEventTriggers(EventContext<T> context, Resource resource, UUID objectUuid) throws EventException {
@@ -196,9 +222,8 @@ public abstract class EventHandler<T extends UniquelyIdentifiedObject> implement
         }
         saveEventHistory(eventHistory, EventStatus.FINISHED);
     }
-
-    protected void saveEventHistory(EventHistory eventHistory, EventStatus finished) {
-        eventHistory.setStatus(finished);
+    protected void saveEventHistory(EventHistory eventHistory, EventStatus eventStatus) {
+        eventHistory.setStatus(eventStatus);
         eventHistory.setFinishedAt(OffsetDateTime.now());
         eventHistoryRepository.save(eventHistory);
     }
